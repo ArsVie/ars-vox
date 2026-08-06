@@ -1,3 +1,8 @@
+---
+type: adr
+title: ADR 0003 — SQLite confirmation snapshots
+description: Two-phase confirmations execute the exact SQLite-stored argument snapshot, not regenerated model arguments
+---
 # ADR 0003: SQLite confirmation snapshots
 
 Status: Accepted

@@ -1,3 +1,8 @@
+---
+type: adr
+title: ADR 0001 — Electron and Python service
+description: Electron shell (TypeScript) + separate Python agent service (FastAPI + WebSocket); Electron version pin pending target-machine spike
+---
 # ADR 0001: Electron and Python service
 
 Status: Accepted (Electron version pin pending the target-machine spike)

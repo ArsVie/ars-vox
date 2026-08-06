@@ -1,3 +1,8 @@
+---
+type: adr
+title: ADR 0004 — Local stop path
+description: stop is handled at protocol level; AgentRuntime.cancel() never waits on the LLM, network, tools, or TTS
+---
 # ADR 0004: Local stop path
 
 Status: Accepted

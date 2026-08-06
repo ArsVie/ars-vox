@@ -1,3 +1,8 @@
+---
+type: handoff
+title: Ars-Vox handoff — 2026-08-06
+description: Authoritative roadmap and latest session state (mic path verified; next step is the real-mic smoke test)
+---
 # Ars-Vox handoff — 2026-08-06 (mic path: energy VAD + STT round trip done)
 
 This handoff supersedes the previous one (TTS autoplay verification done,

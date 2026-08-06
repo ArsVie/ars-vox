@@ -1,3 +1,8 @@
+---
+type: architecture
+title: System overview
+description: Components, turn path, event bus, layout engine, SQLite data model, and configuration of Ars-Vox
+---
 # System overview
 
 ## Components

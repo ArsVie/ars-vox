@@ -1,3 +1,8 @@
+---
+type: adr
+title: ADR 0002 — Contracts as the single source of truth
+description: packages/contracts owns all wire types; strict pydantic models, exported JSON schemas, ui_command as discriminated union
+---
 # ADR 0002: Contracts as the single source of truth
 
 Status: Accepted

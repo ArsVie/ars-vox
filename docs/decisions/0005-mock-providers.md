@@ -1,3 +1,8 @@
+---
+type: adr
+title: ADR 0005 — Mock providers
+description: Every provider has an interface + mock behind a config switch; mocks run the same runtime, policy, confirmation, WS, and SQLite paths
+---
 # ADR 0005: Mock providers
 
 Status: Accepted

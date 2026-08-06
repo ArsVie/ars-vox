@@ -6,10 +6,11 @@ news, keep notes and tasks, and send a Telegram message to one approved
 person.
 
 Current state: **a verified agent-service foundation with a working
-desktop vertical slice and a partially wired real voice path**. TTS
-synthesis (edge provider) and STT (faster-whisper) work end to end;
-microphone capture is not wired yet, so the full user-facing product
-(voice capture, all panels) is not complete.
+desktop vertical slice and a fully wired real voice path**. TTS
+synthesis (edge provider), STT (faster-whisper), and microphone capture
+(energy VAD + blob-per-utterance) work end to end — verified in real
+Edge with a fake audio device. The only remaining demo gap is a
+real-microphone smoke test on the physical Windows machine.
 
 ## Current scope
 
@@ -32,16 +33,21 @@ Working end to end (verified live):
 - Local stop path: the protocol `stop` message cancels the running turn
   without ever involving the LLM.
 
-- Voice path start: `GET /tts?text=...` synthesizes Spanish speech
+- Voice path: `GET /tts?text=...` synthesizes Spanish speech
   (edge-tts) and `POST /api/stt` transcribes uploaded audio
   (faster-whisper, es); `auto_speak` emits a real `tts.speak` and the
   renderer plays it (Electron disables the autoplay policy; plain
-  browsers get a muted-then-unmute fallback). Verified live: a real
-  click on Send produced `GET /tts` with 200 and playback started.
+  browsers get a muted-then-unmute fallback). The composer MIC button
+  records with getUserMedia + MediaRecorder, a pure energy VAD ends the
+  utterance on ~900ms silence (or 30s cap), and the blob is POSTed to
+  `/api/stt` — the transcript flows in as a normal `user_text` message.
+  Verified live: real CDP click on Send produced `GET /tts` with 200 and
+  playback started; the full mic→VAD→STT→agent→TTS loop was verified in
+  real Edge with a fake audio device (see `docs/HANDOFF.md`).
 
-Not yet done: microphone capture (the renderer must record mic audio
-and POST it to `/api/stt`), the remaining panels (browser, media,
-news, notes, tasks, settings), Electron version pinning for the target
+Not yet done: the remaining panels (browser, media,
+news, notes, tasks, settings), a real-microphone smoke test on the
+target Windows machine, Electron version pinning for the target
 2014 Intel MacBook Air, and the product documentation listed under
 `docs/`.
 
@@ -122,7 +128,7 @@ export OPENCODE_GO_API_KEY=...        # see Required environment variables
 
 ```bash
 .venv/bin/python -m pytest tests/python -q      # 45 tests
-cd apps/desktop && npm test                     # 20 Vitest tests
+cd apps/desktop && npm test                     # 30 Vitest tests
 cd apps/desktop && npm run typecheck && npm run build
 ```
 
@@ -168,9 +174,10 @@ panels, and the UI computes geometry.
 
 ## Known limitations
 
-- Microphone capture is not wired: the voice pipeline state machine and
-  STT/TTS provider interfaces exist and STT/TTS work via file/URL
-  paths, but the renderer does not record mic audio yet.
+- The real-microphone smoke test has not run on the physical Windows
+  machine (verified end to end only with a fake audio device via CDP);
+  transcription accuracy on a real mic may require `voice.stt.model`
+  tiny -> base/small.
 - TS types in the renderer are hand-mirrored from the Python contracts;
   the JSON schemas in `packages/contracts/schemas/` exist for future
   code generation.
@@ -201,7 +208,7 @@ panels, and the UI computes geometry.
 ## Implementation status
 
 - Python suite: 45/45 passing.
-- Desktop: 20/20 Vitest, typecheck clean, renderer + Electron build.
+- Desktop: 30/30 Vitest, typecheck clean, renderer + Electron build.
 - Live model: verified (`demo_live.py` LIVE_OK with two typed tool calls
   in one turn).
 - End-to-end UI: verified in a real Chromium against the mock service —
@@ -214,5 +221,6 @@ panels, and the UI computes geometry.
   with `autoplay-policy=no-user-gesture-required`; plain browsers fall
   back to muted-then-unmute when no user activation exists yet.
 - This project is NOT a complete demo yet; it is a verified agent-service
-  foundation with a working desktop vertical slice and a partially wired
-  real voice path (TTS/STT work; microphone capture pending).
+  foundation with a working desktop vertical slice and a fully wired
+  voice path (TTS/STT/mic verified with a fake device); the real-mic
+  smoke test on the Windows machine remains.

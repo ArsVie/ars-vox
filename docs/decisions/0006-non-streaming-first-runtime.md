@@ -1,3 +1,8 @@
+---
+type: adr
+title: ADR 0006 — Non-streaming-first runtime
+description: One agent.run per turn, single agent_message (delta:false); delta flag reserved for later streaming without protocol break
+---
 # ADR 0006: Non-streaming-first runtime
 
 Status: Accepted

@@ -1,3 +1,8 @@
+---
+type: threat-model
+title: Threat model — embedded browser and tool surface
+description: Attack surface of the embedded browser panel and tool execution; deny-by-default policy, two-phase confirmations, local stop path
+---
 # Threat model: embedded browser and tool surface
 
 Scope: the attack surface created by (a) an embedded browser panel that
