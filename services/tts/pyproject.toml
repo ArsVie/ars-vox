@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arsvox-tts"
+version = "0.1.0"
+description = "Ars-Vox text-to-speech: provider interface, queue, mock/edge/piper/kittentts"
+requires-python = ">=3.11"
+dependencies = ["arsvox-contracts==0.1.0"]
+
+[project.optional-dependencies]
+edge = ["edge-tts>=6.1"]
+
+[tool.setuptools.packages.find]
+include = ["arsvox_tts*"]

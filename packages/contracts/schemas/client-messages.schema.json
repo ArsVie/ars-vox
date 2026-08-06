@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "CancelMessage": {
+      "properties": {
+        "type": {
+          "const": "cancel",
+          "title": "Type",
+          "type": "string"
+        },
+        "pending_id": {
+          "title": "Pending Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "pending_id"
+      ],
+      "title": "CancelMessage",
+      "type": "object"
+    },
+    "ConfirmMessage": {
+      "properties": {
+        "type": {
+          "const": "confirm",
+          "title": "Type",
+          "type": "string"
+        },
+        "pending_id": {
+          "title": "Pending Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "pending_id"
+      ],
+      "title": "ConfirmMessage",
+      "type": "object"
+    },
+    "PingMessage": {
+      "properties": {
+        "type": {
+          "const": "ping",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PingMessage",
+      "type": "object"
+    },
+    "StopMessage": {
+      "properties": {
+        "type": {
+          "const": "stop",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "StopMessage",
+      "type": "object"
+    },
+    "UserText": {
+      "properties": {
+        "type": {
+          "const": "user_text",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "UserText",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "cancel": "#/$defs/CancelMessage",
+      "confirm": "#/$defs/ConfirmMessage",
+      "ping": "#/$defs/PingMessage",
+      "stop": "#/$defs/StopMessage",
+      "user_text": "#/$defs/UserText"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/UserText"
+    },
+    {
+      "$ref": "#/$defs/ConfirmMessage"
+    },
+    {
+      "$ref": "#/$defs/CancelMessage"
+    },
+    {
+      "$ref": "#/$defs/StopMessage"
+    },
+    {
+      "$ref": "#/$defs/PingMessage"
+    }
+  ]
+}

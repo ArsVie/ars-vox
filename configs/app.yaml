@@ -1,0 +1,86 @@
+# ============================================================
+# Ars-Vox application configuration - single source of truth
+# ============================================================
+# The Python agent service loads and validates this file at startup
+# (pydantic AppConfig, packages/contracts). The Electron UI receives
+# a copy through GET /config and can persist changes through PATCH
+# /config (Settings panel). Unknown keys are rejected.
+#
+# Relative paths resolve against this file's directory (repo root).
+
+app:
+  name: Ars-Vox
+  locale: es            # UI language; the agent answers in the user's language
+
+server:
+  host: 127.0.0.1
+  port: 8765
+
+# ---- Agent / model -------------------------------------------------------
+agent:
+  mock: false           # true -> scripted model (no network, deterministic demos)
+  model:
+    provider: opencode-go
+    base_url: https://opencode.ai/zen/go/v1/
+    api_key_env: OPENCODE_GO_API_KEY   # env var holding the API key
+    name: deepseek-v4-flash            # any opencode-go model id works
+    temperature: 0.2
+    timeout_s: 90
+    max_steps: 8        # hard cap on tool steps per turn
+  system_prompt_file: null   # optional path to a custom system prompt (markdown)
+  recent_turns_in_context: 6
+
+voice:
+  enabled: false        # microphone pipeline is provider-stubbed in iteration 1
+  wake_word:
+    enabled: false
+    model: null         # openWakeWord model name
+  vad:
+    provider: silero
+  stt:
+    provider: mock      # mock | faster-whisper
+    model: tiny
+  silence_timeout_s: 60 # voice state -> SLEEPING after this much user silence
+  wake_sound: null
+  sleep_sound: null
+
+tts:
+  provider: mock        # mock | edge | piper | kittentts (interfaces ready)
+  auto_speak: false     # true -> speak each finished assistant phrase
+  es_voice: null        # provider-specific Spanish voice id
+  speed: 1.0
+  queue_max: 20
+
+ui:
+  templates: [focus, split, reference, background_media]
+  reduced_motion: false
+  large_text: false
+  high_contrast: false
+  default_template: focus
+  default_primary: conversation
+
+telegram:
+  mock: true            # true -> simulated send + local audit record only
+  token_env: TELEGRAM_BOT_TOKEN
+  chat_id: ""           # single approved recipient chat id (one recipient by design)
+
+memory:
+  db_path: data/arsvox.db
+  library_dir: data/library
+  documents_dir: data/documents
+
+reminders:
+  scheduler_interval_s: 5
+  snooze_seconds: 600
+  confirmation_timeout_s: 120
+
+browser:
+  allowlist: ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org"]
+  home_url: https://www.youtube.com
+
+media:
+  sample_video_url: https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+
+demo:
+  enabled: false        # true -> UI auto-plays a scripted command tour
+  step_delay_s: 6

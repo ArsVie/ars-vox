@@ -1,0 +1,136 @@
+"""WebSocket endpoint: the UI's realtime channel.
+
+Client → server: ClientMessage (user_text, confirm, cancel, stop, ping).
+Server → client: validated AgentEvent objects from the shared bus.
+
+Local intents (posponer / descartar / qué alarmas) are handled here,
+before the LLM, so scheduling controls never depend on the model.
+"""
+
+import asyncio
+import logging
+from typing import Any
+
+from fastapi import WebSocket, WebSocketDisconnect
+
+from arsvox_contracts import (
+    AgentMessageEvent,
+    ConfigUpdateEvent,
+    PongEvent,
+    StateUpdateEvent,
+    VoiceState,
+    parse_client_message,
+)
+
+from arsvox_agent.events import EventBus
+from arsvox_agent.local_intents import match_intent
+from arsvox_agent.runtime import AgentRuntime
+from arsvox_agent.tools.scheduler import ReminderScheduler
+
+log = logging.getLogger(__name__)
+
+_RECEIVE_TIMEOUT = 0.1
+
+
+async def websocket_endpoint(
+    ws: WebSocket,
+    bus: EventBus,
+    runtime: AgentRuntime,
+    scheduler: ReminderScheduler,
+    config_snapshot: dict[str, Any],
+) -> None:
+    await ws.accept()
+    queue = bus.subscribe()
+    try:
+        # initial state so the UI renders immediately
+        state = VoiceState.LISTENING
+        await ws.send_text(StateUpdateEvent(voice_state=state).model_dump_json())
+        await ws.send_text(
+            ConfigUpdateEvent(config=config_snapshot).model_dump_json()
+        )
+        while True:
+            await _pump_outgoing(ws, queue)
+            try:
+                raw = await asyncio.wait_for(ws.receive_text(), timeout=_RECEIVE_TIMEOUT)
+            except asyncio.TimeoutError:
+                continue
+            await _handle_client_message(ws, raw, runtime, scheduler)
+    except WebSocketDisconnect:
+        log.info("ws client disconnected")
+    except Exception as exc:  # noqa: BLE001
+        log.exception("ws handler error")
+        try:
+            await ws.close()
+        except Exception:
+            pass
+    finally:
+        bus.unsubscribe(queue)
+
+
+async def _pump_outgoing(ws: WebSocket, queue: asyncio.Queue) -> None:
+    while not queue.empty():
+        payload = queue.get_nowait()
+        await ws.send_text(_json(payload))
+
+
+def _json(payload: dict) -> str:
+    import json
+
+    return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+async def _handle_client_message(
+    ws: WebSocket, raw: str, runtime: AgentRuntime, scheduler: ReminderScheduler
+) -> None:
+    try:
+        message = parse_client_message(raw)
+    except Exception as exc:
+        await ws.send_text(
+            AgentMessageEvent(text=f"Mensaje no válido: {exc}", delta=False).model_dump_json()
+        )
+        return
+    if message.type == "ping":
+        await ws.send_text(PongEvent().model_dump_json())
+        return
+    if message.type == "stop":
+        await runtime.cancel()
+        return
+    if message.type == "confirm":
+        await runtime.deps_base.confirmations.resolve(message.pending_id, approve=True)
+        await _sync_state_after_resolve(ws, runtime)
+        return
+    if message.type == "cancel":
+        await runtime.deps_base.confirmations.resolve(message.pending_id, approve=False)
+        await _sync_state_after_resolve(ws, runtime)
+        return
+    # user_text
+    intent = match_intent(message.text)
+    if intent is not None:
+        await _handle_local_intent(ws, intent.kind, runtime, scheduler)
+        return
+    if runtime.pipeline is not None:
+        await runtime.pipeline.inject_text(message.text)
+    else:
+        await runtime.handle_user_text(message.text)
+
+
+async def _handle_local_intent(
+    ws: WebSocket, kind: str, runtime: AgentRuntime, scheduler: ReminderScheduler
+) -> None:
+    if kind == "snooze":
+        seconds = runtime.config.reminders.snooze_seconds
+        await scheduler.snooze_top(seconds)
+    elif kind == "dismiss":
+        await scheduler.dismiss_top()
+    elif kind == "list_reminders":
+        await ws.send_text(
+            AgentMessageEvent(text=scheduler.list_active_text(), delta=False).model_dump_json()
+        )
+    elif kind == "stop":
+        await runtime.cancel()
+
+
+async def _sync_state_after_resolve(ws: WebSocket, runtime: AgentRuntime) -> None:
+    pending = runtime.deps_base.pending.list_pending()
+    state = VoiceState.WAITING_FOR_CONFIRMATION if pending else VoiceState.LISTENING
+    await ws.send_text(StateUpdateEvent(voice_state=state).model_dump_json())

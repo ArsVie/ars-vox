@@ -1,0 +1,407 @@
+{
+  "$defs": {
+    "AudioPlay": {
+      "properties": {
+        "action": {
+          "const": "audio.play",
+          "title": "Action",
+          "type": "string"
+        },
+        "asset": {
+          "title": "Asset",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "asset"
+      ],
+      "title": "AudioPlay",
+      "type": "object"
+    },
+    "LayoutApply": {
+      "properties": {
+        "action": {
+          "const": "layout.apply",
+          "title": "Action",
+          "type": "string"
+        },
+        "template": {
+          "$ref": "#/$defs/LayoutTemplate"
+        },
+        "primary_panel": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "secondary_panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "preserve": {
+          "default": true,
+          "title": "Preserve",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "template",
+        "primary_panel"
+      ],
+      "title": "LayoutApply",
+      "type": "object"
+    },
+    "LayoutRestore": {
+      "properties": {
+        "action": {
+          "const": "layout.restore",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "LayoutRestore",
+      "type": "object"
+    },
+    "LayoutTemplate": {
+      "enum": [
+        "focus",
+        "split",
+        "reference",
+        "background_media"
+      ],
+      "title": "LayoutTemplate",
+      "type": "string"
+    },
+    "MediaState": {
+      "enum": [
+        "playing",
+        "paused",
+        "stopped"
+      ],
+      "title": "MediaState",
+      "type": "string"
+    },
+    "MediaStateChange": {
+      "properties": {
+        "action": {
+          "const": "media.state",
+          "title": "Action",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/MediaState"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume"
+        }
+      },
+      "required": [
+        "action",
+        "state"
+      ],
+      "title": "MediaStateChange",
+      "type": "object"
+    },
+    "NotificationKind": {
+      "enum": [
+        "reminder",
+        "alarm",
+        "info",
+        "error"
+      ],
+      "title": "NotificationKind",
+      "type": "string"
+    },
+    "NotificationShow": {
+      "properties": {
+        "action": {
+          "const": "notification.show",
+          "title": "Action",
+          "type": "string"
+        },
+        "notification_id": {
+          "title": "Notification Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/NotificationKind"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "sound": {
+          "default": false,
+          "title": "Sound",
+          "type": "boolean"
+        },
+        "snoozable": {
+          "default": true,
+          "title": "Snoozable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "notification_id",
+        "kind",
+        "title",
+        "text"
+      ],
+      "title": "NotificationShow",
+      "type": "object"
+    },
+    "PanelClose": {
+      "properties": {
+        "action": {
+          "const": "panel.close",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "panel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Panel Id"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "PanelClose",
+      "type": "object"
+    },
+    "PanelFullscreen": {
+      "properties": {
+        "action": {
+          "const": "panel.fullscreen",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        }
+      },
+      "required": [
+        "action",
+        "panel_type"
+      ],
+      "title": "PanelFullscreen",
+      "type": "object"
+    },
+    "PanelOpen": {
+      "properties": {
+        "action": {
+          "const": "panel.open",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "content_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Reference"
+        }
+      },
+      "required": [
+        "action",
+        "panel_type"
+      ],
+      "title": "PanelOpen",
+      "type": "object"
+    },
+    "PanelSetPrimary": {
+      "properties": {
+        "action": {
+          "const": "panel.set_primary",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        }
+      },
+      "required": [
+        "action",
+        "panel_type"
+      ],
+      "title": "PanelSetPrimary",
+      "type": "object"
+    },
+    "PanelType": {
+      "enum": [
+        "conversation",
+        "browser",
+        "youtube",
+        "media",
+        "book_reader",
+        "document_editor",
+        "news",
+        "notes",
+        "tasks",
+        "reminders",
+        "telegram_preview",
+        "confirmation",
+        "settings",
+        "notification"
+      ],
+      "title": "PanelType",
+      "type": "string"
+    },
+    "TtsSpeak": {
+      "properties": {
+        "action": {
+          "const": "tts.speak",
+          "title": "Action",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "priority": {
+          "default": false,
+          "title": "Priority",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "text"
+      ],
+      "title": "TtsSpeak",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "audio.play": "#/$defs/AudioPlay",
+      "layout.apply": "#/$defs/LayoutApply",
+      "layout.restore": "#/$defs/LayoutRestore",
+      "media.state": "#/$defs/MediaStateChange",
+      "notification.show": "#/$defs/NotificationShow",
+      "panel.close": "#/$defs/PanelClose",
+      "panel.fullscreen": "#/$defs/PanelFullscreen",
+      "panel.open": "#/$defs/PanelOpen",
+      "panel.set_primary": "#/$defs/PanelSetPrimary",
+      "tts.speak": "#/$defs/TtsSpeak"
+    },
+    "propertyName": "action"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/LayoutApply"
+    },
+    {
+      "$ref": "#/$defs/PanelOpen"
+    },
+    {
+      "$ref": "#/$defs/PanelClose"
+    },
+    {
+      "$ref": "#/$defs/PanelSetPrimary"
+    },
+    {
+      "$ref": "#/$defs/PanelFullscreen"
+    },
+    {
+      "$ref": "#/$defs/LayoutRestore"
+    },
+    {
+      "$ref": "#/$defs/NotificationShow"
+    },
+    {
+      "$ref": "#/$defs/MediaStateChange"
+    },
+    {
+      "$ref": "#/$defs/TtsSpeak"
+    },
+    {
+      "$ref": "#/$defs/AudioPlay"
+    }
+  ]
+}

@@ -1,0 +1,864 @@
+{
+  "$defs": {
+    "AgentMessageEvent": {
+      "properties": {
+        "type": {
+          "const": "agent_message",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "delta": {
+          "default": false,
+          "title": "Delta",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "AgentMessageEvent",
+      "type": "object"
+    },
+    "AudioPlay": {
+      "properties": {
+        "action": {
+          "const": "audio.play",
+          "title": "Action",
+          "type": "string"
+        },
+        "asset": {
+          "title": "Asset",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "asset"
+      ],
+      "title": "AudioPlay",
+      "type": "object"
+    },
+    "ConfigUpdateEvent": {
+      "properties": {
+        "type": {
+          "const": "config_update",
+          "title": "Type",
+          "type": "string"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "config"
+      ],
+      "title": "ConfigUpdateEvent",
+      "type": "object"
+    },
+    "ConfirmationRequestedEvent": {
+      "properties": {
+        "type": {
+          "const": "confirmation_requested",
+          "title": "Type",
+          "type": "string"
+        },
+        "pending_id": {
+          "title": "Pending Id",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "expires_in_s": {
+          "title": "Expires In S",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "pending_id",
+        "tool",
+        "title",
+        "detail",
+        "expires_in_s"
+      ],
+      "title": "ConfirmationRequestedEvent",
+      "type": "object"
+    },
+    "ConfirmationResolvedEvent": {
+      "properties": {
+        "type": {
+          "const": "confirmation_resolved",
+          "title": "Type",
+          "type": "string"
+        },
+        "pending_id": {
+          "title": "Pending Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ConfirmationStatus"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "pending_id",
+        "status"
+      ],
+      "title": "ConfirmationResolvedEvent",
+      "type": "object"
+    },
+    "ConfirmationStatus": {
+      "enum": [
+        "pending",
+        "approved",
+        "cancelled",
+        "expired",
+        "superseded"
+      ],
+      "title": "ConfirmationStatus",
+      "type": "string"
+    },
+    "ErrorEvent": {
+      "properties": {
+        "type": {
+          "const": "error",
+          "title": "Type",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "recoverable": {
+          "default": true,
+          "title": "Recoverable",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "LayoutApply": {
+      "properties": {
+        "action": {
+          "const": "layout.apply",
+          "title": "Action",
+          "type": "string"
+        },
+        "template": {
+          "$ref": "#/$defs/LayoutTemplate"
+        },
+        "primary_panel": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "secondary_panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "preserve": {
+          "default": true,
+          "title": "Preserve",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "template",
+        "primary_panel"
+      ],
+      "title": "LayoutApply",
+      "type": "object"
+    },
+    "LayoutRestore": {
+      "properties": {
+        "action": {
+          "const": "layout.restore",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "LayoutRestore",
+      "type": "object"
+    },
+    "LayoutTemplate": {
+      "enum": [
+        "focus",
+        "split",
+        "reference",
+        "background_media"
+      ],
+      "title": "LayoutTemplate",
+      "type": "string"
+    },
+    "MediaState": {
+      "enum": [
+        "playing",
+        "paused",
+        "stopped"
+      ],
+      "title": "MediaState",
+      "type": "string"
+    },
+    "MediaStateChange": {
+      "properties": {
+        "action": {
+          "const": "media.state",
+          "title": "Action",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/MediaState"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume"
+        }
+      },
+      "required": [
+        "action",
+        "state"
+      ],
+      "title": "MediaStateChange",
+      "type": "object"
+    },
+    "NotificationEvent": {
+      "properties": {
+        "type": {
+          "const": "notification",
+          "title": "Type",
+          "type": "string"
+        },
+        "notification_id": {
+          "title": "Notification Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/NotificationKind"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "due_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Due At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "notification_id",
+        "kind",
+        "title",
+        "text"
+      ],
+      "title": "NotificationEvent",
+      "type": "object"
+    },
+    "NotificationKind": {
+      "enum": [
+        "reminder",
+        "alarm",
+        "info",
+        "error"
+      ],
+      "title": "NotificationKind",
+      "type": "string"
+    },
+    "NotificationShow": {
+      "properties": {
+        "action": {
+          "const": "notification.show",
+          "title": "Action",
+          "type": "string"
+        },
+        "notification_id": {
+          "title": "Notification Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/NotificationKind"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "sound": {
+          "default": false,
+          "title": "Sound",
+          "type": "boolean"
+        },
+        "snoozable": {
+          "default": true,
+          "title": "Snoozable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "notification_id",
+        "kind",
+        "title",
+        "text"
+      ],
+      "title": "NotificationShow",
+      "type": "object"
+    },
+    "PanelClose": {
+      "properties": {
+        "action": {
+          "const": "panel.close",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "panel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Panel Id"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "PanelClose",
+      "type": "object"
+    },
+    "PanelFullscreen": {
+      "properties": {
+        "action": {
+          "const": "panel.fullscreen",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        }
+      },
+      "required": [
+        "action",
+        "panel_type"
+      ],
+      "title": "PanelFullscreen",
+      "type": "object"
+    },
+    "PanelOpen": {
+      "properties": {
+        "action": {
+          "const": "panel.open",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "content_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Reference"
+        }
+      },
+      "required": [
+        "action",
+        "panel_type"
+      ],
+      "title": "PanelOpen",
+      "type": "object"
+    },
+    "PanelSetPrimary": {
+      "properties": {
+        "action": {
+          "const": "panel.set_primary",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        }
+      },
+      "required": [
+        "action",
+        "panel_type"
+      ],
+      "title": "PanelSetPrimary",
+      "type": "object"
+    },
+    "PanelType": {
+      "enum": [
+        "conversation",
+        "browser",
+        "youtube",
+        "media",
+        "book_reader",
+        "document_editor",
+        "news",
+        "notes",
+        "tasks",
+        "reminders",
+        "telegram_preview",
+        "confirmation",
+        "settings",
+        "notification"
+      ],
+      "title": "PanelType",
+      "type": "string"
+    },
+    "PongEvent": {
+      "properties": {
+        "type": {
+          "const": "pong",
+          "title": "Type",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PongEvent",
+      "type": "object"
+    },
+    "StateUpdateEvent": {
+      "properties": {
+        "type": {
+          "const": "state_update",
+          "title": "Type",
+          "type": "string"
+        },
+        "voice_state": {
+          "$ref": "#/$defs/VoiceState"
+        },
+        "activity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Activity"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "voice_state"
+      ],
+      "title": "StateUpdateEvent",
+      "type": "object"
+    },
+    "ToolCallEvent": {
+      "properties": {
+        "type": {
+          "const": "tool_call",
+          "title": "Type",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "done",
+            "error",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "run_id",
+        "tool",
+        "args",
+        "status"
+      ],
+      "title": "ToolCallEvent",
+      "type": "object"
+    },
+    "TtsSpeak": {
+      "properties": {
+        "action": {
+          "const": "tts.speak",
+          "title": "Action",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "priority": {
+          "default": false,
+          "title": "Priority",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "text"
+      ],
+      "title": "TtsSpeak",
+      "type": "object"
+    },
+    "UiCommandEvent": {
+      "properties": {
+        "type": {
+          "const": "ui_command",
+          "title": "Type",
+          "type": "string"
+        },
+        "command": {
+          "discriminator": {
+            "mapping": {
+              "audio.play": "#/$defs/AudioPlay",
+              "layout.apply": "#/$defs/LayoutApply",
+              "layout.restore": "#/$defs/LayoutRestore",
+              "media.state": "#/$defs/MediaStateChange",
+              "notification.show": "#/$defs/NotificationShow",
+              "panel.close": "#/$defs/PanelClose",
+              "panel.fullscreen": "#/$defs/PanelFullscreen",
+              "panel.open": "#/$defs/PanelOpen",
+              "panel.set_primary": "#/$defs/PanelSetPrimary",
+              "tts.speak": "#/$defs/TtsSpeak"
+            },
+            "propertyName": "action"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LayoutApply"
+            },
+            {
+              "$ref": "#/$defs/PanelOpen"
+            },
+            {
+              "$ref": "#/$defs/PanelClose"
+            },
+            {
+              "$ref": "#/$defs/PanelSetPrimary"
+            },
+            {
+              "$ref": "#/$defs/PanelFullscreen"
+            },
+            {
+              "$ref": "#/$defs/LayoutRestore"
+            },
+            {
+              "$ref": "#/$defs/NotificationShow"
+            },
+            {
+              "$ref": "#/$defs/MediaStateChange"
+            },
+            {
+              "$ref": "#/$defs/TtsSpeak"
+            },
+            {
+              "$ref": "#/$defs/AudioPlay"
+            }
+          ],
+          "title": "Command"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command"
+      ],
+      "title": "UiCommandEvent",
+      "type": "object"
+    },
+    "UserMessageEvent": {
+      "properties": {
+        "type": {
+          "const": "user_message",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "text"
+      ],
+      "title": "UserMessageEvent",
+      "type": "object"
+    },
+    "VoiceState": {
+      "enum": [
+        "sleeping",
+        "listening",
+        "thinking",
+        "speaking",
+        "waiting_for_confirmation",
+        "stopping",
+        "error"
+      ],
+      "title": "VoiceState",
+      "type": "string"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "agent_message": "#/$defs/AgentMessageEvent",
+      "config_update": "#/$defs/ConfigUpdateEvent",
+      "confirmation_requested": "#/$defs/ConfirmationRequestedEvent",
+      "confirmation_resolved": "#/$defs/ConfirmationResolvedEvent",
+      "error": "#/$defs/ErrorEvent",
+      "notification": "#/$defs/NotificationEvent",
+      "pong": "#/$defs/PongEvent",
+      "state_update": "#/$defs/StateUpdateEvent",
+      "tool_call": "#/$defs/ToolCallEvent",
+      "ui_command": "#/$defs/UiCommandEvent",
+      "user_message": "#/$defs/UserMessageEvent"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/UserMessageEvent"
+    },
+    {
+      "$ref": "#/$defs/AgentMessageEvent"
+    },
+    {
+      "$ref": "#/$defs/ToolCallEvent"
+    },
+    {
+      "$ref": "#/$defs/UiCommandEvent"
+    },
+    {
+      "$ref": "#/$defs/ConfirmationRequestedEvent"
+    },
+    {
+      "$ref": "#/$defs/ConfirmationResolvedEvent"
+    },
+    {
+      "$ref": "#/$defs/StateUpdateEvent"
+    },
+    {
+      "$ref": "#/$defs/NotificationEvent"
+    },
+    {
+      "$ref": "#/$defs/ErrorEvent"
+    },
+    {
+      "$ref": "#/$defs/ConfigUpdateEvent"
+    },
+    {
+      "$ref": "#/$defs/PongEvent"
+    }
+  ]
+}

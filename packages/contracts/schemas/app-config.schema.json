@@ -1,0 +1,594 @@
+{
+  "$defs": {
+    "AgentSection": {
+      "additionalProperties": false,
+      "properties": {
+        "mock": {
+          "default": false,
+          "title": "Mock",
+          "type": "boolean"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelSection",
+          "default": {
+            "provider": "opencode-go",
+            "base_url": "https://opencode.ai/zen/go/v1/",
+            "api_key_env": "OPENCODE_GO_API_KEY",
+            "name": "deepseek-v4-flash",
+            "temperature": 0.2,
+            "timeout_s": 90,
+            "max_steps": 8
+          }
+        },
+        "system_prompt_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "System Prompt File"
+        },
+        "recent_turns_in_context": {
+          "default": 6,
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Recent Turns In Context",
+          "type": "integer"
+        }
+      },
+      "title": "AgentSection",
+      "type": "object"
+    },
+    "AppSection": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": "Ars-Vox",
+          "title": "Name",
+          "type": "string"
+        },
+        "locale": {
+          "default": "es",
+          "title": "Locale",
+          "type": "string"
+        }
+      },
+      "title": "AppSection",
+      "type": "object"
+    },
+    "BrowserSection": {
+      "additionalProperties": false,
+      "properties": {
+        "allowlist": {
+          "default": [
+            "youtube.com",
+            "*.youtube.com",
+            "wikipedia.org",
+            "openstreetmap.org"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowlist",
+          "type": "array"
+        },
+        "home_url": {
+          "default": "https://www.youtube.com",
+          "title": "Home Url",
+          "type": "string"
+        }
+      },
+      "title": "BrowserSection",
+      "type": "object"
+    },
+    "DemoSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "step_delay_s": {
+          "default": 6.0,
+          "maximum": 120.0,
+          "minimum": 1.0,
+          "title": "Step Delay S",
+          "type": "number"
+        }
+      },
+      "title": "DemoSection",
+      "type": "object"
+    },
+    "MediaSection": {
+      "additionalProperties": false,
+      "properties": {
+        "sample_video_url": {
+          "default": "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          "title": "Sample Video Url",
+          "type": "string"
+        }
+      },
+      "title": "MediaSection",
+      "type": "object"
+    },
+    "MemorySection": {
+      "additionalProperties": false,
+      "properties": {
+        "db_path": {
+          "default": "data/arsvox.db",
+          "title": "Db Path",
+          "type": "string"
+        },
+        "library_dir": {
+          "default": "data/library",
+          "title": "Library Dir",
+          "type": "string"
+        },
+        "documents_dir": {
+          "default": "data/documents",
+          "title": "Documents Dir",
+          "type": "string"
+        }
+      },
+      "title": "MemorySection",
+      "type": "object"
+    },
+    "ModelSection": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "default": "opencode-go",
+          "title": "Provider",
+          "type": "string"
+        },
+        "base_url": {
+          "default": "https://opencode.ai/zen/go/v1/",
+          "title": "Base Url",
+          "type": "string"
+        },
+        "api_key_env": {
+          "default": "OPENCODE_GO_API_KEY",
+          "title": "Api Key Env",
+          "type": "string"
+        },
+        "name": {
+          "default": "deepseek-v4-flash",
+          "title": "Name",
+          "type": "string"
+        },
+        "temperature": {
+          "default": 0.2,
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "timeout_s": {
+          "default": 90,
+          "maximum": 600,
+          "minimum": 5,
+          "title": "Timeout S",
+          "type": "integer"
+        },
+        "max_steps": {
+          "default": 8,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Max Steps",
+          "type": "integer"
+        }
+      },
+      "title": "ModelSection",
+      "type": "object"
+    },
+    "RemindersSection": {
+      "additionalProperties": false,
+      "properties": {
+        "scheduler_interval_s": {
+          "default": 5,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Scheduler Interval S",
+          "type": "integer"
+        },
+        "snooze_seconds": {
+          "default": 600,
+          "maximum": 86400,
+          "minimum": 10,
+          "title": "Snooze Seconds",
+          "type": "integer"
+        },
+        "confirmation_timeout_s": {
+          "default": 120,
+          "maximum": 3600,
+          "minimum": 10,
+          "title": "Confirmation Timeout S",
+          "type": "integer"
+        }
+      },
+      "title": "RemindersSection",
+      "type": "object"
+    },
+    "ServerSection": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "default": "127.0.0.1",
+          "title": "Host",
+          "type": "string"
+        },
+        "port": {
+          "default": 8765,
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Port",
+          "type": "integer"
+        }
+      },
+      "title": "ServerSection",
+      "type": "object"
+    },
+    "SttSection": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "default": "mock",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "tiny",
+          "title": "Model",
+          "type": "string"
+        }
+      },
+      "title": "SttSection",
+      "type": "object"
+    },
+    "TelegramSection": {
+      "additionalProperties": false,
+      "properties": {
+        "mock": {
+          "default": true,
+          "title": "Mock",
+          "type": "boolean"
+        },
+        "token_env": {
+          "default": "TELEGRAM_BOT_TOKEN",
+          "title": "Token Env",
+          "type": "string"
+        },
+        "chat_id": {
+          "default": "",
+          "title": "Chat Id",
+          "type": "string"
+        }
+      },
+      "title": "TelegramSection",
+      "type": "object"
+    },
+    "TtsSection": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "default": "mock",
+          "title": "Provider",
+          "type": "string"
+        },
+        "auto_speak": {
+          "default": false,
+          "title": "Auto Speak",
+          "type": "boolean"
+        },
+        "es_voice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Es Voice"
+        },
+        "speed": {
+          "default": 1.0,
+          "maximum": 2.0,
+          "minimum": 0.5,
+          "title": "Speed",
+          "type": "number"
+        },
+        "queue_max": {
+          "default": 20,
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Queue Max",
+          "type": "integer"
+        }
+      },
+      "title": "TtsSection",
+      "type": "object"
+    },
+    "UiSection": {
+      "additionalProperties": false,
+      "properties": {
+        "templates": {
+          "default": [
+            "focus",
+            "split",
+            "reference",
+            "background_media"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Templates",
+          "type": "array"
+        },
+        "reduced_motion": {
+          "default": false,
+          "title": "Reduced Motion",
+          "type": "boolean"
+        },
+        "large_text": {
+          "default": false,
+          "title": "Large Text",
+          "type": "boolean"
+        },
+        "high_contrast": {
+          "default": false,
+          "title": "High Contrast",
+          "type": "boolean"
+        },
+        "default_template": {
+          "default": "focus",
+          "title": "Default Template",
+          "type": "string"
+        },
+        "default_primary": {
+          "default": "conversation",
+          "title": "Default Primary",
+          "type": "string"
+        }
+      },
+      "title": "UiSection",
+      "type": "object"
+    },
+    "VadSection": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "default": "silero",
+          "title": "Provider",
+          "type": "string"
+        }
+      },
+      "title": "VadSection",
+      "type": "object"
+    },
+    "VoiceSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "wake_word": {
+          "$ref": "#/$defs/WakeWordSection",
+          "default": {
+            "enabled": false,
+            "model": null
+          }
+        },
+        "vad": {
+          "$ref": "#/$defs/VadSection",
+          "default": {
+            "provider": "silero"
+          }
+        },
+        "stt": {
+          "$ref": "#/$defs/SttSection",
+          "default": {
+            "provider": "mock",
+            "model": "tiny"
+          }
+        },
+        "silence_timeout_s": {
+          "default": 60,
+          "maximum": 3600,
+          "minimum": 5,
+          "title": "Silence Timeout S",
+          "type": "integer"
+        },
+        "wake_sound": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wake Sound"
+        },
+        "sleep_sound": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sleep Sound"
+        }
+      },
+      "title": "VoiceSection",
+      "type": "object"
+    },
+    "WakeWordSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        }
+      },
+      "title": "WakeWordSection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "app": {
+      "$ref": "#/$defs/AppSection",
+      "default": {
+        "name": "Ars-Vox",
+        "locale": "es"
+      }
+    },
+    "server": {
+      "$ref": "#/$defs/ServerSection",
+      "default": {
+        "host": "127.0.0.1",
+        "port": 8765
+      }
+    },
+    "agent": {
+      "$ref": "#/$defs/AgentSection",
+      "default": {
+        "mock": false,
+        "model": {
+          "api_key_env": "OPENCODE_GO_API_KEY",
+          "base_url": "https://opencode.ai/zen/go/v1/",
+          "max_steps": 8,
+          "name": "deepseek-v4-flash",
+          "provider": "opencode-go",
+          "temperature": 0.2,
+          "timeout_s": 90
+        },
+        "system_prompt_file": null,
+        "recent_turns_in_context": 6
+      }
+    },
+    "voice": {
+      "$ref": "#/$defs/VoiceSection",
+      "default": {
+        "enabled": false,
+        "wake_word": {
+          "enabled": false,
+          "model": null
+        },
+        "vad": {
+          "provider": "silero"
+        },
+        "stt": {
+          "model": "tiny",
+          "provider": "mock"
+        },
+        "silence_timeout_s": 60,
+        "wake_sound": null,
+        "sleep_sound": null
+      }
+    },
+    "tts": {
+      "$ref": "#/$defs/TtsSection",
+      "default": {
+        "provider": "mock",
+        "auto_speak": false,
+        "es_voice": null,
+        "speed": 1.0,
+        "queue_max": 20
+      }
+    },
+    "ui": {
+      "$ref": "#/$defs/UiSection",
+      "default": {
+        "templates": [
+          "focus",
+          "split",
+          "reference",
+          "background_media"
+        ],
+        "reduced_motion": false,
+        "large_text": false,
+        "high_contrast": false,
+        "default_template": "focus",
+        "default_primary": "conversation"
+      }
+    },
+    "telegram": {
+      "$ref": "#/$defs/TelegramSection",
+      "default": {
+        "mock": true,
+        "token_env": "TELEGRAM_BOT_TOKEN",
+        "chat_id": ""
+      }
+    },
+    "memory": {
+      "$ref": "#/$defs/MemorySection",
+      "default": {
+        "db_path": "data/arsvox.db",
+        "library_dir": "data/library",
+        "documents_dir": "data/documents"
+      }
+    },
+    "reminders": {
+      "$ref": "#/$defs/RemindersSection",
+      "default": {
+        "scheduler_interval_s": 5,
+        "snooze_seconds": 600,
+        "confirmation_timeout_s": 120
+      }
+    },
+    "browser": {
+      "$ref": "#/$defs/BrowserSection",
+      "default": {
+        "allowlist": [
+          "youtube.com",
+          "*.youtube.com",
+          "wikipedia.org",
+          "openstreetmap.org"
+        ],
+        "home_url": "https://www.youtube.com"
+      }
+    },
+    "media": {
+      "$ref": "#/$defs/MediaSection",
+      "default": {
+        "sample_video_url": "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+      }
+    },
+    "demo": {
+      "$ref": "#/$defs/DemoSection",
+      "default": {
+        "enabled": false,
+        "step_delay_s": 6.0
+      }
+    }
+  },
+  "title": "AppConfig",
+  "type": "object"
+}

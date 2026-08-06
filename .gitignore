@@ -1,0 +1,15 @@
+.venv/
+node_modules/
+dist/
+dist-electron/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+data/*.db
+data/*.db-*
+data/documents/*
+!data/documents/.gitkeep
+configs/.env
+*.log
+.DS_Store
