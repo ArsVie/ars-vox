@@ -25,7 +25,9 @@ class ScriptedModel:
     """Deterministic scripted model for demos and tests (no network).
 
     Each script entry is either {"tool": name, "args": {...}} or
-    {"text": "..."}; entries replay in order, last one repeats.
+    {"text": "..."}; entries replay in order and the script LOOPs, so a
+    long-running demo service replays the full tool -> text flow on
+    every user turn (the agent instance is cached across turns).
     """
 
     def __init__(self, script: list[dict[str, Any]] | None = None):
@@ -33,7 +35,7 @@ class ScriptedModel:
         self._step = 0
 
     def _handler(self, messages, info: AgentInfo) -> ModelResponse:
-        entry = self.script[min(self._step, len(self.script) - 1)]
+        entry = self.script[self._step % len(self.script)]
         self._step += 1
         if "tool" in entry:
             return ModelResponse(
