@@ -19,4 +19,9 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ## Done
 
-(entries marked resolved move here or get removed by their owner)
+### hermes (ars-vox 2026-08-06 continuation)
+- timestamp: 2026-08-06T19:52:54Z
+- task: Post-handoff verification + repo convention bootstrap (index.md, hey.md, OKF frontmatter) + README voice status refresh
+- files/dirs: `index.md`, `hey.md`, `README.md`, `docs/**` (frontmatter + index.md only)
+- boundaries: did NOT touch `apps/desktop/src/`, `services/`, `packages/`, `configs/` — handoff state was committed and green (45/45 python, 30/30 vitest, typecheck clean); next real work is the real-mic smoke test on the Windows machine
+- status: resolved
