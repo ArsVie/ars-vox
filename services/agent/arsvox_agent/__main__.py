@@ -22,13 +22,16 @@ def main() -> None:
     port = args.port or config.server.port
     if args.mock:
         config.agent.mock = True
-        config_path = Path(args.config).resolve()
+        # Never rewrite the user's config file: write the mock variant to
+        # a temp file and boot from that.
+        import tempfile
         import yaml
 
-        config_path.write_text(
-            yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False, allow_unicode=True),
-            encoding="utf-8",
-        )
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+            yaml.safe_dump(
+                config.model_dump(mode="json"), f, sort_keys=False, allow_unicode=True
+            )
+            args.config = f.name
     app = create_app(args.config)
     uvicorn.run(app, host=host, port=port, log_level="info")
 
