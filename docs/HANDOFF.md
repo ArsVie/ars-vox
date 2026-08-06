@@ -61,36 +61,34 @@ Done (uncommitted in this working tree):
 - Tests: 2 new Vitest cases (enqueue/drain, stop clears queue). Python
   suite unchanged at 45/45.
 
-INTERRUPTED: the browser verification of the autoplay fix was cut off.
-What was proven in the browser BEFORE the fix: the store processed
-tts.speak (status bar showed "Speaking"), but Chrome's autoplay policy
-blocked the audio element from even issuing the GET /tts request
-(CDP synthetic clicks carry no user activation). The muted-then-unmute
-fallback + Electron autoplay switch were written AFTER that, and were
-NOT re-verified.
+INTERRUPTED (NOW VERIFIED): the browser verification of the autoplay
+fix was cut off in the previous session and is now complete. What was
+proven in the browser BEFORE the fix: the store processed tts.speak
+(status bar showed "Speaking"), but Chrome's autoplay policy blocked
+the audio element from even issuing the GET /tts request (CDP
+synthetic clicks carry no user activation).
 
-Next-session first step (about 10 minutes):
+Verification completed 2026-08-06 (plain Edge via CDP, mock agent +
+edge TTS + auto_speak):
 
-```bash
-# terminal 1
-cd /mnt/c/dev/ars-vox && .venv/bin/python -c "
-import yaml
-cfg = yaml.safe_load(open('configs/app.yaml'))
-cfg['agent']['mock'] = True
-cfg['tts']['provider'] = 'edge'
-cfg['tts']['auto_speak'] = True
-yaml.safe_dump(cfg, open('/tmp/arsvox-voice.yaml','w'), sort_keys=False, allow_unicode=True)
-from arsvox_agent.app import create_app
-import uvicorn
-uvicorn.run(create_app('/tmp/arsvox-voice.yaml'), host='127.0.0.1', port=8765, log_level='info')
-"
-# terminal 2
-cd /mnt/c/dev/ars-vox/apps/desktop && npx vite --port 5173 --strictPort
-# then: real Edge/Chrome via agent-browser CDP (see quirks), open
-# http://localhost:5173, click Send (REAL click via CDP Input, not
-# eval .click()), and check the service log for "GET /tts" + audible
-# playback on the Windows machine.
-```
+- REAL CDP Input click on Send -> agent turn -> TtsSpeak -> the
+  renderer issued `GET /tts?text=...` (200 OK in service log) and
+  `HTMLMediaElement.play()` RESOLVED unmuted (`muted:false,
+  paused:false`) — audible playback on the Windows machine.
+- The muted-then-unmute fallback is reached on a zero-activation page
+  (first play() rejected with NotAllowedError), BUT in current
+  Chromium even muted play() is rejected without user activation —
+  the fallback cannot rescue a never-interacted page in a plain
+  browser. Electron's `autoplay-policy=no-user-gesture-required`
+  (committed in `apps/desktop/electron/main.ts`) is the real fix for
+  the voice-first product; in plain browsers the product flow always
+  starts from a real user gesture (Send click / mic permission), so
+  unmuted play succeeds.
+
+Next-session first step: priority 2 below — the microphone path. The
+TTS playback side is verified; what remains for "the user speaks and
+the assistant answers out loud" is renderer mic capture -> POST
+/api/stt -> user_text.
 
 REMEMBER: vite on /mnt/c does NOT see file changes — restart vite after
 any source edit, or the browser serves stale modules (this burned 20
@@ -98,8 +96,9 @@ minutes this session).
 
 ## Next steps, priority order
 
-1. Finish the TTS browser verification above; then commit the voice
-   work (it is currently uncommitted in the working tree).
+1. ~~Finish the TTS browser verification~~ DONE 2026-08-06 (see the
+   INTERRUPTED section above); voice work committed as `e88a3a7` and
+   README voice section updated. No action left here.
 2. Microphone path: the missing half of the voice demo. The renderer
    must capture mic audio (getUserMedia; Electron main grants audio
    device permission) and POST it to /api/stt (faster-whisper, es),
@@ -107,6 +106,10 @@ minutes this session).
    stop recognition can ride on the existing VoicePipeline state
    machine; barge-in = stop() already clears the speak queue. Plan the
    audio framing (blob per utterance vs chunked stream) before coding.
+   NOTE from verification: in plain browsers the mic permission grant
+   itself is the user gesture that makes unmuted TTS autoplay legal —
+   the mic flow and TTS playback compose cleanly, no extra work needed
+   there for the browser case.
 3. Expand panels (browser/youtube via allowlisted WebContentsView,
    media, news, notes, tasks, settings) only after 1-2 work.
 4. MacBook Air 2014 spike (real hardware): Electron launch + Big Sur,

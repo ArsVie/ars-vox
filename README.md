@@ -6,8 +6,10 @@ news, keep notes and tasks, and send a Telegram message to one approved
 person.
 
 Current state: **a verified agent-service foundation with a working
-desktop vertical slice**. The full user-facing product (voice capture,
-TTS playback, all panels) is not complete yet.
+desktop vertical slice and a partially wired real voice path**. TTS
+synthesis (edge provider) and STT (faster-whisper) work end to end;
+microphone capture is not wired yet, so the full user-facing product
+(voice capture, all panels) is not complete.
 
 ## Current scope
 
@@ -30,10 +32,18 @@ Working end to end (verified live):
 - Local stop path: the protocol `stop` message cancels the running turn
   without ever involving the LLM.
 
-Not yet done: real microphone + STT + TTS wiring (mock providers in
-place), the remaining panels (browser, media, news, notes, tasks,
-settings), Electron version pinning for the target 2014 Intel MacBook
-Air, and the product documentation listed under `docs/`.
+- Voice path start: `GET /tts?text=...` synthesizes Spanish speech
+  (edge-tts) and `POST /api/stt` transcribes uploaded audio
+  (faster-whisper, es); `auto_speak` emits a real `tts.speak` and the
+  renderer plays it (Electron disables the autoplay policy; plain
+  browsers get a muted-then-unmute fallback). Verified live: a real
+  click on Send produced `GET /tts` with 200 and playback started.
+
+Not yet done: microphone capture (the renderer must record mic audio
+and POST it to `/api/stt`), the remaining panels (browser, media,
+news, notes, tasks, settings), Electron version pinning for the target
+2014 Intel MacBook Air, and the product documentation listed under
+`docs/`.
 
 ## Repository structure
 
@@ -158,9 +168,9 @@ panels, and the UI computes geometry.
 
 ## Known limitations
 
-- Voice capture (microphone, VAD, STT) and TTS playback are provider
-  stubs; the pipeline state machine and interfaces exist, but no real
-  audio path is wired yet.
+- Microphone capture is not wired: the voice pipeline state machine and
+  STT/TTS provider interfaces exist and STT/TTS work via file/URL
+  paths, but the renderer does not record mic audio yet.
 - TS types in the renderer are hand-mirrored from the Python contracts;
   the JSON schemas in `packages/contracts/schemas/` exist for future
   code generation.
@@ -198,5 +208,11 @@ panels, and the UI computes geometry.
   user text → tool call → policy → `ui_command` → split layout →
   document panel → agent response; stop button returns the app to
   sleeping and the service stays responsive.
+- TTS playback: verified in a real Chromium against the mock service
+  with edge TTS — a real CDP click on Send issued `GET /tts` (200) and
+  playback started (unmuted, resolved). Autoplay-safe: Electron ships
+  with `autoplay-policy=no-user-gesture-required`; plain browsers fall
+  back to muted-then-unmute when no user activation exists yet.
 - This project is NOT a complete demo yet; it is a verified agent-service
-  foundation with a working desktop vertical slice.
+  foundation with a working desktop vertical slice and a partially wired
+  real voice path (TTS/STT work; microphone capture pending).
