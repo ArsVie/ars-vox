@@ -8,6 +8,10 @@
 import { app, BrowserWindow } from "electron";
 import * as path from "path";
 
+// The assistant speaks without any user click (voice-first product):
+// Chrome's autoplay policy must not block TTS playback.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 
 function createWindow(): void {

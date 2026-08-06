@@ -13,9 +13,11 @@ from arsvox_contracts import (
     AppConfig,
     ErrorEvent,
     StateUpdateEvent,
+    UiCommandEvent,
     UserMessageEvent,
     VoiceState,
 )
+from arsvox_contracts.commands import TtsSpeak
 
 from arsvox_agent.context import build_context
 from arsvox_agent.deps import Deps
@@ -138,8 +140,14 @@ class AgentRuntime:
             self.deps_base.sessions.append_turn(self.session_id, "assistant", final)
             await self.bus.publish(AgentMessageEvent(text=final, delta=False))
             if self.config.tts.auto_speak:
-                await self.bus.publish(StateUpdateEvent(voice_state=VoiceState.SPEAKING))
-                await asyncio.sleep(0.05)  # mock phase; real TTS plays here
+                # The UI fetches the audio (GET /tts) and plays it; the
+                # stop path clears the UI queue and interrupts playback.
+                await self.bus.publish(
+                    StateUpdateEvent(voice_state=VoiceState.SPEAKING)
+                )
+                await self.bus.publish(
+                    UiCommandEvent(command=TtsSpeak(text=final, priority=False))
+                )
 
     # ------------------------------------------------------------------ #
     async def cancel(self) -> None:

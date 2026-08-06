@@ -222,6 +222,35 @@ describe("layout restoration", () => {
   });
 });
 
+describe("tts speak queue", () => {
+  it("enqueues tts.speak commands and drains via ttsDone", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "tts.speak", text: "Hola" },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "tts.speak", text: "mundo" },
+      created_at: ts(),
+    });
+    expect(store.getState().speakTexts).toEqual(["Hola", "mundo"]);
+    store.getState().ttsDone();
+    expect(store.getState().speakTexts).toEqual(["mundo"]);
+  });
+
+  it("stop clears the speak queue before sending the stop message", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().enqueueTts("Hola");
+    store.getState().enqueueTts("mundo");
+    store.getState().stop();
+    expect(store.getState().speakTexts).toEqual([]);
+    expect(sent).toEqual([{ type: "stop" }]);
+  });
+});
+
 describe("panel close", () => {
   it("closing the primary panel falls back to the conversation panel", () => {
     const store = createAppStore(() => {});

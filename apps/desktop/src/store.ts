@@ -54,6 +54,8 @@ export interface AppState {
   error: ErrorInfo | null;
   fullscreenPanel: PanelId | null;
   reducedMotion: boolean;
+  /** Pending TTS phrases (text), played in order by TtsPlayer. */
+  speakTexts: string[];
 
   send: SendFn;
   setConnected: (connected: boolean) => void;
@@ -67,6 +69,8 @@ export interface AppState {
 
   applyUiCommand: (command: UiCommand) => void;
   recompute: () => void;
+  enqueueTts: (text: string) => void;
+  ttsDone: () => void;
 }
 
 let messageSeq = 0;
@@ -192,10 +196,15 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           });
           return;
         }
-        case "tts.speak":
+        case "tts.speak": {
+          const speakTexts = [...state.speakTexts, command.text];
+          if (speakTexts.length > 10) speakTexts.shift();
+          set({ speakTexts });
+          return;
+        }
         case "media.state":
         case "audio.play":
-          // Slice: no media/TTS surfaces yet; the command is acknowledged by
+          // Slice: no media surface yet; the command is acknowledged by
           // the service but has no visible effect here.
           return;
       }
@@ -294,6 +303,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       error: null,
       fullscreenPanel: null,
       reducedMotion: false,
+      speakTexts: [],
 
       send,
       setConnected: (connected) => set({ connected }),
@@ -310,7 +320,12 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         // the single source of truth for the conversation history.
         get().send({ type: "user_text", text: trimmed });
       },
-      stop: () => get().send({ type: "stop" }),
+      stop: () => {
+        // Local stop: clear the speak queue so TtsPlayer interrupts
+        // playback, then tell the service to cancel the running turn.
+        set({ speakTexts: [] });
+        get().send({ type: "stop" });
+      },
       confirm: (approve) => {
         const state = get();
         if (!state.pending) return;
@@ -326,6 +341,14 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
 
       applyUiCommand,
       recompute,
+      enqueueTts: (text) => {
+        const speakTexts = [...get().speakTexts, text];
+        if (speakTexts.length > 10) speakTexts.shift();
+        set({ speakTexts });
+      },
+      ttsDone: () => {
+        set({ speakTexts: get().speakTexts.slice(1) });
+      },
     };
   });
   return store;

@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 class TTSProvider(ABC):
     name: str = "abstract"
+    media_type: str = "application/octet-stream"
 
     @abstractmethod
     async def synthesize(self, text: str, voice: str | None = None) -> bytes | None:
@@ -43,6 +44,7 @@ class EdgeTTS(TTSProvider):
     """Microsoft Edge neural voices (free, no key). Spanish voices available."""
 
     name = "edge"
+    media_type = "audio/mpeg"
 
     def __init__(self, voice: str | None = None):
         self.default_voice = voice or "es-MX-DaliaNeural"
@@ -69,6 +71,7 @@ class PiperTTS(TTSProvider):
     """
 
     name = "piper"
+    media_type = "audio/wav"
 
     def __init__(self, binary: str | None = None, voice: str | None = None):
         self.binary = binary or shutil.which("piper") or ""

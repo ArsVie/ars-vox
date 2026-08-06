@@ -6,8 +6,9 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from arsvox_contracts import (
@@ -44,6 +45,7 @@ from arsvox_agent.tools.scheduler import ReminderScheduler
 from arsvox_agent.ws import websocket_endpoint
 from arsvox_tts import build_tts
 from arsvox_voice import VoicePipeline
+from arsvox_voice.providers import build_stt
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +87,7 @@ class AppServices:
         register_all(self.registry)
         self.policy = PolicyEngine()
         self.tts = build_tts(config)
+        self.stt = build_stt(config)
         self.telegram = build_telegram(config)
         self.confirmations = ConfirmationCoordinator(
             self.pending,
@@ -262,6 +265,37 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
             Path(doc["path"]).write_text(payload.content, encoding="utf-8")
         services.documents.update_content(doc_id, payload.content, saved=payload.saved)
         return {"ok": True}
+
+    # -------------------------------------------------------------- tts #
+    @app.get("/tts")
+    async def api_tts(text: str, voice: str | None = None):
+        """Synthesize speech for the given text (returns audio bytes)."""
+        if not text.strip():
+            raise HTTPException(status_code=422, detail="text is required")
+        audio = await services.tts.synthesize(text[:2000], voice)
+        if not audio:
+            raise HTTPException(status_code=503, detail="tts provider returned no audio")
+
+        return Response(content=audio, media_type=services.tts.media_type)
+
+    # -------------------------------------------------------------- stt #
+    @app.post("/api/stt")
+    async def api_stt(file: UploadFile):
+        """Transcribe an uploaded audio file (wav/mp3/ogg) to text."""
+        import tempfile
+
+        data = await file.read()
+        if not data:
+            raise HTTPException(status_code=422, detail="empty upload")
+        suffix = Path(file.filename or "audio.wav").suffix or ".wav"
+        with tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False) as f:
+            f.write(data)
+            tmp_path = f.name
+        try:
+            text = await services.stt.transcribe(tmp_path, language="es")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+        return {"text": text}
 
     # --------------------------------------------------------------- ws #
     @app.websocket("/ws")
