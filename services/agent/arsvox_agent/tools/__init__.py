@@ -174,8 +174,13 @@ def build_pydantic_tools(registry: ToolRegistry) -> list:
             namespace,
         )
         fn = namespace[fn_name]
-        fn.__name__ = spec.name
-        fn.__qualname__ = spec.name
+        # The live provider (Console Go / opencode-go) rejects tool names
+        # that are not ^[a-zA-Z0-9_-]+$ — dots must be flattened here.
+        # Internal dotted names (policy, confirmations, audit, events) are
+        # preserved; only the model-visible name is sanitized.
+        wire_name = spec.name.replace(".", "_")
+        fn.__name__ = wire_name
+        fn.__qualname__ = wire_name
         fn.__doc__ = spec.description
         # copy the handler's typed annotations so pydantic-ai builds a
         # proper JSON schema (enums, optionals, literals)
@@ -184,7 +189,7 @@ def build_pydantic_tools(registry: ToolRegistry) -> list:
             for p in sig.parameters.values()
             if p.name != "tctx" and p.annotation is not inspect.Parameter.empty
         } | {"return": str}
-        tools.append(Tool(fn, name=spec.name, description=spec.description, takes_ctx=True))
+        tools.append(Tool(fn, name=wire_name, description=spec.description, takes_ctx=True))
     return tools
 
 

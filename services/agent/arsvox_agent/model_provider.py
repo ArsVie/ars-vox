@@ -14,7 +14,7 @@ from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
 DEFAULT_SCRIPT: list[dict[str, Any]] = [
     {
-        "tool": "ui.apply_layout",
+        "tool": "ui_apply_layout",
         "args": {"template": "split", "primary_panel": "document_editor"},
     },
     {"text": "Listo. Apliqué la disposición dividida con el documento como panel principal."},

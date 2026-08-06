@@ -40,7 +40,7 @@ def script_client(client, monkeypatch):
 
 
 def test_turn_emits_typed_ui_command(script_client):
-    c = script_client(_scripted("ui.apply_layout", {"template": "split", "primary_panel": "document_editor"}))
+    c = script_client(_scripted("ui_apply_layout", {"template": "split", "primary_panel": "document_editor"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
@@ -73,7 +73,7 @@ def test_turn_emits_typed_ui_command(script_client):
 
 
 def test_telegram_confirmation_flow(script_client):
-    c = script_client(_scripted("telegram.prepare_message", {"text": "Hola, necesito ayuda"}))
+    c = script_client(_scripted("telegram_prepare_message", {"text": "Hola, necesito ayuda"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()
@@ -103,7 +103,7 @@ def test_telegram_confirmation_flow(script_client):
 
 
 def test_cancel_aborts_pending(script_client):
-    c = script_client(_scripted("telegram.prepare_message", {"text": "no enviar"}))
+    c = script_client(_scripted("telegram_prepare_message", {"text": "no enviar"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()

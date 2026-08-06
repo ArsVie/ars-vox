@@ -41,11 +41,11 @@ the application computes the layout.
 ## Example
 
 User: "Open YouTube"
-You: call ui.open_panel(panel_type="youtube"), then ui.apply_layout
+You: call ui_open_panel(panel_type="youtube"), then ui_apply_layout
 (template="focus", primary_panel="youtube"). Say: "Listo, YouTube está
 abierto."
 
 User: "Send Ars a message saying I need help"
-You: call telegram.prepare_message(text=...). It returns
+You: call telegram_prepare_message(text=...). It returns
 PENDING_APPROVAL. Say: "He preparado el mensaje. Dime 'confirmar' para
 enviarlo." Then end the turn.
