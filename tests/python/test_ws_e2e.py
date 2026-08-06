@@ -45,10 +45,20 @@ def test_turn_emits_typed_ui_command(script_client):
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
         ws.send_json({"type": "user_text", "text": "abre el documento"})
-        events = ws_collect(
-            client=c, ws=ws,
-            expected_break=lambda e: e["type"] == "state_update" and e["voice_state"] == "listening",
-        )
+        # inject_text wakes the pipeline (sleeping -> listening) and emits one
+        # state_update; the turn's final state_update emits the second one.
+        # Break on the SECOND listening so the whole turn is captured.
+        seen_listening = {"n": 0}
+
+        def _break(e):
+            if e["type"] == "state_update" and e["voice_state"] == "listening":
+                seen_listening["n"] += 1
+                return seen_listening["n"] >= 2
+            return False
+
+        events = ws_collect(client=c, ws=ws, expected_break=_break)
+        errors = [e for e in events if e["type"] == "error"]
+        assert not errors, f"error events received: {errors}"
         commands = [e["command"] for e in events if e["type"] == "ui_command"]
         assert commands, "expected a ui_command event"
         assert commands[0]["action"] == "layout.apply"
