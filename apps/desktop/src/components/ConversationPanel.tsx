@@ -3,6 +3,7 @@ import { useStore } from "zustand";
 
 import type { PanelMeta } from "../store";
 import { appStore } from "../store";
+import { MicButton } from "./MicButton";
 
 export function ConversationPanel({ meta }: { meta?: PanelMeta }) {
   const messages = useStore(appStore, (s) => s.messages);
@@ -41,6 +42,7 @@ export function ConversationPanel({ meta }: { meta?: PanelMeta }) {
           placeholder="Type a request..."
           aria-label="Request"
         />
+        <MicButton />
         <button type="button" onClick={submit} disabled={!draft.trim()}>
           Send
         </button>

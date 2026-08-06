@@ -5,12 +5,23 @@
  * talks to it over WebSocket.
  */
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, session } from "electron";
 import * as path from "path";
 
 // The assistant speaks without any user click (voice-first product):
 // Chrome's autoplay policy must not block TTS playback.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
+// Voice-first product: the mic must be usable without fiddling with
+// site permissions. Grant the media permission to this app's windows.
+app.whenReady().then(() => {
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission === "media");
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    return permission === "media";
+  });
+});
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 

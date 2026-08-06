@@ -169,6 +169,39 @@ body,
   cursor: pointer;
 }
 
+.composer .mic-button {
+  background: #1f2937;
+  border: 1px solid var(--panel-border);
+  min-width: 64px;
+  text-align: center;
+}
+
+.composer .mic-button.recording {
+  background: #b91c1c;
+  border-color: #ef4444;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+.composer .mic-button.busy {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.mic-error {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #fbbf24;
+  vertical-align: middle;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
 .composer button:disabled {
   opacity: 0.5;
   cursor: default;
