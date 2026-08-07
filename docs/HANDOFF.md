@@ -1,6 +1,6 @@
 ---
 type: handoff
-title: Ars-Vox handoff — 2026-08-07 (night): config-driven UI + live windows demo + modularity audit fixes
+title: "Ars-Vox handoff — 2026-08-07 (night): config-driven UI + live windows demo + modularity audit fixes"
 description: Authoritative roadmap and latest session state. Session shipped config-driven UI wiring (endpoints.ts, store.applyConfig, a11y modes, tts knobs), live multi-turn LLM window-management demo (MULTI_OK 5/5), modularity audit fixes, and the taste-skill design-governance pass.
 ---
 

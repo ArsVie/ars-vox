@@ -1,3 +1,10 @@
+---
+type: analysis
+title: taste-skill repo analysis & adoption report
+description: Design-token protocol and adoption report for the Ars-Vox desktop app (2026-08-07).
+timestamp: 2026-08-07T00:00:00Z
+---
+
 # taste-skill Repo Analysis & Adoption Report for Ars-Vox
 
 **Date:** 2026-08-07

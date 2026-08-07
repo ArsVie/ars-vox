@@ -1,3 +1,10 @@
+---
+type: audit
+title: Ars-Vox modularity & configuration audit
+description: Read-only audit of duplication, drift risk, dead code, and config hygiene (2026-08-07).
+timestamp: 2026-08-07T00:00:00Z
+---
+
 # Ars-Vox Modularity & Configuration Audit — 2026-08-07
 
 Read-only audit of duplication, drift risk, dead code, and config hygiene across

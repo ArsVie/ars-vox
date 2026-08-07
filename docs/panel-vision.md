@@ -1,3 +1,10 @@
+---
+type: direction
+title: Panel vision direction — Ars's spec
+description: Frozen panel definitions per Ars (2026-08-07). NOT editable by agents.
+timestamp: 2026-08-07T00:00:00Z
+---
+
 # Panel vision direction — Ars's spec (2026-08-07, authoritative)
 
 > ⛔ FROZEN DIRECTION — NOT EDITABLE BY AGENTS.

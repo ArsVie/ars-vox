@@ -1,9 +1,3 @@
----
-type: index
-title: plans
-description: Implementation plans for ars-vox (all current plans implemented; see docs/HANDOFF.md for open work)
----
-
 # docs/plans
 
 No active plans. The multi-zone layout advisor plan (2026-08-07) was fully

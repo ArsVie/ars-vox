@@ -1,3 +1,10 @@
+---
+type: review
+title: Advisor review round 1
+description: claude-opus-4.8 grounded UI review of the pre-fix multi-zone layouts (2026-08-07).
+timestamp: 2026-08-07T00:00:00Z
+---
+
 # Advisor review — Round 1 (claude-opus-4.8, 2026-08-07)
 
 Screenshots reviewed: `docs/review-2026-08-07/01-focus.png` .. `04-dashboard.png`
