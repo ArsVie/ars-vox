@@ -61,6 +61,8 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     "telegram.send_pending": PolicyKind.EXTERNAL,
     # memory
     "memory.remember": PolicyKind.USER_VISIBLE,
+    # demo (mock mode only — the handler guards itself)
+    "demo_populate": PolicyKind.USER_VISIBLE,
     "memory.recall": PolicyKind.READ_ONLY,
 }
 

@@ -13,11 +13,11 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
 DEFAULT_SCRIPT: list[dict[str, Any]] = [
+    {"tool": "demo_populate", "args": {}},
     {
-        "tool": "ui_apply_layout",
-        "args": {"template": "split", "primary_panel": "document_editor"},
+        "text": "Listo. Te he preparado el escritorio: navegador con las noticias, "
+        "tus tareas, un documento abierto y opciones de vídeo en YouTube."
     },
-    {"text": "Listo. Apliqué la disposición dividida con el documento como panel principal."},
 ]
 
 
