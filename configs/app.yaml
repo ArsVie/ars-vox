@@ -52,7 +52,7 @@ tts:
   queue_max: 20
 
 ui:
-  templates: [focus, split, reference, background_media]
+  templates: [focus, split, reading, dashboard]
   reduced_motion: false
   large_text: false
   high_contrast: false

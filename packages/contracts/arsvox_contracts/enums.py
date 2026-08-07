@@ -6,6 +6,11 @@ from enum import Enum
 class LayoutTemplate(str, Enum):
     FOCUS = "focus"
     SPLIT = "split"
+    READING = "reading"
+    DASHBOARD = "dashboard"
+    # Deprecated aliases — kept forever (deployed configs may reference
+    # them); engine resolves them to READING/DASHBOARD. Not documented
+    # to the model.
     REFERENCE = "reference"
     BACKGROUND_MEDIA = "background_media"
 

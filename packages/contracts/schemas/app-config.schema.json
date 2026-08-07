@@ -322,8 +322,8 @@
           "default": [
             "focus",
             "split",
-            "reference",
-            "background_media"
+            "reading",
+            "dashboard"
           ],
           "items": {
             "type": "string"
@@ -529,8 +529,8 @@
         "templates": [
           "focus",
           "split",
-          "reference",
-          "background_media"
+          "reading",
+          "dashboard"
         ],
         "reduced_motion": false,
         "large_text": false,

@@ -9,6 +9,14 @@ def test_config_loads(client):
     assert cfg["agent"]["model"]["name"] == "deepseek-v4-flash"
 
 
+def test_ui_templates_default_to_frozen_set():
+    # B5: config advertises the frozen canonical set (aliases are valid
+    # enum values but not advertised)
+    from arsvox_contracts import UiSection
+
+    assert UiSection().templates == ["focus", "split", "reading", "dashboard"]
+
+
 def test_config_rejects_unknown_keys(config_path):
     raw = yaml.safe_load(config_path.read_text())
     raw["nonsense_key"] = True

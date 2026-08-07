@@ -38,7 +38,7 @@ def base_config(tmp_path: Path) -> dict:
         },
         "voice": {"enabled": False, "silence_timeout_s": 60},
         "tts": {"provider": "mock", "auto_speak": False, "speed": 1.0, "queue_max": 20},
-        "ui": {"templates": ["focus", "split", "reference", "background_media"]},
+        "ui": {"templates": ["focus", "split", "reading", "dashboard"]},
         "telegram": {"mock": True, "token_env": "TELEGRAM_BOT_TOKEN", "chat_id": "12345"},
         "memory": {
             "db_path": str(tmp_path / "arsvox-test.db"),

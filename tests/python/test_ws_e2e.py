@@ -72,6 +72,46 @@ def test_turn_emits_typed_ui_command(script_client):
         assert services.sessions.get(services.runtime.session_id)["turn_count"] >= 2
 
 
+def test_slots_bearing_layout_survives_wire(script_client):
+    """Joint gate (Phase 2, backend half): a slots-bearing ui_apply_layout
+    call emits a layout.apply command with the full slots map over the WS."""
+    c = script_client(
+        _scripted(
+            "ui_apply_layout",
+            {
+                "template": "reading",
+                "primary_panel": "document_editor",
+                "side": "conversation",
+                "dock": "media",
+            },
+        )
+    )
+    with c.websocket_connect("/ws") as ws:
+        ws.receive_json()  # state_update
+        ws.receive_json()  # config_update
+        ws.send_json({"type": "user_text", "text": "abre el documento con música"})
+        seen_listening = {"n": 0}
+
+        def _break(e):
+            if e["type"] == "state_update" and e["voice_state"] == "listening":
+                seen_listening["n"] += 1
+                return seen_listening["n"] >= 2
+            return False
+
+        events = ws_collect(client=c, ws=ws, expected_break=_break)
+        assert not [e for e in events if e["type"] == "error"], "error events received"
+        commands = [e["command"] for e in events if e["type"] == "ui_command"]
+        assert commands and commands[0]["action"] == "layout.apply"
+        cmd = commands[0]
+        assert cmd["template"] == "reading"
+        slots = cmd["slots"]
+        assert slots["main"] == "document_editor"
+        assert slots["side"] == "conversation"
+        assert slots["dock"] == "media"
+        assert slots["rail"] is None
+        assert cmd["primary_panel"] == slots["main"]
+
+
 def test_telegram_confirmation_flow(script_client):
     c = script_client(_scripted("telegram_prepare_message", {"text": "Hola, necesito ayuda"}))
     with c.websocket_connect("/ws") as ws:

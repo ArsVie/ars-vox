@@ -4,6 +4,7 @@
       "properties": {
         "action": {
           "const": "audio.play",
+          "default": "audio.play",
           "title": "Action",
           "type": "string"
         },
@@ -13,7 +14,6 @@
         }
       },
       "required": [
-        "action",
         "asset"
       ],
       "title": "AudioPlay",
@@ -23,6 +23,7 @@
       "properties": {
         "action": {
           "const": "layout.apply",
+          "default": "layout.apply",
           "title": "Action",
           "type": "string"
         },
@@ -43,6 +44,17 @@
           ],
           "default": null
         },
+        "slots": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutSlots"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "preserve": {
           "default": true,
           "title": "Preserve",
@@ -50,7 +62,6 @@
         }
       },
       "required": [
-        "action",
         "template",
         "primary_panel"
       ],
@@ -61,20 +72,66 @@
       "properties": {
         "action": {
           "const": "layout.restore",
+          "default": "layout.restore",
           "title": "Action",
           "type": "string"
         }
       },
-      "required": [
-        "action"
-      ],
       "title": "LayoutRestore",
+      "type": "object"
+    },
+    "LayoutSlots": {
+      "description": "Panel\u2192slot assignments for multi-zone layouts.\n\n``main`` is always populated (frozen invariant). ``side``/``rail``/\n``dock`` are optional. The model never sends coordinates \u2014 only\nassignments; the engine owns geometry.",
+      "properties": {
+        "main": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "main"
+      ],
+      "title": "LayoutSlots",
       "type": "object"
     },
     "LayoutTemplate": {
       "enum": [
         "focus",
         "split",
+        "reading",
+        "dashboard",
         "reference",
         "background_media"
       ],
@@ -94,6 +151,7 @@
       "properties": {
         "action": {
           "const": "media.state",
+          "default": "media.state",
           "title": "Action",
           "type": "string"
         },
@@ -138,7 +196,6 @@
         }
       },
       "required": [
-        "action",
         "state"
       ],
       "title": "MediaStateChange",
@@ -158,6 +215,7 @@
       "properties": {
         "action": {
           "const": "notification.show",
+          "default": "notification.show",
           "title": "Action",
           "type": "string"
         },
@@ -188,7 +246,6 @@
         }
       },
       "required": [
-        "action",
         "notification_id",
         "kind",
         "title",
@@ -201,6 +258,7 @@
       "properties": {
         "action": {
           "const": "panel.close",
+          "default": "panel.close",
           "title": "Action",
           "type": "string"
         },
@@ -228,9 +286,6 @@
           "title": "Panel Id"
         }
       },
-      "required": [
-        "action"
-      ],
       "title": "PanelClose",
       "type": "object"
     },
@@ -238,6 +293,7 @@
       "properties": {
         "action": {
           "const": "panel.fullscreen",
+          "default": "panel.fullscreen",
           "title": "Action",
           "type": "string"
         },
@@ -246,7 +302,6 @@
         }
       },
       "required": [
-        "action",
         "panel_type"
       ],
       "title": "PanelFullscreen",
@@ -256,6 +311,7 @@
       "properties": {
         "action": {
           "const": "panel.open",
+          "default": "panel.open",
           "title": "Action",
           "type": "string"
         },
@@ -288,7 +344,6 @@
         }
       },
       "required": [
-        "action",
         "panel_type"
       ],
       "title": "PanelOpen",
@@ -336,6 +391,7 @@
       "properties": {
         "action": {
           "const": "tts.speak",
+          "default": "tts.speak",
           "title": "Action",
           "type": "string"
         },
@@ -350,7 +406,6 @@
         }
       },
       "required": [
-        "action",
         "text"
       ],
       "title": "TtsSpeak",

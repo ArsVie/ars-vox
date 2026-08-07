@@ -83,7 +83,7 @@ class TtsSection(BaseModel):
 
 class UiSection(BaseModel):
     model_config = _STRICT
-    templates: list[str] = ["focus", "split", "reference", "background_media"]
+    templates: list[str] = ["focus", "split", "reading", "dashboard"]
     reduced_motion: bool = False
     large_text: bool = False
     high_contrast: bool = False

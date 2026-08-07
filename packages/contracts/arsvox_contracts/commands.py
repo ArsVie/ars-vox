@@ -11,7 +11,7 @@ UiCommand is a discriminated union on ``action``.
 from datetime import datetime, timezone
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from arsvox_contracts.enums import LayoutTemplate, MediaState, NotificationKind, PanelType
 
@@ -20,13 +20,36 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class LayoutSlots(BaseModel):
+    """Panel→slot assignments for multi-zone layouts.
+
+    ``main`` is always populated (frozen invariant). ``side``/``rail``/
+    ``dock`` are optional. The model never sends coordinates — only
+    assignments; the engine owns geometry.
+    """
+
+    main: PanelType
+    side: PanelType | None = None
+    rail: PanelType | None = None
+    dock: PanelType | None = None
+
+
 class LayoutApply(BaseModel):
     action: Literal["layout.apply"] = "layout.apply"
     template: LayoutTemplate
     primary_panel: PanelType
     secondary_panel: PanelType | None = None
+    # Optional superset: when present it WINS over primary/secondary
+    # (engine treats slots.main as the source of truth for the main slot).
+    slots: LayoutSlots | None = None
     # When True the UI keeps current panels mounted; only roles change.
     preserve: bool = True
+
+    @model_validator(mode="after")
+    def _slots_main_matches_primary(self) -> "LayoutApply":
+        if self.slots is not None and self.slots.main != self.primary_panel:
+            raise ValueError("slots.main must equal primary_panel when both are present")
+        return self
 
 
 class PanelOpen(BaseModel):

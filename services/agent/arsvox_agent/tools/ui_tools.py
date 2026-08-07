@@ -6,6 +6,7 @@ from arsvox_contracts import LayoutTemplate, PanelType
 from arsvox_contracts.commands import (
     LayoutApply,
     LayoutRestore,
+    LayoutSlots,
     PanelClose,
     PanelFullscreen,
     PanelOpen,
@@ -61,14 +62,28 @@ async def ui_apply_layout(
     template: LayoutTemplate,
     primary_panel: PanelType,
     secondary_panel: PanelType | None = None,
+    side: PanelType | None = None,
+    rail: PanelType | None = None,
+    dock: PanelType | None = None,
 ) -> str:
+    """Apply a fixed layout template.
+
+    Flat slot kwargs (side/rail/dock) are the 3/4-zone expressiveness —
+    the derived JSON schema comes from the flat typed parameters, so the
+    model never nests objects. ``primary_panel`` is always the ``main``
+    slot. 2-zone calls (focus/split) may keep using primary/secondary.
+    """
     tctx.deps.panels.upsert(primary_panel.value)
+    slots: LayoutSlots | None = None
+    if any(v is not None for v in (side, rail, dock)):
+        slots = LayoutSlots(main=primary_panel, side=side, rail=rail, dock=dock)
     await tctx.emit(
         UiCommandEvent(
             command=LayoutApply(
                 template=template,
                 primary_panel=primary_panel,
                 secondary_panel=secondary_panel,
+                slots=slots,
             )
         )
     )
@@ -115,10 +130,12 @@ SPECS = [
     ),
     ToolSpec(
         "ui.apply_layout",
-        "Apply one of the four fixed layout templates: focus (one large center panel),"
-        " split (large panel + small side panel), reference (center + two narrow side"
-        " panels), background_media (large work panel + small media panel)."
-        " Call only when the user's primary task changes. Never invent coordinates.",
+        "Apply one of the four fixed layout templates: focus (single main"
+        " slot), split (main + side), reading (main + side + dock),"
+        " dashboard (rail + main + side + dock). Assign panels to slots"
+        " with the flat side/rail/dock arguments for 3-4 zone layouts;"
+        " primary_panel is always the main slot. Call only when the user's"
+        " primary task changes. Never invent coordinates.",
         ui_apply_layout,
         PolicyKind.REVERSIBLE,
     ),

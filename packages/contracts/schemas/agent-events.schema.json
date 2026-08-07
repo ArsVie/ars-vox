@@ -4,6 +4,7 @@
       "properties": {
         "type": {
           "const": "agent_message",
+          "default": "agent_message",
           "title": "Type",
           "type": "string"
         },
@@ -23,7 +24,6 @@
         }
       },
       "required": [
-        "type",
         "text"
       ],
       "title": "AgentMessageEvent",
@@ -33,6 +33,7 @@
       "properties": {
         "action": {
           "const": "audio.play",
+          "default": "audio.play",
           "title": "Action",
           "type": "string"
         },
@@ -42,7 +43,6 @@
         }
       },
       "required": [
-        "action",
         "asset"
       ],
       "title": "AudioPlay",
@@ -52,6 +52,7 @@
       "properties": {
         "type": {
           "const": "config_update",
+          "default": "config_update",
           "title": "Type",
           "type": "string"
         },
@@ -67,7 +68,6 @@
         }
       },
       "required": [
-        "type",
         "config"
       ],
       "title": "ConfigUpdateEvent",
@@ -77,6 +77,7 @@
       "properties": {
         "type": {
           "const": "confirmation_requested",
+          "default": "confirmation_requested",
           "title": "Type",
           "type": "string"
         },
@@ -107,7 +108,6 @@
         }
       },
       "required": [
-        "type",
         "pending_id",
         "tool",
         "title",
@@ -121,6 +121,7 @@
       "properties": {
         "type": {
           "const": "confirmation_resolved",
+          "default": "confirmation_resolved",
           "title": "Type",
           "type": "string"
         },
@@ -150,7 +151,6 @@
         }
       },
       "required": [
-        "type",
         "pending_id",
         "status"
       ],
@@ -172,6 +172,7 @@
       "properties": {
         "type": {
           "const": "error",
+          "default": "error",
           "title": "Type",
           "type": "string"
         },
@@ -191,7 +192,6 @@
         }
       },
       "required": [
-        "type",
         "message"
       ],
       "title": "ErrorEvent",
@@ -201,6 +201,7 @@
       "properties": {
         "action": {
           "const": "layout.apply",
+          "default": "layout.apply",
           "title": "Action",
           "type": "string"
         },
@@ -221,6 +222,17 @@
           ],
           "default": null
         },
+        "slots": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutSlots"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "preserve": {
           "default": true,
           "title": "Preserve",
@@ -228,7 +240,6 @@
         }
       },
       "required": [
-        "action",
         "template",
         "primary_panel"
       ],
@@ -239,20 +250,66 @@
       "properties": {
         "action": {
           "const": "layout.restore",
+          "default": "layout.restore",
           "title": "Action",
           "type": "string"
         }
       },
-      "required": [
-        "action"
-      ],
       "title": "LayoutRestore",
+      "type": "object"
+    },
+    "LayoutSlots": {
+      "description": "Panel\u2192slot assignments for multi-zone layouts.\n\n``main`` is always populated (frozen invariant). ``side``/``rail``/\n``dock`` are optional. The model never sends coordinates \u2014 only\nassignments; the engine owns geometry.",
+      "properties": {
+        "main": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "main"
+      ],
+      "title": "LayoutSlots",
       "type": "object"
     },
     "LayoutTemplate": {
       "enum": [
         "focus",
         "split",
+        "reading",
+        "dashboard",
         "reference",
         "background_media"
       ],
@@ -272,6 +329,7 @@
       "properties": {
         "action": {
           "const": "media.state",
+          "default": "media.state",
           "title": "Action",
           "type": "string"
         },
@@ -316,7 +374,6 @@
         }
       },
       "required": [
-        "action",
         "state"
       ],
       "title": "MediaStateChange",
@@ -326,6 +383,7 @@
       "properties": {
         "type": {
           "const": "notification",
+          "default": "notification",
           "title": "Type",
           "type": "string"
         },
@@ -364,7 +422,6 @@
         }
       },
       "required": [
-        "type",
         "notification_id",
         "kind",
         "title",
@@ -387,6 +444,7 @@
       "properties": {
         "action": {
           "const": "notification.show",
+          "default": "notification.show",
           "title": "Action",
           "type": "string"
         },
@@ -417,7 +475,6 @@
         }
       },
       "required": [
-        "action",
         "notification_id",
         "kind",
         "title",
@@ -430,6 +487,7 @@
       "properties": {
         "action": {
           "const": "panel.close",
+          "default": "panel.close",
           "title": "Action",
           "type": "string"
         },
@@ -457,9 +515,6 @@
           "title": "Panel Id"
         }
       },
-      "required": [
-        "action"
-      ],
       "title": "PanelClose",
       "type": "object"
     },
@@ -467,6 +522,7 @@
       "properties": {
         "action": {
           "const": "panel.fullscreen",
+          "default": "panel.fullscreen",
           "title": "Action",
           "type": "string"
         },
@@ -475,7 +531,6 @@
         }
       },
       "required": [
-        "action",
         "panel_type"
       ],
       "title": "PanelFullscreen",
@@ -485,6 +540,7 @@
       "properties": {
         "action": {
           "const": "panel.open",
+          "default": "panel.open",
           "title": "Action",
           "type": "string"
         },
@@ -517,7 +573,6 @@
         }
       },
       "required": [
-        "action",
         "panel_type"
       ],
       "title": "PanelOpen",
@@ -565,6 +620,7 @@
       "properties": {
         "type": {
           "const": "pong",
+          "default": "pong",
           "title": "Type",
           "type": "string"
         },
@@ -574,9 +630,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "type"
-      ],
       "title": "PongEvent",
       "type": "object"
     },
@@ -584,6 +637,7 @@
       "properties": {
         "type": {
           "const": "state_update",
+          "default": "state_update",
           "title": "Type",
           "type": "string"
         },
@@ -609,7 +663,6 @@
         }
       },
       "required": [
-        "type",
         "voice_state"
       ],
       "title": "StateUpdateEvent",
@@ -619,6 +672,7 @@
       "properties": {
         "type": {
           "const": "tool_call",
+          "default": "tool_call",
           "title": "Type",
           "type": "string"
         },
@@ -664,7 +718,6 @@
         }
       },
       "required": [
-        "type",
         "run_id",
         "tool",
         "args",
@@ -677,6 +730,7 @@
       "properties": {
         "action": {
           "const": "tts.speak",
+          "default": "tts.speak",
           "title": "Action",
           "type": "string"
         },
@@ -691,7 +745,6 @@
         }
       },
       "required": [
-        "action",
         "text"
       ],
       "title": "TtsSpeak",
@@ -701,6 +754,7 @@
       "properties": {
         "type": {
           "const": "ui_command",
+          "default": "ui_command",
           "title": "Type",
           "type": "string"
         },
@@ -761,7 +815,6 @@
         }
       },
       "required": [
-        "type",
         "command"
       ],
       "title": "UiCommandEvent",
@@ -771,6 +824,7 @@
       "properties": {
         "type": {
           "const": "user_message",
+          "default": "user_message",
           "title": "Type",
           "type": "string"
         },
@@ -789,7 +843,6 @@
         }
       },
       "required": [
-        "type",
         "id",
         "text"
       ],

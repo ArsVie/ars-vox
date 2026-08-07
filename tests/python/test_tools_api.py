@@ -16,6 +16,30 @@ def test_registry_registers_all_tools():
     assert registry.get("shell.exec") is None
 
 
+def test_ui_apply_layout_flat_slot_kwargs():
+    """B3: the tool signature is FLAT side/rail/dock kwargs (pydantic-ai
+    derives the JSON schema from flat typed params; no nested object)."""
+    import inspect
+
+    registry = ToolRegistry()
+    register_all(registry)
+    spec = registry.get("ui.apply_layout")
+    params = list(inspect.signature(spec.handler).parameters)
+    assert params == [
+        "tctx",
+        "template",
+        "primary_panel",
+        "secondary_panel",
+        "side",
+        "rail",
+        "dock",
+    ]
+    # secondary stays optional; slots kwargs are PanelType|None
+    ann = inspect.signature(spec.handler).parameters
+    assert ann["side"].annotation == PanelType | None
+    assert ann["dock"].annotation == PanelType | None
+
+
 def test_unknown_tool_denied_by_gate():
     registry = ToolRegistry()
     assert registry.get("nope.tool") is None
