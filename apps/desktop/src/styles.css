@@ -824,7 +824,7 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 40px;
+  height: 48px; /* ≥48px per advisor acceptance criterion (round 1) */
   padding: 0 18px;
   border-radius: 999px;
   border: 1px solid rgba(255, 107, 87, 0.6);

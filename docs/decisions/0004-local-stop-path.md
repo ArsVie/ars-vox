@@ -20,7 +20,7 @@ unresponsive. The stop path must be local and instantaneous.
 
 - `stop` is a protocol-level client message handled before any model
   routing; local intent matching also recognizes spoken stop vocabulary
-  (`stop`, `detente`, `para`, `alto`, `basta`).
+  (`stop`, `detente`, `alto`, `basta`).
 - `AgentRuntime.cancel()`:
   1. cancels the active model run (task cancel),
   2. clears the TTS queue,

@@ -823,6 +823,20 @@
   background: #10151f;
 }
 
+/* Book measure: the reader renders into a mount div; for EPUB the mount
+ * is capped to a comfortable reading column (~65-80 chars/line) and
+ * centered. ch scales with the A−/A+ font size. PDF keeps full width. */
+.reader-mount {
+  width: 100%;
+  min-width: 0;
+}
+
+.reader-mount--book {
+  max-width: 72ch;
+  min-width: 300px;
+  margin: 0 auto;
+}
+
 .reader-stage .pdf-page {
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   margin: 14px auto;

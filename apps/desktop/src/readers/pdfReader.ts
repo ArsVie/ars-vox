@@ -31,7 +31,11 @@ export class PdfReader implements Reader {
   private pageNum = 1;
   private fontSize = 17;
   private canvas: HTMLCanvasElement | null = null;
+  /** Fit-width by default: the first page scales so its width fills the
+   *  panel (advisor review: fit-page left the text tiny for the target
+   *  user). A−/A+ then zoom relative to that base. */
   private scale = 1.4;
+  private baseScale = 1.4;
   onLocationChange?: (loc: ReaderLocation) => void;
 
   async open(url: string, container: HTMLElement): Promise<void> {
@@ -43,7 +47,15 @@ export class PdfReader implements Reader {
     this.loadTask = pdfjs.getDocument({ url });
     const doc = await this.loadTask.promise;
     this.doc = doc;
-    this.fontSize = defaultFontSize(container.clientWidth || 700);
+    const width = container.clientWidth || 700;
+    this.fontSize = defaultFontSize(width);
+    // Fit-width: base scale makes page 1 exactly panel-wide (clamped
+    // so tiny or huge PDFs stay readable).
+    const page1 = await doc.getPage(1);
+    const vp = page1.getViewport({ scale: 1 });
+    page1.cleanup();
+    this.baseScale = Math.min(2.5, Math.max(0.6, (width - 32) / vp.width));
+    this.scale = this.baseScale;
     await this.showPage(1);
     this.emit();
   }
@@ -112,7 +124,8 @@ export class PdfReader implements Reader {
 
   setFontSize(px: number): void {
     this.fontSize = px;
-    this.scale = 1.2 + (px - 14) * 0.08;
+    // Zoom relative to the fit-width base: 17px = base scale.
+    this.scale = this.baseScale * (px / 17);
     if (this.doc) void this.showPage(this.pageNum);
   }
 

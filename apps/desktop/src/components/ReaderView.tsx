@@ -16,7 +16,7 @@ const FONT_STEPS = [14, 16, 17, 19, 22, 26];
  * with the formats.
  */
 export function ReaderView({ kind, url }: { kind: DocumentKind; url: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
   const readerRef = useRef<Reader | null>(null);
   const [location, setLocation] = useState<ReaderLocation | null>(null);
   const [fontIdx, setFontIdx] = useState(2); // 17px default
@@ -24,7 +24,7 @@ export function ReaderView({ kind, url }: { kind: DocumentKind; url: string }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const container = containerRef.current;
+    const container = mountRef.current;
     if (!container || !url) return;
     const reader: Reader | null =
       kind === "pdf" ? new PdfReader() : kind === "epub" ? new EpubReader() : null;
@@ -106,7 +106,11 @@ export function ReaderView({ kind, url }: { kind: DocumentKind; url: string }) {
           </button>
         ) : null}
       </div>
-      <div className="reader-stage" ref={containerRef}>
+      <div className="reader-stage">
+        <div
+          className={`reader-mount${kind === "epub" ? " reader-mount--book" : ""}`}
+          ref={mountRef}
+        />
         {failed ? (
           <div className="content-panel-empty">
             <span className="content-panel-empty-text">

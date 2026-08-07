@@ -2,7 +2,7 @@
 type: status
 title: Ars-Vox current state
 description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-07.
-timestamp: 2026-08-07T21:30:00Z
+timestamp: 2026-08-07T20:34:25Z
 ---
 
 # Ars-Vox — current state (2026-08-07)
@@ -30,8 +30,15 @@ wins.
 
 - Voice state machine, silence timer, wake/listen/speak/interrupt
   semantics: implemented (real code, provider-agnostic).
+- WAKE-WORD / VAD PROVIDERS ARE NOT WIRED: `WakeWordDetector`,
+  `MockWakeWordDetector`, `Vad` exist in services/voice but have ZERO
+  consumers, and `voice.wake_word.*` / `voice.vad.provider` config has
+  zero readers. Wiring is IMPLEMENTATION WORK, not just verification.
 - STT / TTS providers: run in MOCK mode for the demo; real provider
   path exists but is NOT verified end-to-end.
+- STOP vocabulary (utterance-level, accent-stripped): stop, detente,
+  deten, alto, basta. "para" was REMOVED (2026-08-07, Ars's decision)
+  because it is a common mid-sentence Spanish word.
 - Physical microphone smoke test: NOT DONE (blocked on being at the
   physical machine). The wake → ask → interrupt → continue → sleep →
   wake loop is NOT yet proven on real hardware.
