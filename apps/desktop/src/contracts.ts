@@ -124,6 +124,9 @@ export interface DocumentLoadEvent {
   title: string;
   kind: DocumentKind;
   path: string;
+  /** Fetchable URL for pdf/epub real rendering (web demo / Electron
+   *  custom protocol). When absent, the text path renders instead. */
+  url?: string | null;
   /** Full text for txt/md; for pdf/epub, the extracted readable text
    *  (rendered chapters) so panels never stay empty shells. */
   content: string;

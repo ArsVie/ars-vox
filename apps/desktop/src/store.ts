@@ -82,6 +82,8 @@ export interface DocumentContent {
   title: string;
   kind: DocumentKind;
   path: string;
+  /** Fetchable URL for pdf/epub real rendering. */
+  url?: string | null;
   content: string;
   chapters: { title: string; content: string }[];
 }
@@ -507,6 +509,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                 title: event.title,
                 kind: event.kind,
                 path: event.path,
+                url: event.url ?? null,
                 content: event.content,
                 chapters: event.chapters,
               },

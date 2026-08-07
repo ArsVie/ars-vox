@@ -314,6 +314,18 @@
           "title": "Path",
           "type": "string"
         },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
         "content": {
           "default": "",
           "title": "Content",

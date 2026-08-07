@@ -145,6 +145,7 @@ class DocumentLoadEvent(BaseModel):
     title: str
     kind: DocumentKind
     path: str
+    url: str | None = None
     content: str = ""
     chapters: list[DocumentChapter] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)
