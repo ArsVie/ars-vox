@@ -455,3 +455,102 @@ describe("multi-zone layout via slots (A8)", () => {
     expect(state.layout.panels.find((p) => p.panel === "media")).toBeUndefined();
   });
 });
+
+describe("config-driven UI state (config_update)", () => {
+  const configEvent = (overrides: Record<string, unknown>): ServerEvent => ({
+    type: "config_update",
+    config: {
+      app: { name: "Ars-Vox", locale: "es" },
+      server: { host: "127.0.0.1", port: 8765 },
+      agent: { mock: true, model: { name: "deepseek-v4-flash", max_steps: 8 } },
+      tts: { provider: "edge", auto_speak: false, es_voice: null, speed: 1.15, queue_max: 20 },
+      ui: {
+        templates: ["focus", "split", "reading", "dashboard"],
+        reduced_motion: true,
+        large_text: true,
+        high_contrast: true,
+        default_template: "split",
+        default_primary: "news",
+      },
+      ...overrides,
+    },
+    created_at: ts(),
+  });
+
+  it("applies accessibility flags and TTS knobs from the config", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent(configEvent({}));
+    const state = store.getState();
+    expect(state.reducedMotion).toBe(true);
+    expect(state.largeText).toBe(true);
+    expect(state.highContrast).toBe(true);
+    expect(state.ttsSpeed).toBe(1.15);
+    expect(state.ttsQueueMax).toBe(20);
+  });
+
+  it("applies the config default layout only before any layout command", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent(configEvent({}));
+    let state = store.getState();
+    expect(state.spec.template).toBe("split");
+    expect(state.spec.primaryPanel).toBe("news");
+
+    // a server layout command takes over; a later reconnect config_update
+    // must NOT clobber it back to the default
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "focus",
+        primary_panel: "youtube",
+        secondary_panel: null,
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+    store.getState().applyEvent(configEvent({}));
+    state = store.getState();
+    expect(state.spec.template).toBe("focus");
+    expect(state.spec.primaryPanel).toBe("youtube");
+  });
+
+  it("honors the config TTS queue cap in the speak path", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent(configEvent({ tts: { speed: 1, queue_max: 2 } }));
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "tts.speak", text: "uno" },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "tts.speak", text: "dos" },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "tts.speak", text: "tres" },
+      created_at: ts(),
+    });
+    const texts = store.getState().speakTexts;
+    expect(texts).toEqual(["dos", "tres"]);
+  });
+
+  it("ignores overlay panels (confirmation/notification) in the registry", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.open", panel_type: "notification", title: "X" },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.set_primary", panel_type: "confirmation" },
+      created_at: ts(),
+    });
+    const state = store.getState();
+    expect(Object.keys(state.panelMeta)).toEqual([]);
+    expect(state.spec.primaryPanel).toBe("conversation");
+    expect(state.fullscreenPanel).toBeNull();
+  });
+});

@@ -1,13 +1,9 @@
 """Session and turn storage (Hermes-style pattern: SQLite + FTS5)."""
 
 import uuid
-from datetime import datetime, timezone
 
-from arsvox_memory.db import Database
+from arsvox_memory.db import Database, utcnow_iso
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class SessionStore:
@@ -18,7 +14,7 @@ class SessionStore:
         session_id = uuid.uuid4().hex[:16]
         self.db.execute(
             "INSERT INTO sessions (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (session_id, title, _now(), _now()),
+            (session_id, title, utcnow_iso(), utcnow_iso()),
         )
         self.db.commit()
         return session_id
@@ -38,7 +34,7 @@ class SessionStore:
         )
         self.db.execute(
             "UPDATE sessions SET turn_count = turn_count + 1, updated_at = ? WHERE id = ?",
-            (_now(), session_id),
+            (utcnow_iso(), session_id),
         )
         self.db.commit()
         return turn_id
@@ -53,13 +49,13 @@ class SessionStore:
     def set_summary(self, session_id: str, summary: str) -> None:
         self.db.execute(
             "UPDATE sessions SET summary = ?, updated_at = ? WHERE id = ?",
-            (summary, _now(), session_id),
+            (summary, utcnow_iso(), session_id),
         )
         self.db.commit()
 
     def touch(self, session_id: str) -> None:
         self.db.execute(
-            "UPDATE sessions SET updated_at = ? WHERE id = ?", (_now(), session_id)
+            "UPDATE sessions SET updated_at = ? WHERE id = ?", (utcnow_iso(), session_id)
         )
         self.db.commit()
 

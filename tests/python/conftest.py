@@ -1,6 +1,11 @@
-"""Shared fixtures: temp config + FastAPI TestClient (mock model)."""
+"""Shared fixtures: temp config + FastAPI TestClient (mock model).
 
-import json
+The test config is configs/app.yaml (the single source of truth) with
+only test-specific overrides applied (tmp paths, mock agent, short
+timeouts). This keeps the fixture honest: if a key drifts in app.yaml,
+tests exercise the real value instead of a stale copy.
+"""
+
 from pathlib import Path
 
 import pytest
@@ -8,6 +13,8 @@ import yaml
 from fastapi.testclient import TestClient
 
 from arsvox_agent.app import create_app
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def base_config(tmp_path: Path) -> dict:
@@ -19,41 +26,19 @@ def base_config(tmp_path: Path) -> dict:
         "Capítulo uno.\n\nPrimera sección del libro de prueba.\n\nSegunda sección.\n\nTercera sección.",
         encoding="utf-8",
     )
-    cfg = {
-        "app": {"name": "Ars-Vox", "locale": "es"},
-        "server": {"host": "127.0.0.1", "port": 8765},
-        "agent": {
-            "mock": True,
-            "model": {
-                "provider": "opencode-go",
-                "base_url": "https://opencode.ai/zen/go/v1/",
-                "api_key_env": "OPENCODE_GO_API_KEY",
-                "name": "deepseek-v4-flash",
-                "temperature": 0.2,
-                "timeout_s": 30,
-                "max_steps": 8,
-            },
-            "system_prompt_file": None,
-            "recent_turns_in_context": 4,
-        },
-        "voice": {"enabled": False, "silence_timeout_s": 60},
-        "tts": {"provider": "mock", "auto_speak": False, "speed": 1.0, "queue_max": 20},
-        "ui": {"templates": ["focus", "split", "reading", "dashboard"]},
-        "telegram": {"mock": True, "token_env": "TELEGRAM_BOT_TOKEN", "chat_id": "12345"},
-        "memory": {
-            "db_path": str(tmp_path / "arsvox-test.db"),
-            "library_dir": str(library_dir),
-            "documents_dir": str(docs_dir),
-        },
-        "reminders": {
-            "scheduler_interval_s": 1,
-            "snooze_seconds": 600,
-            "confirmation_timeout_s": 30,
-        },
-        "browser": {"allowlist": ["youtube.com"], "home_url": "https://www.youtube.com"},
-        "media": {"sample_video_url": "https://example.com/sample.mp4"},
-        "demo": {"enabled": False, "step_delay_s": 2},
-    }
+    cfg = yaml.safe_load((REPO_ROOT / "configs" / "app.yaml").read_text(encoding="utf-8"))
+    # --- test-only overrides ------------------------------------------ #
+    cfg["agent"]["mock"] = True
+    cfg["agent"]["model"]["timeout_s"] = 30
+    cfg["agent"]["recent_turns_in_context"] = 4
+    cfg["memory"]["db_path"] = str(tmp_path / "arsvox-test.db")
+    cfg["memory"]["library_dir"] = str(library_dir)
+    cfg["memory"]["documents_dir"] = str(docs_dir)
+    cfg["reminders"]["scheduler_interval_s"] = 1
+    cfg["reminders"]["confirmation_timeout_s"] = 30
+    cfg["telegram"]["chat_id"] = "12345"
+    cfg["media"]["sample_video_url"] = "https://example.com/sample.mp4"
+    cfg["demo"]["enabled"] = False
     return cfg
 
 

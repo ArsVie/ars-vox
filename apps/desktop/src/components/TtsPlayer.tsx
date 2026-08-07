@@ -1,19 +1,20 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "zustand";
 
+import { TTS_URL } from "../endpoints";
 import { appStore } from "../store";
-
-const TTS_URL = "http://127.0.0.1:8765/tts";
 
 /**
  * Plays the store's speak queue: fetches each phrase from the agent
- * service (GET /tts), plays it, and advances. When the queue is cleared
- * (the stop button) the current playback is interrupted immediately.
- * Never touches the store's voice state — that stays server-owned.
+ * service (GET /tts), plays it, and advances. Playback rate follows the
+ * config-driven tts.speed. When the queue is cleared (the stop button)
+ * the current playback is interrupted immediately. Never touches the
+ * store's voice state — that stays server-owned.
  */
 export function TtsPlayer() {
   const speakTexts = useStore(appStore, (s) => s.speakTexts);
   const ttsDone = useStore(appStore, (s) => s.ttsDone);
+  const ttsSpeed = useStore(appStore, (s) => s.ttsSpeed);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const text = speakTexts[0];
@@ -26,6 +27,7 @@ export function TtsPlayer() {
     }
     let finished = false;
     const audio = new Audio(`${TTS_URL}?text=${encodeURIComponent(text)}`);
+    audio.playbackRate = ttsSpeed > 0 ? ttsSpeed : 1;
     audioRef.current = audio;
     const advance = () => {
       if (finished) return;
@@ -40,7 +42,7 @@ export function TtsPlayer() {
       audio.pause();
       audioRef.current = null;
     };
-  }, [text, ttsDone]);
+  }, [text, ttsDone, ttsSpeed]);
 
   return null;
 }

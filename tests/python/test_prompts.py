@@ -21,6 +21,16 @@ def test_system_prompt_defines_all_four_slots():
         assert slot in text, f"system.md no longer defines slot '{slot}'"
 
 
+def test_system_prompt_names_all_panel_types():
+    from arsvox_contracts import PanelType
+
+    text = _prompt()
+    for panel in PanelType:
+        assert (
+            panel.value in text
+        ), f"system.md no longer names panel '{panel.value}'"
+
+
 def test_system_prompt_does_not_advertise_deprecated_aliases():
     # reference/background_media stay valid enum values but are
     # undocumented for the model (frozen decision, plan §1.1/B4).

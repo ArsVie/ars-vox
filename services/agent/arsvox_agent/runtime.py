@@ -132,8 +132,14 @@ class AgentRuntime:
         prompt = f"{text}\n\n[Estado actual de la aplicación]\n{context}"
 
         timeout = self.config.agent.model.timeout_s
+        usage_limits = None
+        max_steps = self.config.agent.model.max_steps
+        if max_steps:
+            from pydantic_ai.usage import UsageLimits
+
+            usage_limits = UsageLimits(tool_calls_limit=max_steps)
         async with asyncio.timeout(timeout):
-            result = await agent.run(prompt, deps=deps)
+            result = await agent.run(prompt, deps=deps, usage_limits=usage_limits)
 
         final = (result.output or "").strip()
         if final:

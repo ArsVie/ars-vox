@@ -11,7 +11,8 @@ from arsvox_contracts.events import UiCommandEvent
 
 from arsvox_agent.tools.context import ToolContext
 
-_TEXT_EXTS = {".txt", ".md", ".epub"}
+# Phase 1 is plain-text books only; EPUB reading lands in Phase 2.
+_TEXT_EXTS = {".txt", ".md"}
 
 
 def list_books(config) -> list[dict]:
@@ -26,7 +27,7 @@ def list_books(config) -> list[dict]:
 
 def read_book_text(config, book_id: str) -> str:
     library_dir = Path(config.memory.library_dir)
-    for ext in (".txt", ".md"):
+    for ext in _TEXT_EXTS:
         path = library_dir / f"{book_id}{ext}"
         if path.is_file():
             return path.read_text(encoding="utf-8", errors="replace")

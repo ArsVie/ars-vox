@@ -2,13 +2,9 @@
 (data/documents); the DB row is the registry and the recovery snapshot."""
 
 import hashlib
-from datetime import datetime, timezone
 
-from arsvox_memory.db import Database
+from arsvox_memory.db import Database, utcnow_iso
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class DocumentStore:
@@ -41,11 +37,11 @@ class DocumentStore:
             self.db.execute(
                 "UPDATE documents SET content_hash = ?, unsaved_json = NULL,"
                 " updated_at = ?, last_saved_at = ? WHERE id = ?",
-                (digest, _now(), _now(), doc_id),
+                (digest, utcnow_iso(), utcnow_iso(), doc_id),
             )
         else:
             self.db.execute(
                 "UPDATE documents SET unsaved_json = ?, updated_at = ? WHERE id = ?",
-                (content, _now(), doc_id),
+                (content, utcnow_iso(), doc_id),
             )
         self.db.commit()

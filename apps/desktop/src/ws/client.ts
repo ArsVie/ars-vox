@@ -5,6 +5,7 @@
  */
 
 import type { ServerEvent } from "../contracts";
+import { WS_URL } from "../endpoints";
 
 const DEFAULT_RECONNECT_MS = 2000;
 
@@ -26,7 +27,7 @@ export class WsClient {
   private closedByUser = false;
 
   constructor(options: WsClientOptions) {
-    this.url = options.url ?? "ws://127.0.0.1:8765/ws";
+    this.url = options.url ?? WS_URL;
     this.reconnectMs = options.reconnectMs ?? DEFAULT_RECONNECT_MS;
     this.onEvent = options.onEvent;
     this.onStatus = options.onStatus;

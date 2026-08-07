@@ -14,6 +14,59 @@ export interface LayoutSlotsWire {
   dock?: PanelId | null;
 }
 
+/**
+ * Enum unions — mirror of packages/contracts/arsvox_contracts/enums.py.
+ * Typed (not `string`) so enum drift between Python and TS is a compile
+ * error, and cross-checked by tests/conformance.test.ts.
+ */
+export type NotificationKind = "reminder" | "alarm" | "info" | "error";
+export type MediaState = "playing" | "paused" | "stopped";
+export type ConfirmationStatus =
+  | "pending"
+  | "approved"
+  | "cancelled"
+  | "expired"
+  | "superseded";
+
+/**
+ * All panel values the Python side can emit (PanelType enum). The layout
+ * engine only hosts KNOWN_PANELS; confirmation/notification are overlay
+ * panels handled through their own channels (ConfirmationPanel /
+ * notification events), so they exist on the wire but never in slots.
+ */
+export type WirePanelId = PanelId | "confirmation" | "notification";
+
+/**
+ * Minimal typed view of the agent config the UI consumes (mirror of
+ * packages/contracts/arsvox_contracts/config.py). The server sends the
+ * full config on connect (config_update) and on GET /config.
+ */
+export interface UiConfigWire {
+  templates?: string[];
+  reduced_motion?: boolean;
+  large_text?: boolean;
+  high_contrast?: boolean;
+  default_template?: string;
+  default_primary?: string;
+}
+
+export interface TtsConfigWire {
+  provider?: string;
+  auto_speak?: boolean;
+  es_voice?: string | null;
+  speed?: number;
+  queue_max?: number;
+}
+
+export interface AppConfigWire {
+  app?: { name?: string; locale?: string };
+  server?: { host?: string; port?: number };
+  agent?: { mock?: boolean; model?: { name?: string; max_steps?: number } };
+  tts?: TtsConfigWire;
+  ui?: UiConfigWire;
+  [key: string]: unknown;
+}
+
 export type VoiceState =
   | "sleeping"
   | "listening"
@@ -59,22 +112,22 @@ export type UiCommand =
     }
   | {
       action: "panel.open";
-      panel_type: PanelId;
+      panel_type: WirePanelId;
       title?: string | null;
       content_reference?: string | null;
     }
   | {
       action: "panel.close";
-      panel_type?: PanelId | null;
+      panel_type?: WirePanelId | null;
       panel_id?: string | null;
     }
-  | { action: "panel.set_primary"; panel_type: PanelId }
-  | { action: "panel.fullscreen"; panel_type: PanelId }
+  | { action: "panel.set_primary"; panel_type: WirePanelId }
+  | { action: "panel.fullscreen"; panel_type: WirePanelId }
   | { action: "layout.restore" }
   | {
       action: "notification.show";
       notification_id: string;
-      kind: string;
+      kind: NotificationKind;
       title: string;
       text: string;
       sound?: boolean;
@@ -82,7 +135,7 @@ export type UiCommand =
     }
   | {
       action: "media.state";
-      state: string;
+      state: MediaState;
       title?: string | null;
       url?: string | null;
       volume?: number | null;
@@ -109,7 +162,7 @@ export interface ConfirmationRequestedEvent {
 export interface ConfirmationResolvedEvent {
   type: "confirmation_resolved";
   pending_id: string;
-  status: string;
+  status: ConfirmationStatus;
   message: string | null;
   created_at: string;
 }
@@ -124,7 +177,7 @@ export interface StateUpdateEvent {
 export interface NotificationEvent {
   type: "notification";
   notification_id: string;
-  kind: string;
+  kind: NotificationKind;
   title: string;
   text: string;
   due_at: string | null;
@@ -140,7 +193,7 @@ export interface ErrorEvent {
 
 export interface ConfigUpdateEvent {
   type: "config_update";
-  config: Record<string, unknown> & { ui?: { reduced_motion?: boolean } };
+  config: AppConfigWire;
   created_at: string;
 }
 

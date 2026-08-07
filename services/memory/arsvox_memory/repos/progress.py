@@ -1,13 +1,9 @@
 """Content progress (book positions, video positions, ...)."""
 
 import json
-from datetime import datetime, timezone
 
-from arsvox_memory.db import Database
+from arsvox_memory.db import Database, utcnow_iso
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class ProgressStore:
@@ -32,7 +28,7 @@ class ProgressStore:
             " VALUES (?, ?, ?, ?)"
             " ON CONFLICT(kind, ref_id) DO UPDATE SET position_json = excluded.position_json,"
             " updated_at = excluded.updated_at",
-            (kind, ref_id, json.dumps(position, ensure_ascii=False), _now()),
+            (kind, ref_id, json.dumps(position, ensure_ascii=False), utcnow_iso()),
         )
         self.db.commit()
 

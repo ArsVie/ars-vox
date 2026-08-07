@@ -2,12 +2,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import App from "./App";
+import { WS_URL } from "./endpoints";
 import { appStore, bindTransport } from "./store";
 import { WsClient } from "./ws/client";
 import "./styles.css";
 
 const ws = new WsClient({
-  url: "ws://127.0.0.1:8765/ws",
+  url: WS_URL,
   onEvent: (event) => appStore.getState().applyEvent(event),
   onStatus: (connected) => appStore.getState().setConnected(connected),
 });

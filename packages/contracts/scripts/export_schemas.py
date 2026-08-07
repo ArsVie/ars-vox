@@ -5,7 +5,8 @@ Usage:  .venv/bin/python packages/contracts/scripts/export_schemas.py
 Output: packages/contracts/schemas/*.schema.json
 
 The Electron UI mirrors these with hand-written types in
-apps/desktop/src/types.ts plus a conformance test (tests/ts).
+apps/desktop/src/contracts.ts plus a conformance test
+(apps/desktop/tests/conformance.test.ts).
 """
 
 import json

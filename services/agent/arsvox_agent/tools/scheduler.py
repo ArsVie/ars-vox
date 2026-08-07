@@ -14,6 +14,7 @@ from arsvox_contracts import (
     AgentMessageEvent,
     NotificationEvent,
     NotificationKind,
+    NotificationStatus,
     UiCommandEvent,
 )
 from arsvox_contracts.commands import NotificationShow
@@ -71,7 +72,10 @@ class ReminderScheduler:
         for reminder in self.reminders.due(now):
             self.reminders.mark_fired(reminder["id"], now)
             nid = self.notifications.insert(
-                "reminder", "Recordatorio", reminder["text"], reminder["id"]
+                NotificationKind.REMINDER.value,
+                "Recordatorio",
+                reminder["text"],
+                reminder["id"],
             )
             log.info("reminder %s fired", reminder["id"])
             await self.bus.publish(
@@ -103,7 +107,7 @@ class ReminderScheduler:
         if not n or not n["reminder_id"]:
             return "No hay ningún recordatorio activo para posponer."
         self.reminders.snooze(n["reminder_id"], seconds, datetime.now(timezone.utc))
-        self.notifications.resolve(n["id"], "snoozed")
+        self.notifications.resolve(n["id"], NotificationStatus.SNOOZED.value)
         minutes = seconds // 60
         await self.bus.publish(
             AgentMessageEvent(text=f"Recordatorio pospuesto {minutes} minutos.", delta=False)
@@ -114,7 +118,7 @@ class ReminderScheduler:
         n = self.notifications.latest_active()
         if not n:
             return "No hay ningún recordatorio activo que descartar."
-        self.notifications.resolve(n["id"], "dismissed")
+        self.notifications.resolve(n["id"], NotificationStatus.DISMISSED.value)
         await self.bus.publish(AgentMessageEvent(text="Recordatorio descartado.", delta=False))
         return "Recordatorio descartado."
 

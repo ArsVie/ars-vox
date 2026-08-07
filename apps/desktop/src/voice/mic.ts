@@ -12,6 +12,7 @@
  * unchanged. VAD + silence detection run here, in the renderer.
  */
 
+import { STT_URL } from "../endpoints";
 import { EnergyVad, type VadConfig } from "./vad";
 
 export type MicPhase = "idle" | "recording" | "transcribing" | "error";
@@ -21,14 +22,17 @@ export interface MicCallbacks {
   onTranscript: (text: string) => void;
 }
 
+/**
+ * VAD thresholds are deliberate renderer constants (they are tuned to
+ * the single user's mic, not exposed via config); the framing contract
+ * (blob per utterance) lives in services/voice/arsvox_voice.
+ */
 const DEFAULT_VAD: VadConfig = {
   speechThreshold: 0.015,
   silenceMs: 900,
   minSpeechMs: 250,
   maxDurationMs: 30000,
 };
-
-const STT_URL = "http://127.0.0.1:8765/api/stt";
 
 function rmsOf(buffer: Float32Array): number {
   let sum = 0;

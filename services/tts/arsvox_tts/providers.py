@@ -16,6 +16,9 @@ from arsvox_contracts import AppConfig
 
 log = logging.getLogger(__name__)
 
+#: Spanish voice used when config.tts.es_voice is not set (Edge provider).
+DEFAULT_EDGE_VOICE = "es-MX-DaliaNeural"
+
 
 class TTSProvider(ABC):
     name: str = "abstract"
@@ -47,7 +50,7 @@ class EdgeTTS(TTSProvider):
     media_type = "audio/mpeg"
 
     def __init__(self, voice: str | None = None):
-        self.default_voice = voice or "es-MX-DaliaNeural"
+        self.default_voice = voice or DEFAULT_EDGE_VOICE
 
     async def synthesize(self, text: str, voice: str | None = None) -> bytes | None:
         try:

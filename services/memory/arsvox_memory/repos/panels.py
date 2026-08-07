@@ -2,13 +2,9 @@
 content lives in the UI and survives layout changes because panels stay
 mounted — this table is the service-side registry used for context."""
 
-from datetime import datetime, timezone
 
-from arsvox_memory.db import Database
+from arsvox_memory.db import Database, utcnow_iso
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class PanelStore:
@@ -27,14 +23,14 @@ class PanelStore:
             " ON CONFLICT(id) DO UPDATE SET title = COALESCE(excluded.title, title),"
             " content_reference = COALESCE(excluded.content_reference, content_reference),"
             " last_used_at = excluded.last_used_at",
-            (panel_type, panel_type, title, content_reference, _now(), _now()),
+            (panel_type, panel_type, title, content_reference, utcnow_iso(), utcnow_iso()),
         )
         self.db.commit()
 
     def touch(self, panel_type: str) -> None:
         self.db.execute(
             "UPDATE panel_instances SET last_used_at = ? WHERE id = ?",
-            (_now(), panel_type),
+            (utcnow_iso(), panel_type),
         )
         self.db.commit()
 

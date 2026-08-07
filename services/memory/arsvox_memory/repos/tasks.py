@@ -1,12 +1,8 @@
 """Simple task list."""
 
-from datetime import datetime, timezone
+from arsvox_contracts import TaskStatus
+from arsvox_memory.db import Database, utcnow_iso
 
-from arsvox_memory.db import Database
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class TaskStore:
@@ -39,16 +35,16 @@ class TaskStore:
 
     def complete(self, task_id: int) -> bool:
         cur = self.db.execute(
-            "UPDATE tasks SET status = 'done', updated_at = ? WHERE id = ? AND status = 'pending'",
-            (_now(), task_id),
+            "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+            (TaskStatus.DONE.value, utcnow_iso(), task_id, TaskStatus.PENDING.value),
         )
         self.db.commit()
         return cur.rowcount > 0
 
     def reopen(self, task_id: int) -> bool:
         cur = self.db.execute(
-            "UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ?",
-            (_now(), task_id),
+            "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
+            (TaskStatus.PENDING.value, utcnow_iso(), task_id),
         )
         self.db.commit()
         return cur.rowcount > 0
@@ -56,7 +52,7 @@ class TaskStore:
     def reschedule(self, task_id: int, due_at: str | None) -> bool:
         cur = self.db.execute(
             "UPDATE tasks SET due_at = ?, updated_at = ? WHERE id = ?",
-            (due_at, _now(), task_id),
+            (due_at, utcnow_iso(), task_id),
         )
         self.db.commit()
         return cur.rowcount > 0

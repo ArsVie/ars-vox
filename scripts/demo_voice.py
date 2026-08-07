@@ -18,11 +18,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+from arsvox_tts.providers import DEFAULT_EDGE_VOICE
+
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--text", default="Hola, abre el documento, por favor.")
-    parser.add_argument("--voice", default="es-MX-DaliaNeural")
+    parser.add_argument("--voice", default=DEFAULT_EDGE_VOICE)
     parser.add_argument("--model", default="tiny")
     args = parser.parse_args()
 

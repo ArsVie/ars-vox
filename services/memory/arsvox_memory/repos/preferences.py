@@ -1,13 +1,9 @@
 """Key-value preferences."""
 
 import json
-from datetime import datetime, timezone
 
-from arsvox_memory.db import Database
+from arsvox_memory.db import Database, utcnow_iso
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class PreferenceStore:
@@ -28,6 +24,6 @@ class PreferenceStore:
             "INSERT INTO preferences (key, value_json, updated_at) VALUES (?, ?, ?)"
             " ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json,"
             " updated_at = excluded.updated_at",
-            (key, json.dumps(value, ensure_ascii=False), _now()),
+            (key, json.dumps(value, ensure_ascii=False), utcnow_iso()),
         )
         self.db.commit()

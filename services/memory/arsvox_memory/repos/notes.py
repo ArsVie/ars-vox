@@ -1,13 +1,9 @@
 """Notes with FTS5 search. Agent may suggest tags but never edits content."""
 
 import json
-from datetime import datetime, timezone
 
 from arsvox_memory.db import Database
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class NoteStore:

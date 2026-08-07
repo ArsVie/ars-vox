@@ -1,13 +1,11 @@
 """Reminders and their occurrences. Scheduling decisions live in the agent
 service scheduler; this store is only authoritative persistence."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
-from arsvox_memory.db import Database
+from arsvox_contracts import NotificationStatus, ReminderStatus
+from arsvox_memory.db import Database, utcnow_iso
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class ReminderStore:
@@ -27,19 +25,20 @@ class ReminderStore:
 
     def list_active(self) -> list[dict]:
         return self.db.rows(
-            "SELECT * FROM reminders WHERE status = 'active' ORDER BY due_at"
+            "SELECT * FROM reminders WHERE status = ? ORDER BY due_at",
+            (ReminderStatus.ACTIVE.value,),
         )
 
     def due(self, now_iso: str) -> list[dict]:
         return self.db.rows(
-            "SELECT * FROM reminders WHERE status = 'active' AND due_at <= ? ORDER BY due_at",
-            (now_iso,),
+            "SELECT * FROM reminders WHERE status = ? AND due_at <= ? ORDER BY due_at",
+            (ReminderStatus.ACTIVE.value, now_iso),
         )
 
     def cancel(self, reminder_id: int) -> bool:
         cur = self.db.execute(
-            "UPDATE reminders SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'active'",
-            (_now(), reminder_id),
+            "UPDATE reminders SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+            (ReminderStatus.CANCELLED.value, utcnow_iso(), reminder_id, ReminderStatus.ACTIVE.value),
         )
         self.db.commit()
         return cur.rowcount > 0
@@ -51,19 +50,19 @@ class ReminderStore:
             return
         self.db.execute(
             "INSERT INTO reminder_occurrences (reminder_id, scheduled_for, fired_at, status)"
-            " VALUES (?, ?, ?, 'fired')",
-            (reminder_id, r["due_at"], fired_at),
+            " VALUES (?, ?, ?, ?)",
+            (reminder_id, r["due_at"], fired_at, ReminderStatus.FIRED.value),
         )
         if r["repeat_rule"] == "none":
             self.db.execute(
-                "UPDATE reminders SET status = 'fired', updated_at = ? WHERE id = ?",
-                (_now(), reminder_id),
+                "UPDATE reminders SET status = ?, updated_at = ? WHERE id = ?",
+                (ReminderStatus.FIRED.value, utcnow_iso(), reminder_id),
             )
         else:
             next_due = self._next_due(r["due_at"], r["repeat_rule"])
             self.db.execute(
                 "UPDATE reminders SET due_at = ?, updated_at = ? WHERE id = ?",
-                (next_due, _now(), reminder_id),
+                (next_due, utcnow_iso(), reminder_id),
             )
         self.db.commit()
 
@@ -80,13 +79,13 @@ class ReminderStore:
         new_due = current + timedelta(seconds=seconds)
         self.db.execute(
             "UPDATE reminders SET due_at = ?, updated_at = ? WHERE id = ?",
-            (new_due.isoformat(timespec="seconds"), _now(), reminder_id),
+            (new_due.isoformat(timespec="seconds"), utcnow_iso(), reminder_id),
         )
         # mark the most recent fired occurrence as snoozed
         self.db.execute(
-            "UPDATE reminder_occurrences SET status = 'snoozed'"
+            "UPDATE reminder_occurrences SET status = ?"
             " WHERE reminder_id = ? AND id = (SELECT MAX(id) FROM reminder_occurrences WHERE reminder_id = ?)",
-            (reminder_id, reminder_id),
+            (NotificationStatus.SNOOZED.value, reminder_id, reminder_id),
         )
         self.db.commit()
 

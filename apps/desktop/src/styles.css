@@ -3,6 +3,19 @@
    Layered elevation, larger controls for an older user, Spanish-first
    copy, one accent. Agent-harness feel: panels as elevated cards with
    chrome, a presence strip, and a tappable mic hero.
+
+   DESIGN GOVERNANCE (2026-08-07, taste-skill adoption — see
+   docs/taste-skill-analysis-2026-08-07.md):
+   Audience = accessibility-critical (one elderly user) -> the "quiet
+   constraints" preset OVERRIDES aesthetic preference:
+     DESIGN_VARIANCE: 3   (predictable, near-symmetric layouts)
+     MOTION_INTENSITY: 2  (motion only for feedback/state transitions)
+     VISUAL_DENSITY: 5    (comfortable spacing, larger targets)
+   Hard rules: one accent (--accent blue; red ONLY for stop/danger),
+   off-black surfaces (never pure #000), no decorative status dots
+   (only real state), every animation must communicate hierarchy /
+   feedback / state transition, reduced motion is non-negotiable,
+   animate only transform+opacity, tactile press feedback on controls.
    --------------------------------------------------------------------------
    DOM contract preserved: .panel-slot, .panel-slot--{main,side,rail,dock},
    .density-{full,compact,rail}, .composer-collapsed, .panel, .panel-header,
@@ -45,9 +58,17 @@
   --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --glow-accent: 0 0 0 1px rgba(90, 167, 255, 0.4), 0 0 26px rgba(90, 167, 255, 0.3);
 
-  /* shape & motion */
+  /* SHAPE CONSISTENCY LOCK — one radius scale, used everywhere:
+     --radius-xs  6px  inline micro-elements (error dismiss)
+     --radius-sm  10px chips, small controls (panel actions)
+     --radius     14px panels (the main surface radius)
+     --radius-lg  16px large surfaces (message bubbles, cards)
+     --radius-pill 999px mic, stop, pills (circular/tactile controls only) */
   --radius: 14px;
   --radius-sm: 10px;
+  --radius-lg: 16px;
+  --radius-xs: 6px;
+  --radius-pill: 999px;
   --ease: cubic-bezier(0.33, 1, 0.68, 1);
 }
 
@@ -134,7 +155,7 @@ body,
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--shadow-panel), inset 0 1px 0 var(--panel-highlight);
 }
 
 .panel::before {
@@ -210,7 +231,7 @@ body,
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-dim);
@@ -255,7 +276,7 @@ body,
   flex-direction: column;
   gap: 3px;
   padding: 10px 15px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   max-width: 76%;
   font-size: 16px;
   line-height: 1.6;
@@ -584,6 +605,10 @@ body,
   box-shadow: none;
 }
 
+.composer .mic-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 .composer .mic-button.recording {
   background: linear-gradient(135deg, var(--danger-strong), var(--danger));
   border-color: var(--danger);
@@ -665,6 +690,7 @@ body,
   background: linear-gradient(180deg, #0d131c, #0a0e14);
   border-top: 1px solid var(--panel-border-soft);
   font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
   user-select: none;
 }
 
@@ -1025,7 +1051,7 @@ body,
   max-width: 90%;
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid var(--panel-border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   padding: 24px 26px;
   box-shadow: var(--shadow-float);
   animation: card-in 0.22s var(--ease);
@@ -1157,7 +1183,7 @@ body,
   font-size: 15px;
   line-height: 1;
   padding: 2px 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
 }
 
 .error-dismiss:hover {
@@ -1180,7 +1206,62 @@ body,
   }
   .composer input,
   .composer button,
-  .panel-action {
+  .panel-action,
+  .mic-button,
+  .stop-button {
     transition: none;
+    transform: none !important; /* tactile press collapse */
   }
+}
+
+/* ------------------------------------------------------ accessibility modes
+   Driven by the server config snapshot (ui.large_text / ui.high_contrast);
+   App.tsx sets data-* attributes on .app. Both can be combined. */
+.app[data-large-text] {
+  font-size: 18px;
+}
+
+.app[data-large-text] .message-list {
+  font-size: 18px;
+}
+
+.app[data-large-text] .message {
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.app[data-large-text] .composer input {
+  font-size: 17px;
+}
+
+.app[data-large-text] .panel-header {
+  font-size: 13.5px;
+}
+
+.app[data-large-text] .status-bar {
+  font-size: 15px;
+}
+
+.app[data-high-contrast] {
+  --bg: #05070c;
+  --panel: #0d1422;
+  --panel-2: #182235;
+  --panel-3: #1d2a40;
+  --panel-border: #4a5c74;
+  --panel-border-soft: #33445a;
+  --text: #ffffff;
+  --text-dim: #d6e0ea;
+  --text-faint: #a9b8c8;
+  --accent: #79b8ff;
+  --accent-strong: #5aa7ff;
+  --accent-soft: rgba(121, 184, 255, 0.22);
+}
+
+.app[data-high-contrast] .panel {
+  border-width: 2px;
+}
+
+.app[data-high-contrast] .composer input {
+  background: #0d1422;
+  border-color: var(--panel-border);
 }

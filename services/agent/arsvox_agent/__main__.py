@@ -7,6 +7,7 @@ import uvicorn
 
 from arsvox_agent.app import create_app
 from arsvox_agent.config_loader import load_config
+from scripts._harness import dump_mock_config
 
 
 def main() -> None:
@@ -21,17 +22,9 @@ def main() -> None:
     host = args.host or config.server.host
     port = args.port or config.server.port
     if args.mock:
-        config.agent.mock = True
         # Never rewrite the user's config file: write the mock variant to
         # a temp file and boot from that.
-        import tempfile
-        import yaml
-
-        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
-            yaml.safe_dump(
-                config.model_dump(mode="json"), f, sort_keys=False, allow_unicode=True
-            )
-            args.config = f.name
+        args.config = dump_mock_config(args.config, mock=True)[0]
     app = create_app(args.config)
     uvicorn.run(app, host=host, port=port, log_level="info")
 

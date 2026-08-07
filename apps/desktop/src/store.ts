@@ -5,10 +5,12 @@
 
 import { createStore, type StoreApi } from "zustand/vanilla";
 
-import type { ServerEvent, UiCommand, VoiceState } from "./contracts";
+import type { AppConfigWire, ServerEvent, UiCommand, VoiceState } from "./contracts";
 import {
   computeLayout,
   DEFAULT_PRIMARY,
+  isPanelId,
+  resolveTemplate,
   type LayoutResult,
   type LayoutSpec,
   type PanelId,
@@ -59,6 +61,12 @@ export interface AppState {
   error: ErrorInfo | null;
   fullscreenPanel: PanelId | null;
   reducedMotion: boolean;
+  /** Accessibility modes driven by config ui.large_text / ui.high_contrast. */
+  largeText: boolean;
+  highContrast: boolean;
+  /** TTS knobs driven by config tts.speed / tts.queue_max. */
+  ttsSpeed: number;
+  ttsQueueMax: number;
   /** Real content-viewport size in px (engine px floors + density). */
   viewport: Viewport;
   /** Pending TTS phrases (text), played in order by TtsPlayer. */
@@ -113,6 +121,9 @@ function slotsEqual(
 
 export function createAppStore(send: SendFn): StoreApi<AppState> {
   const store = createStore<AppState>((set, get) => {
+    /** True once any server layout command has been applied; guards the
+     *  config-driven default from clobbering later user state on reconnect. */
+    let layoutApplied = false;
     const spec = initialSpec();
     const layout = computeLayout(spec, {
       reducedMotion: false,
@@ -142,10 +153,55 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       set({ history });
     };
 
+    /** Append a TTS phrase, honoring the config-driven queue cap. */
+    const pushSpeak = (text: string): void => {
+      const state = get();
+      const speakTexts = [...state.speakTexts, text];
+      const cap = state.ttsQueueMax > 0 ? state.ttsQueueMax : 10;
+      if (speakTexts.length > cap) speakTexts.shift();
+      set({ speakTexts });
+    };
+
+    /**
+     * Apply the server config snapshot to the UI: accessibility modes,
+     * TTS knobs, and (only before any layout command) the default layout.
+     */
+    const applyConfig = (config: AppConfigWire): void => {
+      const state = get();
+      const ui = config.ui ?? {};
+      const tts = config.tts ?? {};
+      const patch: Partial<AppState> = {};
+      if (ui.reduced_motion !== undefined) patch.reducedMotion = ui.reduced_motion;
+      if (ui.large_text !== undefined) patch.largeText = ui.large_text;
+      if (ui.high_contrast !== undefined) patch.highContrast = ui.high_contrast;
+      if (typeof tts.speed === "number" && tts.speed > 0) patch.ttsSpeed = tts.speed;
+      if (typeof tts.queue_max === "number" && tts.queue_max > 0) {
+        patch.ttsQueueMax = tts.queue_max;
+      }
+      if (!layoutApplied) {
+        const template =
+          typeof ui.default_template === "string" && ui.default_template
+            ? resolveTemplate(ui.default_template)
+            : null;
+        if (template && template !== state.spec.template) {
+          const primaryPanel =
+            typeof ui.default_primary === "string" &&
+            isPanelId(ui.default_primary) &&
+            ui.default_primary !== state.spec.primaryPanel
+              ? ui.default_primary
+              : state.spec.primaryPanel;
+          patch.spec = { ...state.spec, template, primaryPanel };
+        }
+      }
+      set(patch);
+      if (patch.spec) recompute();
+    };
+
     const applyUiCommand = (command: UiCommand): void => {
       const state = get();
       switch (command.action) {
         case "layout.apply": {
+          layoutApplied = true;
           const next: LayoutSpec = {
             template: command.template,
             primaryPanel: command.primary_panel,
@@ -165,6 +221,9 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "panel.open": {
+          // Overlay panels (confirmation/notification) use their own
+          // channels; only layout panels enter the panel registry.
+          if (!isPanelId(command.panel_type)) return;
           const panelMeta = {
             ...state.panelMeta,
             [command.panel_type]: {
@@ -177,7 +236,9 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "panel.close": {
-          const target = command.panel_type ?? (command.panel_id as PanelId | null);
+          const target = isPanelId(command.panel_type ?? "")
+            ? (command.panel_type as PanelId)
+            : (command.panel_id as PanelId | null);
           if (!target) return;
           const panelMeta = { ...state.panelMeta };
           delete panelMeta[target];
@@ -200,6 +261,8 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "panel.set_primary": {
+          if (!isPanelId(command.panel_type)) return;
+          layoutApplied = true;
           pushHistory();
           set({
             spec: {
@@ -214,10 +277,12 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "panel.fullscreen": {
+          if (!isPanelId(command.panel_type)) return;
           set({ fullscreenPanel: command.panel_type });
           return;
         }
         case "layout.restore": {
+          layoutApplied = true;
           const history = [...state.history];
           const previous = history.pop();
           if (!previous) return;
@@ -239,9 +304,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "tts.speak": {
-          const speakTexts = [...state.speakTexts, command.text];
-          if (speakTexts.length > 10) speakTexts.shift();
-          set({ speakTexts });
+          pushSpeak(command.text);
           return;
         }
         case "media.state":
@@ -322,9 +385,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           });
           return;
         case "config_update":
-          if (event.config.ui?.reduced_motion !== undefined) {
-            get().setReducedMotion(event.config.ui.reduced_motion);
-          }
+          applyConfig(event.config);
           return;
         case "tool_call":
         case "pong":
@@ -345,6 +406,10 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       error: null,
       fullscreenPanel: null,
       reducedMotion: false,
+      largeText: false,
+      highContrast: false,
+      ttsSpeed: 1.0,
+      ttsQueueMax: 10,
       viewport: DEFAULT_VIEWPORT,
       speakTexts: [],
 
@@ -392,11 +457,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
 
       applyUiCommand,
       recompute,
-      enqueueTts: (text) => {
-        const speakTexts = [...get().speakTexts, text];
-        if (speakTexts.length > 10) speakTexts.shift();
-        set({ speakTexts });
-      },
+      enqueueTts: pushSpeak,
       ttsDone: () => {
         set({ speakTexts: get().speakTexts.slice(1) });
       },

@@ -8,8 +8,9 @@ are patient, short, and clear.
 
 The application is made of panels (conversation, browser, youtube, media,
 book_reader, document_editor, news, notes, tasks, reminders,
-telegram_preview). Panels are placed with four fixed layout templates,
-each offering a fixed set of slots:
+telegram_preview, settings, confirmation, notification). Panels are
+placed with four fixed layout templates, each offering a fixed set of
+slots:
 
 - focus (1 slot): main
 - split (2 slots): main, side
