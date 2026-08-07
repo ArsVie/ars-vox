@@ -10,6 +10,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ## Active
 
+### hermes (UI-102 — adaptive template geometry engine)
+- timestamp: 2026-08-07T23:40:00Z
+- task: Deterministic geometry engine for the five frozen adaptive compositions (focus/sidecar/stack/split/triple) + proportion mapping (narrow/balanced/wide) + responsive slot geometry. Consumes LayoutSpec only; renders template+assignments+proportion → concrete slot rects; deterministic errors for invalid specs (reuses validateLayoutSpec + geometry-level fit/duplicate-slot checks); placeholder surfaces from TEMPLATE_FIXTURES; keeps .panel-slot DOM contract.
+- files/dirs: apps/desktop/src/layout/adaptiveEngine.ts (new), apps/desktop/src/layout/AdaptiveStage.tsx (new), apps/desktop/tests/adaptive-geometry.test.ts (new), apps/desktop/tests/adaptive-stage.test.tsx (new), hey.md
+- boundaries: will NOT touch src/adaptive/* (contract code), components/*, src/layout/engine.ts (legacy), store/App/ws/electron; engine+fixture-placeholder render only. No npm installs (node_modules is a junction to main).
+- status: in_progress
+
 ### hermes (orchestrator — adaptive UI redesign)
 - timestamp: 2026-08-07T23:30:00Z
 - task: Execution contract encoded + owner-reviewed: `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md` (4 roles / 5 templates / 3 proportions, LayoutSpec, 4-wave DAG). ✅ WAVE 0 COMPLETE — UI-000 froze the adaptive UI contract: `packages/contracts/arsvox_contracts/adaptive.py` (SurfaceRole/AdaptiveTemplate/Proportion/LayoutSpec + TEMPLATE_SLOTS + validate_layout_spec), TS mirror `apps/desktop/src/adaptive/{contracts,fixtures,tokens}.ts`, placeholder fixtures for all 5 templates, token naming contract, 2 JSON schemas, docs/adaptive-ui-contract.md. Verified: 110 pytest (17 new), 111 vitest (15 new), typecheck+build clean, OKF OK. GATE CONTRACT_FROZEN CLOSED (merge a3e996d).
