@@ -76,6 +76,98 @@ export type VoiceState =
   | "stopping"
   | "error";
 
+/** Media source for the unified player (same UI for both). */
+export type MediaSource = "youtube" | "local";
+export type MediaKind = "video" | "audio";
+
+/* ------------------------------------------------------------------ */
+/* Panel content events — the wire for populating panels.             */
+/* The agent (or mock) emits these; the store reduces them into       */
+/* `content` state consumed by the panel components.                  */
+/* ------------------------------------------------------------------ */
+
+export interface YoutubeVideoResult {
+  id: string;
+  title: string;
+  channel: string;
+  duration_s: number;
+  published: string;
+  thumbnail_url: string | null;
+}
+
+export interface YoutubeSearchEvent {
+  type: "youtube.search";
+  query: string;
+  results: YoutubeVideoResult[];
+  created_at: string;
+}
+
+export interface BrowserNavigateEvent {
+  type: "browser.navigate";
+  url: string;
+  title: string;
+  can_go_back: boolean;
+  can_go_forward: boolean;
+  loading: boolean;
+  created_at: string;
+}
+
+export type DocumentKind = "txt" | "md" | "pdf" | "epub";
+
+export interface DocumentChapter {
+  title: string;
+  content: string;
+}
+
+export interface DocumentLoadEvent {
+  type: "document.load";
+  title: string;
+  kind: DocumentKind;
+  path: string;
+  /** Full text for txt/md; for pdf/epub, the extracted readable text
+   *  (rendered chapters) so panels never stay empty shells. */
+  content: string;
+  chapters: DocumentChapter[];
+  created_at: string;
+}
+
+export interface TodoItem {
+  id: string;
+  title: string;
+  done: boolean;
+  priority: "low" | "normal" | "high";
+  due: string | null;
+}
+
+export interface ReminderItem {
+  id: string;
+  title: string;
+  /** Human cadence label, e.g. "Cada día 9:00". */
+  cadence: string;
+  next_fire: string;
+}
+
+export interface TasksUpdateEvent {
+  type: "tasks.update";
+  todos: TodoItem[];
+  reminders: ReminderItem[];
+  created_at: string;
+}
+
+export interface MediaStateEvent {
+  type: "media.state";
+  state: MediaState;
+  source: MediaSource;
+  kind: MediaKind;
+  title: string;
+  video_id: string | null;
+  url: string | null;
+  position_s: number;
+  duration_s: number;
+  volume: number;
+  created_at: string;
+}
+
 export interface UserMessageEvent {
   type: "user_message";
   id: string;
@@ -140,6 +232,16 @@ export type UiCommand =
       url?: string | null;
       volume?: number | null;
     }
+  | { action: "media.play_pause" }
+  | { action: "media.seek"; position_s: number }
+  | { action: "youtube.search"; query: string }
+  | { action: "youtube.play"; video_id: string; title: string }
+  | { action: "browser.navigate"; url: string }
+  | { action: "browser.back" }
+  | { action: "browser.forward" }
+  | { action: "browser.refresh" }
+  | { action: "document.save"; panel_type: string; content: string }
+  | { action: "tasks.toggle"; task_id: string }
   | { action: "tts.speak"; text: string; priority?: boolean }
   | { action: "audio.play"; asset: string };
 
@@ -213,4 +315,9 @@ export type ServerEvent =
   | NotificationEvent
   | ErrorEvent
   | ConfigUpdateEvent
+  | YoutubeSearchEvent
+  | BrowserNavigateEvent
+  | DocumentLoadEvent
+  | TasksUpdateEvent
+  | MediaStateEvent
   | PongEvent;

@@ -5,7 +5,21 @@
 
 import { createStore, type StoreApi } from "zustand/vanilla";
 
-import type { AppConfigWire, ServerEvent, UiCommand, VoiceState } from "./contracts";
+import type {
+  AppConfigWire,
+  BrowserNavigateEvent,
+  DocumentKind,
+  MediaKind,
+  MediaSource,
+  MediaState,
+  MediaStateEvent,
+  ReminderItem,
+  ServerEvent,
+  TodoItem,
+  UiCommand,
+  VoiceState,
+  YoutubeVideoResult,
+} from "./contracts";
 import {
   computeLayout,
   DEFAULT_PRIMARY,
@@ -45,6 +59,70 @@ export interface ErrorInfo {
   recoverable: boolean;
 }
 
+/* ------------------------------------------------------------ content */
+/* Panel content state — reduced from the panel content events. Keys are
+   the panel ids that own content surfaces (youtube, browser,
+   document_editor, tasks, media). Absent key = panel has no content yet. */
+
+export interface YoutubeContent {
+  query: string;
+  loading: boolean;
+  results: YoutubeVideoResult[];
+}
+
+export interface BrowserContent {
+  url: string;
+  title: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  loading: boolean;
+}
+
+export interface DocumentContent {
+  title: string;
+  kind: DocumentKind;
+  path: string;
+  content: string;
+  chapters: { title: string; content: string }[];
+}
+
+export interface TasksContent {
+  todos: TodoItem[];
+  reminders: ReminderItem[];
+}
+
+export interface MediaContent {
+  state: MediaState;
+  source: MediaSource;
+  kind: MediaKind;
+  title: string;
+  videoId: string | null;
+  url: string | null;
+  positionS: number;
+  durationS: number;
+  volume: number;
+}
+
+export interface PanelContent {
+  youtube?: YoutubeContent;
+  browser?: BrowserContent;
+  document_editor?: DocumentContent;
+  tasks?: TasksContent;
+  media?: MediaContent;
+}
+
+export const EMPTY_MEDIA: MediaContent = {
+  state: "stopped",
+  source: "local",
+  kind: "audio",
+  title: "",
+  videoId: null,
+  url: null,
+  positionS: 0,
+  durationS: 0,
+  volume: 1,
+};
+
 export type SendFn = (message: unknown) => void;
 
 export interface AppState {
@@ -71,6 +149,8 @@ export interface AppState {
   viewport: Viewport;
   /** Pending TTS phrases (text), played in order by TtsPlayer. */
   speakTexts: string[];
+  /** Panel content state, keyed by panel id (see PanelContent). */
+  content: PanelContent;
 
   send: SendFn;
   setConnected: (connected: boolean) => void;
@@ -85,6 +165,9 @@ export interface AppState {
 
   /** Local UI action: toggle a panel's fullscreen state (never sent to the server). */
   toggleFullscreen: (panel: PanelId) => void;
+
+  /** User-initiated command: optimistic local effect + send to the server. */
+  dispatchCommand: (command: UiCommand) => void;
 
   applyUiCommand: (command: UiCommand) => void;
   recompute: () => void;
@@ -387,6 +470,79 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         case "config_update":
           applyConfig(event.config);
           return;
+        case "youtube.search": {
+          set({
+            content: {
+              ...state.content,
+              youtube: {
+                query: event.query,
+                loading: false,
+                results: event.results,
+              },
+            },
+          });
+          return;
+        }
+        case "browser.navigate": {
+          const ev = event as BrowserNavigateEvent;
+          set({
+            content: {
+              ...state.content,
+              browser: {
+                url: ev.url,
+                title: ev.title,
+                canGoBack: ev.can_go_back,
+                canGoForward: ev.can_go_forward,
+                loading: ev.loading,
+              },
+            },
+          });
+          return;
+        }
+        case "document.load": {
+          set({
+            content: {
+              ...state.content,
+              document_editor: {
+                title: event.title,
+                kind: event.kind,
+                path: event.path,
+                content: event.content,
+                chapters: event.chapters,
+              },
+            },
+          });
+          return;
+        }
+        case "tasks.update": {
+          set({
+            content: {
+              ...state.content,
+              tasks: { todos: event.todos, reminders: event.reminders },
+            },
+          });
+          return;
+        }
+        case "media.state": {
+          const ev = event as MediaStateEvent;
+          set({
+            content: {
+              ...state.content,
+              media: {
+                state: ev.state,
+                source: ev.source,
+                kind: ev.kind,
+                title: ev.title,
+                videoId: ev.video_id,
+                url: ev.url,
+                positionS: ev.position_s,
+                durationS: ev.duration_s,
+                volume: ev.volume,
+              },
+            },
+          });
+          return;
+        }
         case "tool_call":
         case "pong":
           return;
@@ -412,6 +568,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       ttsQueueMax: 10,
       viewport: DEFAULT_VIEWPORT,
       speakTexts: [],
+      content: {},
 
       send,
       setConnected: (connected) => set({ connected }),
@@ -441,6 +598,115 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         // playback, then tell the service to cancel the running turn.
         set({ speakTexts: [] });
         get().send({ type: "stop" });
+      },
+      dispatchCommand: (command) => {
+        const state = get();
+        switch (command.action) {
+          case "youtube.search": {
+            set({
+              content: {
+                ...state.content,
+                youtube: {
+                  query: command.query,
+                  loading: true,
+                  results: state.content.youtube?.results ?? [],
+                },
+              },
+            });
+            break;
+          }
+          case "youtube.play": {
+            set({
+              content: {
+                ...state.content,
+                media: {
+                  state: "playing",
+                  source: "youtube",
+                  kind: "video",
+                  title: command.title,
+                  videoId: command.video_id,
+                  url: `https://www.youtube.com/embed/${command.video_id}`,
+                  positionS: 0,
+                  durationS: 0,
+                  volume: state.content.media?.volume ?? 1,
+                },
+              },
+            });
+            break;
+          }
+          case "browser.navigate": {
+            const b = state.content.browser;
+            set({
+              content: {
+                ...state.content,
+                browser: {
+                  url: command.url,
+                  title: b?.title ?? "",
+                  canGoBack: b?.canGoBack ?? false,
+                  canGoForward: b?.canGoForward ?? false,
+                  loading: true,
+                },
+              },
+            });
+            break;
+          }
+          case "browser.back":
+          case "browser.forward":
+          case "browser.refresh": {
+            const b = state.content.browser;
+            if (b) {
+              set({ content: { ...state.content, browser: { ...b, loading: true } } });
+            }
+            break;
+          }
+          case "tasks.toggle": {
+            const tasks = state.content.tasks;
+            if (tasks) {
+              set({
+                content: {
+                  ...state.content,
+                  tasks: {
+                    ...tasks,
+                    todos: tasks.todos.map((t) =>
+                      t.id === command.task_id ? { ...t, done: !t.done } : t,
+                    ),
+                  },
+                },
+              });
+            }
+            break;
+          }
+          case "media.play_pause": {
+            const m = state.content.media;
+            if (m && m.state !== "stopped") {
+              set({
+                content: {
+                  ...state.content,
+                  media: { ...m, state: m.state === "playing" ? "paused" : "playing" },
+                },
+              });
+            }
+            break;
+          }
+          case "media.seek": {
+            const m = state.content.media;
+            if (m) {
+              set({
+                content: { ...state.content, media: { ...m, positionS: command.position_s } },
+              });
+            }
+            break;
+          }
+          case "document.save":
+            // The editor already holds the local content; nothing to
+            // optimistically change here. The command carries the text.
+            break;
+        }
+        get().send({
+          type: "ui_command",
+          command,
+          created_at: new Date().toISOString(),
+        });
       },
       confirm: (approve) => {
         const state = get();
