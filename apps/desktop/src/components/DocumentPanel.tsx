@@ -5,6 +5,7 @@ import type { PanelId } from "../layout/engine";
 import type { PanelMeta } from "../store";
 import { appStore } from "../store";
 import { PanelHeader } from "./PanelHeader";
+import { ReaderView } from "./ReaderView";
 import { DocumentIcon, PenIcon } from "./icons";
 
 const KIND_LABEL: Record<string, string> = {
@@ -62,7 +63,10 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
 
   const content = doc?.content ?? "";
   const chapters = doc?.chapters ?? [];
-  const hasContent = doc !== undefined && (content.length > 0 || chapters.length > 0);
+  const isBinary = (doc?.kind === "pdf" || doc?.kind === "epub") && Boolean(doc?.url);
+  const hasContent =
+    doc !== undefined &&
+    (content.length > 0 || chapters.length > 0 || (isBinary && Boolean(doc?.url)));
 
   const fullText = useMemo(() => {
     if (content) return content;
@@ -70,6 +74,7 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
   }, [content, chapters]);
 
   const title = doc?.title ?? meta?.title ?? "Documento";
+  const canEdit = doc?.kind === "txt" || doc?.kind === "md" || (!isBinary && hasContent);
 
   const startEdit = (): void => {
     setDraft(fullText);
@@ -103,13 +108,15 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
             <span className="document-kind">{KIND_LABEL[doc!.kind] ?? doc!.kind}</span>
             <span className="document-path">{doc!.path}</span>
             <span className="document-spacer" />
-            {mode === "read" ? (
+            {mode === "read" && canEdit ? (
               <button type="button" className="document-mode-btn" onClick={startEdit}>
                 <PenIcon size={13} /> Editar
               </button>
             ) : null}
           </div>
-          {mode === "edit" ? (
+          {isBinary ? (
+            <ReaderView kind={doc!.kind} url={doc!.url!} />
+          ) : mode === "edit" ? (
             <div className="document-editor">
               <textarea
                 value={draft}
