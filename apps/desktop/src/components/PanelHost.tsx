@@ -7,8 +7,11 @@ import { appStore } from "../store";
 
 import { ConversationPanel } from "./ConversationPanel";
 import { ContentPanel } from "./ContentPanel";
+import { BrowserPanel } from "./BrowserPanel";
 import { DocumentPanel } from "./DocumentPanel";
 import { MediaDock } from "./MediaDock";
+import { TasksPanel } from "./TasksPanel";
+import { YoutubePanel } from "./YoutubePanel";
 
 /**
  * Renders the layout computed by the engine. Panels are placed by SLOT:
@@ -21,13 +24,13 @@ const PANEL_COMPONENTS: Partial<
 > = {
   conversation: ConversationPanel,
   document_editor: DocumentPanel,
-  youtube: MediaDock,
+  youtube: YoutubePanel,
   media: MediaDock,
-  browser: ContentPanel,
+  browser: BrowserPanel,
   book_reader: ContentPanel,
   news: ContentPanel,
   notes: ContentPanel,
-  tasks: ContentPanel,
+  tasks: TasksPanel,
   reminders: ContentPanel,
   telegram_preview: ContentPanel,
   settings: ContentPanel,

@@ -6,6 +6,7 @@ import { WS_URL } from "./endpoints";
 import { appStore, bindTransport } from "./store";
 import { WsClient } from "./ws/client";
 import "./styles.css";
+import "./content.css";
 
 const ws = new WsClient({
   url: WS_URL,
