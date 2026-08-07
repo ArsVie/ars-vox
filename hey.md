@@ -11,11 +11,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 ## Active
 
 ### hermes (orchestrator — adaptive UI redesign)
-- timestamp: 2026-08-07T23:00:00Z
-- task: Execution contract encoded + owner-reviewed: `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md` (4 roles / 5 templates / 3 proportions, LayoutSpec, 4-wave DAG). WAVE 0 IN PROGRESS — UI-000 freeze adaptive UI contract: shared TS types (SurfaceRole/Template/Proportion/LayoutSpec), surface registration interface, role-to-surface passing, shell persistent-surface behavior, token naming contract, placeholder fixtures for all 5 templates, LayoutSpec validation rules. Worktree: `/mnt/c/dev/ars-vox-worktrees/ui-000-contract` (branch `wip/ui-000-contract`).
-- files/dirs: packages/contracts/arsvox_contracts/*, packages/contracts/schemas/*, apps/desktop/src/contracts.ts, apps/desktop/src/adaptive/* (new), apps/desktop/tests/*, docs/adaptive-ui-contract.md (new)
-- boundaries: contract types ONLY — additive, no rewrite of existing wire behavior; will NOT touch apps/desktop/src/components/*, readers/*, layout/engine.ts (UI-102 owns geometry later), services/agent logic, or the previous session's uncommitted reader/statusbar changes in the main tree.
-- status: in_progress
+- timestamp: 2026-08-07T23:30:00Z
+- task: Execution contract encoded + owner-reviewed: `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md` (4 roles / 5 templates / 3 proportions, LayoutSpec, 4-wave DAG). ✅ WAVE 0 COMPLETE — UI-000 froze the adaptive UI contract: `packages/contracts/arsvox_contracts/adaptive.py` (SurfaceRole/AdaptiveTemplate/Proportion/LayoutSpec + TEMPLATE_SLOTS + validate_layout_spec), TS mirror `apps/desktop/src/adaptive/{contracts,fixtures,tokens}.ts`, placeholder fixtures for all 5 templates, token naming contract, 2 JSON schemas, docs/adaptive-ui-contract.md. Verified: 110 pytest (17 new), 111 vitest (15 new), typecheck+build clean, OKF OK. GATE CONTRACT_FROZEN CLOSED (merge a3e996d).
+- ⚠️ PARKED: previous session's uncommitted advisor-round2/reader work → branch `wip/advisor-round2-reader-polish` (main was dirty; Wave 1 needs styles.css/components clean). Revertible — merge that branch back when convenient.
+- WAVE 1 STARTING: UI-101..105 in worktrees /mnt/c/dev/ars-vox-worktrees/ui-1{01..05}-*. Workers announce on hey.md before touching files.
+- files/dirs: (wave 0) packages/contracts/** , apps/desktop/src/adaptive/*, apps/desktop/tests/adaptive-contract.test.ts, tests/python/test_adaptive_contract.py, docs/adaptive-ui-contract.md
+- boundaries: contract types ONLY — additive, no rewrite of existing wire behavior; did NOT touch components/, readers/, layout/engine.ts, services/agent.
+- status: in_progress (wave 0 done; orchestrating wave 1)
 
 ### hermes (advisor round-2 fixes + reader polish)
 - timestamp: 2026-08-07T22:50:00Z
