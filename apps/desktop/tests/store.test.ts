@@ -332,3 +332,126 @@ describe("local panel fullscreen toggle", () => {
     expect(store.getState().fullscreenPanel).toBe("conversation");
   });
 });
+
+describe("multi-zone layout via slots (A8)", () => {
+  it("slots-bearing layout.apply drives a 3-zone reading layout", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "reading",
+        primary_panel: "document_editor",
+        secondary_panel: "conversation",
+        slots: { main: "document_editor", side: "conversation", dock: "media" },
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+    const state = store.getState();
+    expect(state.spec.slots).toEqual({
+      main: "document_editor",
+      side: "conversation",
+      dock: "media",
+    });
+    expect(state.layout.template).toBe("reading");
+    const slotOf = (p: string) =>
+      state.layout.panels.find((x) => x.panel === p)?.slot;
+    expect(slotOf("document_editor")).toBe("main");
+    expect(slotOf("conversation")).toBe("side");
+    expect(slotOf("media")).toBe("dock");
+  });
+
+  it("treats slots.main as the source of truth over primary_panel", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "reading",
+        primary_panel: "conversation", // frozen invariant: slots wins
+        secondary_panel: null,
+        slots: { main: "document_editor", side: "conversation" },
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+    const state = store.getState();
+    expect(
+      state.layout.panels.find((p) => p.panel === "document_editor")?.slot,
+    ).toBe("main");
+    expect(
+      state.layout.panels.find((p) => p.panel === "conversation")?.slot,
+    ).toBe("side");
+  });
+
+  it("legacy layout.apply without slots keeps working", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "split",
+        primary_panel: "document_editor",
+        secondary_panel: "conversation",
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+    const state = store.getState();
+    expect(state.spec.slots).toBeUndefined();
+    expect(state.layout.template).toBe("split");
+    expect(
+      state.layout.panels.find((p) => p.panel === "document_editor")?.slot,
+    ).toBe("main");
+    expect(
+      state.layout.panels.find((p) => p.panel === "conversation")?.slot,
+    ).toBe("side");
+  });
+
+  it("viewport drives the px-floor degrade ladder", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "dashboard",
+        primary_panel: "document_editor",
+        secondary_panel: "conversation",
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+    // default viewport 1280x800 drops the rail: dashboard -> reading
+    expect(store.getState().layout.template).toBe("reading");
+    expect(store.getState().layout.degradedFrom).toBe("dashboard");
+
+    store.getState().setViewport({ width: 700, height: 800 });
+    expect(store.getState().layout.template).toBe("focus");
+    expect(store.getState().layout.degradedFrom).toBe("dashboard");
+  });
+
+  it("closing a slot panel clears its slot entry", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "reading",
+        primary_panel: "document_editor",
+        secondary_panel: "conversation",
+        slots: { main: "document_editor", side: "conversation", dock: "media" },
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.close", panel_type: "media" },
+      created_at: ts(),
+    });
+    const state = store.getState();
+    expect(state.spec.slots?.dock).toBeNull();
+    expect(state.layout.panels.find((p) => p.panel === "media")).toBeUndefined();
+  });
+});

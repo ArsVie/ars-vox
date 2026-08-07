@@ -4,10 +4,12 @@
    copy, one accent. Agent-harness feel: panels as elevated cards with
    chrome, a presence strip, and a tappable mic hero.
    --------------------------------------------------------------------------
-   DOM contract preserved: .panel-slot, .panel, .panel-header,
+   DOM contract preserved: .panel-slot, .panel-slot--{main,side,rail,dock},
+   .density-{full,compact,rail}, .composer-collapsed, .panel, .panel-header,
    .message-list, .message.{user,assistant,system}, .composer input/button,
    .mic-button, .status-bar, .status-dot, .stop-button, .overlay,
-   .confirmation-card, .error-banner, .document-body, .document-reference.
+   .confirmation-card, .error-banner, .document-body, .document-reference,
+   .media-dock.
    ========================================================================== */
 
 :root {
@@ -133,7 +135,6 @@ body,
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow-panel);
-  container-type: inline-size;
 }
 
 .panel::before {
@@ -826,34 +827,87 @@ body,
   box-shadow: 0 0 18px rgba(255, 107, 87, 0.55);
 }
 
-/* --------------------------------------------------- narrow panel mode */
-/* Only collapse to icon-only composer when the panel is REALLY narrow
-   (small windows in split layout); at typical desktop sizes the labeled
-   buttons stay visible — icon-only controls are bad for older users. */
-@container (max-width: 260px) {
-  .composer {
-    gap: 7px;
-    padding: 11px 11px;
-  }
-  .composer button {
-    padding: 0 12px;
-    height: 48px;
-  }
-  .composer .btn-label {
-    display: none;
-  }
-  .composer input {
-    height: 48px;
-  }
-  .message-list {
-    padding: 12px 12px;
-  }
-  .message {
-    max-width: 92%;
-  }
-  .empty-state .empty-title {
-    font-size: 18px;
-  }
+/* --------------------------------------------------- slot chrome (A5/A6) */
+/* Non-main slots get reduced elevation so the anchor panel reads first. */
+.panel-slot--side .panel,
+.panel-slot--dock .panel,
+.panel-slot--rail .panel {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.panel-slot--rail .panel {
+  border-color: var(--panel-border-soft);
+}
+
+/* density: rail = icon-only header, no chrome actions */
+.density-rail .panel-header {
+  padding: 10px 0;
+  justify-content: center;
+  gap: 0;
+}
+
+.density-rail .panel-header-title,
+.density-rail .panel-action {
+  display: none;
+}
+
+/* density: compact / rail — composer collapses to icon-only controls.
+   Driven by the engine's computed density (deterministic), NOT a raw
+   container query; full density never collapses. */
+.composer-collapsed .composer {
+  gap: 7px;
+  padding: 11px 11px;
+}
+
+.composer-collapsed .composer button {
+  padding: 0 12px;
+  height: 48px;
+}
+
+.composer-collapsed .composer .btn-label {
+  display: none;
+}
+
+.composer-collapsed .composer input {
+  height: 48px;
+}
+
+.composer-collapsed .message-list {
+  padding: 12px 12px;
+}
+
+.composer-collapsed .message {
+  max-width: 92%;
+}
+
+.composer-collapsed .empty-state .empty-title {
+  font-size: 18px;
+}
+
+/* ---------------------------------------------------------- media dock */
+.media-dock-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.media-dock-title {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.media-dock-empty {
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------ overlays */

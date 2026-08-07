@@ -13,11 +13,12 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 ### ⚡ PHASE 0 — FROZEN INTERFACE (ratify before ANY layout work)
 - timestamp: 2026-08-07T00:30:00Z
 - task: Multi-zone layout interface freeze. Both workstreams (UI + backend) MUST implement against this. Plan: `docs/plans/multi-zone-layout-advisor-plan-2026-08-07.md`; handoff: `docs/HANDOFF-multizone-layout.md`.
-- templates: `focus`(1) | `split`(main,side) | `reading`(main,side,dock) | `dashboard`(rail,main,side,dock). Aliases kept: `reference`→`reading`, `background_media`→`reading`.
+- templates: `focus`(1) | `split`(main,side) | `reading`(main,side,dock) | `dashboard`(rail,main,side,dock). Aliases kept: `reference`→`reading`, `background_media`→`dashboard` (corrected 2026-08-07 — plan §1.1 table is authoritative; earlier note said reading for both).
 - slots: `main` (always populated) | `side` | `rail` | `dock`.
 - wire `layout.apply`: additive — `{template, primary_panel (==slots.main), secondary_panel?, slots?{main,side,rail,dock}, preserve}`. `slots` WINS when present. No coordinates ever.
 - invariants: engine owns geometry/px-floors/degrade/affinity; unknown template → deterministic degrade (never silent coerce-to-focus); conversation anchor always gets a slot.
 - tool signature: flat kwargs `side`/`rail`/`dock` (NOT nested object).
+- RATIFIED by UI stream 2026-08-07 (owner: "you do the ui"): px floors main ≥480×360, side ≥280×240, rail ≥240×240, dock ≥240×64; degrade ladder dashboard→reading→split→focus; template names + flat-kwargs signature per plan.
 - status: ACTIVE — open for owner ratification (px floors, names, signature)
 
 ### hermes (backend workstream B — multi-zone contracts)
@@ -25,7 +26,7 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - task: Implement plan Workstream B1-B6 (enum READING/DASHBOARD, LayoutSlots + LayoutApply.slots + main==primary validator, ui_apply_layout flat side/rail/dock kwargs, system.md frozen vocabulary + decision table, config defaults, regenerate schemas)
 - files/dirs: `packages/contracts/arsvox_contracts/{enums.py,commands.py,config.py,__init__.py}`, `packages/contracts/scripts/export_schemas.py` (run), `packages/contracts/schemas/*.json`, `services/agent/arsvox_agent/tools/ui_tools.py`, `services/agent/arsvox_agent/prompts/system.md`, `configs/app.yaml` (ui.templates only), `tests/python/**`
 - boundaries: will NOT touch `apps/desktop/**` (UI owns A1-A8). Wire shape per Phase 0. NOTE: Phase 0 entry says `background_media`→`reading`, plan §1.1 table says `background_media`→`dashboard` — B is unaffected (alias kept as enum, undocumented in system.md), flagging for owner ratification.
-- status: active
+- status: resolved (B1-B6 complete, 57/57 pytest, schemas regenerated; joint Phase-2 conformance test is A-side)
 
 ### hermes (UI workstream A — multi-zone layouts)
 - timestamp: 2026-08-07T00:31:00Z

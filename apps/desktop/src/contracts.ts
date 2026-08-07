@@ -4,7 +4,15 @@
  * payloads exactly (snake_case).
  */
 
-import type { LayoutTemplateId, PanelId } from "./layout/engine";
+import type { AnyTemplate, PanelId, SlotName } from "./layout/engine";
+
+/** Wire shape of layout.apply `slots` (mirror of LayoutSlots in Python). */
+export interface LayoutSlotsWire {
+  main: PanelId;
+  side?: PanelId | null;
+  rail?: PanelId | null;
+  dock?: PanelId | null;
+}
 
 export type VoiceState =
   | "sleeping"
@@ -43,9 +51,10 @@ export interface ToolCallEvent {
 export type UiCommand =
   | {
       action: "layout.apply";
-      template: LayoutTemplateId;
+      template: AnyTemplate;
       primary_panel: PanelId | null;
       secondary_panel: PanelId | null;
+      slots?: LayoutSlotsWire;
       preserve?: boolean;
     }
   | {

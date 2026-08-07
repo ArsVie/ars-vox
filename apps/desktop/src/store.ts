@@ -12,7 +12,12 @@ import {
   type LayoutResult,
   type LayoutSpec,
   type PanelId,
+  type SlotName,
+  type Viewport,
 } from "./layout/engine";
+
+/** Default content viewport used until the renderer reports real size. */
+export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 800 };
 
 export interface ChatMessage {
   id: string;
@@ -54,12 +59,15 @@ export interface AppState {
   error: ErrorInfo | null;
   fullscreenPanel: PanelId | null;
   reducedMotion: boolean;
+  /** Real content-viewport size in px (engine px floors + density). */
+  viewport: Viewport;
   /** Pending TTS phrases (text), played in order by TtsPlayer. */
   speakTexts: string[];
 
   send: SendFn;
   setConnected: (connected: boolean) => void;
   setReducedMotion: (value: boolean) => void;
+  setViewport: (viewport: Viewport) => void;
 
   applyEvent: (event: ServerEvent) => void;
   sendText: (text: string) => void;
@@ -91,11 +99,24 @@ function initialSpec(): LayoutSpec {
   };
 }
 
+function slotsEqual(
+  a: LayoutSpec["slots"],
+  b: LayoutSpec["slots"],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  for (const slot of ["main", "side", "rail", "dock"] as SlotName[]) {
+    if (a[slot] !== b[slot]) return false;
+  }
+  return true;
+}
+
 export function createAppStore(send: SendFn): StoreApi<AppState> {
   const store = createStore<AppState>((set, get) => {
     const spec = initialSpec();
     const layout = computeLayout(spec, {
       reducedMotion: false,
+      viewport: DEFAULT_VIEWPORT,
       mounted: new Set(),
       previous: null,
     });
@@ -107,6 +128,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       );
       const next = computeLayout(state.spec, {
         reducedMotion: state.reducedMotion,
+        viewport: state.viewport,
         mounted,
         previous: state.layout,
       });
@@ -128,12 +150,14 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             template: command.template,
             primaryPanel: command.primary_panel,
             secondaryPanel: command.secondary_panel,
+            slots: command.slots ? { ...command.slots } : undefined,
             preserve: command.preserve ?? true,
           };
           const same =
             state.spec.template === next.template &&
             state.spec.primaryPanel === next.primaryPanel &&
-            state.spec.secondaryPanel === next.secondaryPanel;
+            state.spec.secondaryPanel === next.secondaryPanel &&
+            slotsEqual(state.spec.slots, next.slots);
           if (same) return;
           pushHistory();
           set({ spec: next, fullscreenPanel: null });
@@ -160,6 +184,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           const next: LayoutSpec = { ...state.spec };
           if (next.primaryPanel === target) next.primaryPanel = null;
           if (next.secondaryPanel === target) next.secondaryPanel = null;
+          if (next.slots) {
+            const slots = { ...next.slots };
+            for (const slot of Object.keys(slots) as SlotName[]) {
+              if (slots[slot] === target) slots[slot] = null;
+            }
+            next.slots = slots;
+          }
           set({
             panelMeta,
             spec: next,
@@ -170,7 +201,15 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         }
         case "panel.set_primary": {
           pushHistory();
-          set({ spec: { ...state.spec, primaryPanel: command.panel_type } });
+          set({
+            spec: {
+              ...state.spec,
+              primaryPanel: command.panel_type,
+              slots: state.spec.slots
+                ? { ...state.spec.slots, main: command.panel_type }
+                : undefined,
+            },
+          });
           recompute();
           return;
         }
@@ -306,12 +345,17 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       error: null,
       fullscreenPanel: null,
       reducedMotion: false,
+      viewport: DEFAULT_VIEWPORT,
       speakTexts: [],
 
       send,
       setConnected: (connected) => set({ connected }),
       setReducedMotion: (value) => {
         set({ reducedMotion: value });
+        recompute();
+      },
+      setViewport: (viewport) => {
+        set({ viewport });
         recompute();
       },
 
