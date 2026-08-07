@@ -10,6 +10,20 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ## Active
 
+### hermes (orchestrator — adaptive UI redesign)
+- timestamp: 2026-08-07T23:00:00Z
+- task: Execution contract encoded + owner-reviewed: `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md` (4 roles / 5 templates / 3 proportions, LayoutSpec, 4-wave DAG). WAVE 0 IN PROGRESS — UI-000 freeze adaptive UI contract: shared TS types (SurfaceRole/Template/Proportion/LayoutSpec), surface registration interface, role-to-surface passing, shell persistent-surface behavior, token naming contract, placeholder fixtures for all 5 templates, LayoutSpec validation rules. Worktree: `/mnt/c/dev/ars-vox-worktrees/ui-000-contract` (branch `wip/ui-000-contract`).
+- files/dirs: packages/contracts/arsvox_contracts/*, packages/contracts/schemas/*, apps/desktop/src/contracts.ts, apps/desktop/src/adaptive/* (new), apps/desktop/tests/*, docs/adaptive-ui-contract.md (new)
+- boundaries: contract types ONLY — additive, no rewrite of existing wire behavior; will NOT touch apps/desktop/src/components/*, readers/*, layout/engine.ts (UI-102 owns geometry later), services/agent logic, or the previous session's uncommitted reader/statusbar changes in the main tree.
+- status: in_progress
+
+### hermes (advisor round-2 fixes + reader polish)
+- timestamp: 2026-08-07T22:50:00Z
+- task: STOP matcher fixed (utterance-level, "para" removed from vocabulary per owner), tests 26/26 new; UI fixes (En espera label, STOP 48px, EPUB 72ch centered measure, PDF fit-width); docs consolidated (STATUS.md voice wording + timestamp, ADR 0004, HANDOFF news landmines, threat-model index T9, plans pointer). VERIFYING epub theme paint via headless Edge (9223) — rAF dead in occluded window.
+- files/dirs: services/agent/arsvox_agent/local_intents.py, tests/python/test_local_intents_stop.py, apps/desktop/src/{components/StatusBar.tsx, components/ReaderView.tsx, readers/epubReader.ts, readers/pdfReader.ts, styles.css, content.css}, docs/{STATUS.md, HANDOFF.md, decisions/0004-local-stop-path.md, threat-model/index.md, plans/index.md}
+- boundaries: no pending collisions; commit pending after epub visual verify (uncommitted working tree).
+- status: in_progress
+
 ### hermes (config-driven UI + live windows demo + modularity cleanup)
 - timestamp: 2026-08-07T22:30:00Z
 - task: Wire configs/app.yaml into the UI (endpoints.ts single-source URLs, store.applyConfig: default template/primary, large_text/high_contrast, tts speed/queue_max); typed wire enum unions + extended conformance tests; live multi-turn LLM window-management demo (demo_live.py --scenario windows, MULTI_OK 5/5); modularity audit fixes (scripts/_harness.py, utcnow_iso dedup, enum-driven repos, conftest loads real app.yaml, max_steps via UsageLimits, system.md drift guard); taste-skill design-governance pass in styles.css.
