@@ -6,6 +6,20 @@ description: Authoritative roadmap and latest session state. Session shipped con
 
 # Ars-Vox handoff — 2026-08-07 (night session)
 
+> UPDATE (late 2026-08-07): content channel shipped — panels are POPULATED
+> in mock mode (screenshots: docs/review-2026-08-07/05-dashboard-populated.png,
+> 06-reading-populated.png, 07-split-populated.png). Frozen panel vision:
+> docs/panel-vision.md — Ars's spec, NOT agent-editable (mirrored in ars-vox
+> skill ref panel-vision-2026-08.md). New events: youtube.search,
+> browser.navigate, document.load, tasks.update, media.state (Python +
+> TS mirrors + schemas). New components: YoutubePanel, BrowserPanel,
+> TasksPanel, DocumentPanel (reader+editor), unified MediaDock.
+> Mock opens a populated dashboard via demo_populate (policy-classified).
+> Tests: 84 vitest (desktop), 67 pytest. Next: backend runtime wiring —
+> reminder cron context injection, message timestamps in agent context,
+> memory-driven search personalization, Electron webview for browser,
+> PDF/EPUB renderers, real media pipeline.
+
 Supersedes the evening handoff (advisor round-2 state remains true; this
 session added the config-driven layer + demo hardening + cleanup).
 
