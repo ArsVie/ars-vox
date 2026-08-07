@@ -4,6 +4,13 @@
    copy, one accent. Agent-harness feel: panels as elevated cards with
    chrome, a presence strip, and a tappable mic hero.
 
+   TOKEN SYSTEM (UI-104, 2026-08-07): one visual language for every
+   surface. The :root catalog below implements the UI-000 frozen token
+   NAMES (apps/desktop/src/adaptive/tokens.ts) with VALUES — typography,
+   spacing, divider, surface, radius, control, icon, state. Surfaces
+   consume catalog tokens; pre-catalog tokens remain as the legacy
+   bridge. Conformance: tests/token-values.test.ts.
+
    DESIGN GOVERNANCE (2026-08-07, taste-skill adoption — see
    docs/taste-skill-analysis-2026-08-07.md):
    Audience = accessibility-critical (one elderly user) -> the "quiet
@@ -28,17 +35,102 @@
 :root {
   color-scheme: dark;
 
-  /* layered elevation: bg darkest -> panel -> elevated surface */
-  --bg: #080b10;
+  /* ============================================================
+     UI-104 TOKEN CATALOG — the ONE visual language (2026-08-07).
+     Names frozen by UI-000 (apps/desktop/src/adaptive/tokens.ts);
+     values implemented here (UI-104). Every name below is a catalog
+     name: group-prefixed, kebab-case, semantic scale. Surfaces may
+     only consume catalog tokens (+ the legacy bridge below) — that
+     is what makes every panel read as one application.
+     Conformance: tests/token-values.test.ts.
+     ============================================================ */
+
+  /* --- typography: font shorthand <weight> <size>/<line-height> <family>.
+     Hierarchy is explicit: -strong leads, -normal is the body voice,
+     -subordinate yields. display > title > body > caption. */
+  --typography-display-strong: 800 30px/1.2 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-display-normal: 650 28px/1.25 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-title-strong: 750 22px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-title-normal: 650 20px/1.35 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-body-strong: 700 17px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-body-normal: 400 16px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-body-subordinate: 400 15px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-caption-strong: 700 13px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-caption-normal: 500 13px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --typography-caption-subordinate: 400 12px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  /* --- spacing: the shared rhythm (4 -> 24). Separate by whitespace
+     first; only then dividers. */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+
+  /* --- divider: separation lines. Prefer -subordinate/-normal for
+     in-region separation; -strong only for major structural breaks. */
+  --divider-strong: #2b3949;
+  --divider-normal: #1f2a37;
+  --divider-subordinate: rgba(255, 255, 255, 0.06);
+
+  /* --- surface: REGIONS are not cards. Layout regions use -region*
+     (architectural, quiet); card CONTENT (bubbles, chips, menus) uses
+     -card. -overlay floats above everything. */
+  --surface-app: #080b10;
+  --surface-region: #121826;
+  --surface-region-active: #1d2738;
+  --surface-overlay: rgba(5, 8, 12, 0.62);
+  --surface-card: #222c3f;
+
+  /* --- radius: one scale everywhere; -pill only for circular/tactile
+     controls (mic, stop, chips). */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* --- control: minimum interaction sizing for an older user.
+     -lg is the >=48px touch target (STOP, primary actions);
+     -md the >=40px standard control; -sm compact in-region controls;
+     -touch-target is the WCAG-2.5.8 floor every hit area must meet. */
+  --control-height-sm: 32px;
+  --control-height-md: 44px;
+  --control-height-lg: 48px;
+  --control-touch-target: 48px;
+
+  /* --- icon: stroke-based, currentColor (icons.tsx); sizes below. */
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+
+  /* --- state: focus/hover/active/disabled. -reduced-motion is the
+     motion duration under prefers-reduced-motion (enforced by the
+     media block at the bottom of this file). */
+  --state-focus-ring: 0 0 0 3px rgba(90, 167, 255, 0.35);
+  --state-hover: rgba(255, 255, 255, 0.06);
+  --state-active: rgba(255, 255, 255, 0.1);
+  --state-disabled: rgba(255, 255, 255, 0.35);
+  --state-reduced-motion: 0s;
+
+  /* ============================================================
+     LEGACY BRIDGE — pre-catalog tokens keep working; shared values
+     are routed through the catalog above. Tokens without a catalog
+     home (text colors, accents, shadows, wash) stay literal below.
+     ============================================================ */
+  --bg: var(--surface-app);
+  --panel: var(--surface-region);
+  --panel-2: var(--surface-region-active);
+  --panel-3: var(--surface-card);
+  --panel-border: var(--divider-strong);
+  --panel-border-soft: var(--divider-normal);
+  --radius: var(--radius-md);
+
+  /* legacy-only tokens (no catalog group owns them) */
   --bg-wash: rgba(90, 167, 255, 0.05);
-  --panel: #121826;
-  --panel-2: #1d2738;
-  --panel-3: #222c3f;
-  --panel-border: #2b3949;
-  --panel-border-soft: #1f2a37;
   --panel-highlight: rgba(255, 255, 255, 0.08);
 
-  /* text (WCAG AA on panel surfaces) */
+  /* text (WCAG AA on region surfaces) */
   --text: #e9eff6;
   --text-dim: #a8b6c4;
   --text-faint: #7c8b9c;
@@ -58,17 +150,6 @@
   --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --glow-accent: 0 0 0 1px rgba(90, 167, 255, 0.4), 0 0 26px rgba(90, 167, 255, 0.3);
 
-  /* SHAPE CONSISTENCY LOCK — one radius scale, used everywhere:
-     --radius-xs  6px  inline micro-elements (error dismiss)
-     --radius-sm  10px chips, small controls (panel actions)
-     --radius     14px panels (the main surface radius)
-     --radius-lg  16px large surfaces (message bubbles, cards)
-     --radius-pill 999px mic, stop, pills (circular/tactile controls only) */
-  --radius: 14px;
-  --radius-sm: 10px;
-  --radius-lg: 16px;
-  --radius-xs: 6px;
-  --radius-pill: 999px;
   --ease: cubic-bezier(0.33, 1, 0.68, 1);
 }
 
@@ -241,19 +322,20 @@ body,
 }
 
 .panel-action:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--state-hover);
   color: var(--text);
   border-color: var(--panel-border);
 }
 
 .panel-action:active {
+  background: var(--state-active);
   transform: scale(0.94);
 }
 
 .panel-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   padding: 7px 16px;
   border-top: 1px solid var(--panel-border-soft);
   color: var(--text-faint);
@@ -267,7 +349,7 @@ body,
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-md);
   scroll-behavior: smooth;
 }
 
@@ -357,7 +439,7 @@ body,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   padding: 24px;
   text-align: center;
   color: var(--text-faint);
@@ -495,7 +577,7 @@ body,
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   margin-top: 18px;
 }
 
@@ -557,7 +639,7 @@ body,
 .composer input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 2px 10px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--state-focus-ring), 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .composer button {
@@ -644,7 +726,7 @@ body,
 
 .composer button:disabled {
   background: #0e141d;
-  color: var(--text-faint);
+  color: var(--state-disabled);
   border: 1px solid var(--panel-border-soft);
   box-shadow: none;
   cursor: default;
@@ -711,7 +793,7 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  height: 32px;
+  height: var(--control-height-sm);
   padding: 0 15px;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
@@ -819,12 +901,13 @@ body,
 /* --------------------------------------------------------- stop button */
 /* The single most important affordance in a voice-first app: always
    visible, filled, red-tinted (stop is a legitimate exception to the
-   single-blue system), sized for an older user. */
+   single-blue system), sized for an older user. Height = the lg
+   control token (>=48px touch target). */
 .stop-button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 40px;
+  height: var(--control-height-lg);
   padding: 0 18px;
   border-radius: 999px;
   border: 1px solid rgba(255, 107, 87, 0.6);
@@ -1032,7 +1115,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 8, 12, 0.62);
+  background: var(--surface-overlay);
   backdrop-filter: blur(4px);
   animation: overlay-in 0.18s ease;
 }
@@ -1188,7 +1271,7 @@ body,
 
 .error-dismiss:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--state-hover);
 }
 
 /* -------------------------------------------------------- reduced motion */
@@ -1243,12 +1326,14 @@ body,
 }
 
 .app[data-high-contrast] {
-  --bg: #05070c;
-  --panel: #0d1422;
-  --panel-2: #182235;
-  --panel-3: #1d2a40;
-  --panel-border: #4a5c74;
-  --panel-border-soft: #33445a;
+  /* override the CATALOG tokens — the legacy bridge picks these up,
+     so both old and new consumers get the high-contrast palette */
+  --surface-app: #05070c;
+  --surface-region: #0d1422;
+  --surface-region-active: #182235;
+  --surface-card: #1d2a40;
+  --divider-strong: #4a5c74;
+  --divider-normal: #33445a;
   --text: #ffffff;
   --text-dim: #d6e0ea;
   --text-faint: #a9b8c8;
@@ -1262,6 +1347,6 @@ body,
 }
 
 .app[data-high-contrast] .composer input {
-  background: #0d1422;
-  border-color: var(--panel-border);
+  background: var(--surface-region);
+  border-color: var(--divider-strong);
 }

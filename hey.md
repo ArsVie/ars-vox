@@ -10,6 +10,14 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ## Active
 
+### hermes (UI-104 — unified visual token system)
+- timestamp: 2026-08-07T23:40:00Z
+- task: Implement VALUES for the UI-000 frozen token catalog (40 names, 8 groups: typography/spacing/divider/surface/radius/control/icon/state) as CSS custom properties in styles.css :root; explicit strong/normal/subordinate typography hierarchy (font shorthand); control floors for the older-user target (lg 48px / md 44px / touch-target 48px); card-content surface distinct from region surfaces; legacy token bridge (--panel/--panel-2/--panel-3/--panel-border/--panel-border-soft/--bg/--radius route through catalog); high-contrast mode re-routed to catalog tokens; STOP wired to --control-height-lg; focus/hover/active/disabled routed to state tokens; divider/spacing tokens used by canonical rules; new conformance suite tests/token-values.test.ts (20 tests: catalog↔CSS set equality, hierarchy, sizing floors, surface separation, legacy bridge, wiring).
+- files/dirs: apps/desktop/src/styles.css (token catalog + legacy bridge + routed rules), apps/desktop/tests/token-values.test.ts (new)
+- boundaries: did NOT touch components/**, readers/**, layout/engine.ts, src/adaptive/* (contract code), content.css, packages/**, services/**; no new token names outside the frozen catalog; region/shell chrome left to UI-101; no stop-condition escalations.
+- verification: 131/131 vitest (111 baseline + 20 new), typecheck clean, build clean (both renderer + electron).
+- status: resolved
+
 ### hermes (orchestrator — adaptive UI redesign)
 - timestamp: 2026-08-07T23:30:00Z
 - task: Execution contract encoded + owner-reviewed: `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md` (4 roles / 5 templates / 3 proportions, LayoutSpec, 4-wave DAG). ✅ WAVE 0 COMPLETE — UI-000 froze the adaptive UI contract: `packages/contracts/arsvox_contracts/adaptive.py` (SurfaceRole/AdaptiveTemplate/Proportion/LayoutSpec + TEMPLATE_SLOTS + validate_layout_spec), TS mirror `apps/desktop/src/adaptive/{contracts,fixtures,tokens}.ts`, placeholder fixtures for all 5 templates, token naming contract, 2 JSON schemas, docs/adaptive-ui-contract.md. Verified: 110 pytest (17 new), 111 vitest (15 new), typecheck+build clean, OKF OK. GATE CONTRACT_FROZEN CLOSED (merge a3e996d).
