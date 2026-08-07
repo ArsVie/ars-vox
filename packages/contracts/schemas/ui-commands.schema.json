@@ -19,6 +19,85 @@
       "title": "AudioPlay",
       "type": "object"
     },
+    "BrowserBack": {
+      "properties": {
+        "action": {
+          "const": "browser.back",
+          "default": "browser.back",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserBack",
+      "type": "object"
+    },
+    "BrowserForward": {
+      "properties": {
+        "action": {
+          "const": "browser.forward",
+          "default": "browser.forward",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserForward",
+      "type": "object"
+    },
+    "BrowserNavigate": {
+      "properties": {
+        "action": {
+          "const": "browser.navigate",
+          "default": "browser.navigate",
+          "title": "Action",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "BrowserNavigate",
+      "type": "object"
+    },
+    "BrowserRefresh": {
+      "properties": {
+        "action": {
+          "const": "browser.refresh",
+          "default": "browser.refresh",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserRefresh",
+      "type": "object"
+    },
+    "DocumentSave": {
+      "properties": {
+        "action": {
+          "const": "document.save",
+          "default": "document.save",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "title": "Panel Type",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "panel_type",
+        "content"
+      ],
+      "title": "DocumentSave",
+      "type": "object"
+    },
     "LayoutApply": {
       "properties": {
         "action": {
@@ -137,6 +216,37 @@
       ],
       "title": "LayoutTemplate",
       "type": "string"
+    },
+    "MediaPlayPause": {
+      "properties": {
+        "action": {
+          "const": "media.play_pause",
+          "default": "media.play_pause",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "MediaPlayPause",
+      "type": "object"
+    },
+    "MediaSeek": {
+      "properties": {
+        "action": {
+          "const": "media.seek",
+          "default": "media.seek",
+          "title": "Action",
+          "type": "string"
+        },
+        "position_s": {
+          "title": "Position S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position_s"
+      ],
+      "title": "MediaSeek",
+      "type": "object"
     },
     "MediaState": {
       "enum": [
@@ -387,6 +497,25 @@
       "title": "PanelType",
       "type": "string"
     },
+    "TasksToggle": {
+      "properties": {
+        "action": {
+          "const": "tasks.toggle",
+          "default": "tasks.toggle",
+          "title": "Action",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "TasksToggle",
+      "type": "object"
+    },
     "TtsSpeak": {
       "properties": {
         "action": {
@@ -410,20 +539,73 @@
       ],
       "title": "TtsSpeak",
       "type": "object"
+    },
+    "YoutubePlay": {
+      "properties": {
+        "action": {
+          "const": "youtube.play",
+          "default": "youtube.play",
+          "title": "Action",
+          "type": "string"
+        },
+        "video_id": {
+          "title": "Video Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "video_id",
+        "title"
+      ],
+      "title": "YoutubePlay",
+      "type": "object"
+    },
+    "YoutubeSearch": {
+      "properties": {
+        "action": {
+          "const": "youtube.search",
+          "default": "youtube.search",
+          "title": "Action",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "YoutubeSearch",
+      "type": "object"
     }
   },
   "discriminator": {
     "mapping": {
       "audio.play": "#/$defs/AudioPlay",
+      "browser.back": "#/$defs/BrowserBack",
+      "browser.forward": "#/$defs/BrowserForward",
+      "browser.navigate": "#/$defs/BrowserNavigate",
+      "browser.refresh": "#/$defs/BrowserRefresh",
+      "document.save": "#/$defs/DocumentSave",
       "layout.apply": "#/$defs/LayoutApply",
       "layout.restore": "#/$defs/LayoutRestore",
+      "media.play_pause": "#/$defs/MediaPlayPause",
+      "media.seek": "#/$defs/MediaSeek",
       "media.state": "#/$defs/MediaStateChange",
       "notification.show": "#/$defs/NotificationShow",
       "panel.close": "#/$defs/PanelClose",
       "panel.fullscreen": "#/$defs/PanelFullscreen",
       "panel.open": "#/$defs/PanelOpen",
       "panel.set_primary": "#/$defs/PanelSetPrimary",
-      "tts.speak": "#/$defs/TtsSpeak"
+      "tasks.toggle": "#/$defs/TasksToggle",
+      "tts.speak": "#/$defs/TtsSpeak",
+      "youtube.play": "#/$defs/YoutubePlay",
+      "youtube.search": "#/$defs/YoutubeSearch"
     },
     "propertyName": "action"
   },
@@ -457,6 +639,36 @@
     },
     {
       "$ref": "#/$defs/AudioPlay"
+    },
+    {
+      "$ref": "#/$defs/MediaPlayPause"
+    },
+    {
+      "$ref": "#/$defs/MediaSeek"
+    },
+    {
+      "$ref": "#/$defs/YoutubeSearch"
+    },
+    {
+      "$ref": "#/$defs/YoutubePlay"
+    },
+    {
+      "$ref": "#/$defs/BrowserNavigate"
+    },
+    {
+      "$ref": "#/$defs/BrowserBack"
+    },
+    {
+      "$ref": "#/$defs/BrowserForward"
+    },
+    {
+      "$ref": "#/$defs/BrowserRefresh"
+    },
+    {
+      "$ref": "#/$defs/DocumentSave"
+    },
+    {
+      "$ref": "#/$defs/TasksToggle"
     }
   ]
 }

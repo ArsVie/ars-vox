@@ -108,6 +108,54 @@ class AudioPlay(BaseModel):
     asset: str
 
 
+class MediaPlayPause(BaseModel):
+    action: Literal["media.play_pause"] = "media.play_pause"
+
+
+class MediaSeek(BaseModel):
+    action: Literal["media.seek"] = "media.seek"
+    position_s: int
+
+
+class YoutubeSearch(BaseModel):
+    action: Literal["youtube.search"] = "youtube.search"
+    query: str
+
+
+class YoutubePlay(BaseModel):
+    action: Literal["youtube.play"] = "youtube.play"
+    video_id: str
+    title: str
+
+
+class BrowserNavigate(BaseModel):
+    action: Literal["browser.navigate"] = "browser.navigate"
+    url: str
+
+
+class BrowserBack(BaseModel):
+    action: Literal["browser.back"] = "browser.back"
+
+
+class BrowserForward(BaseModel):
+    action: Literal["browser.forward"] = "browser.forward"
+
+
+class BrowserRefresh(BaseModel):
+    action: Literal["browser.refresh"] = "browser.refresh"
+
+
+class DocumentSave(BaseModel):
+    action: Literal["document.save"] = "document.save"
+    panel_type: str
+    content: str
+
+
+class TasksToggle(BaseModel):
+    action: Literal["tasks.toggle"] = "tasks.toggle"
+    task_id: str
+
+
 UiCommand = Annotated[
     Union[
         LayoutApply,
@@ -120,6 +168,16 @@ UiCommand = Annotated[
         MediaStateChange,
         TtsSpeak,
         AudioPlay,
+        MediaPlayPause,
+        MediaSeek,
+        YoutubeSearch,
+        YoutubePlay,
+        BrowserNavigate,
+        BrowserBack,
+        BrowserForward,
+        BrowserRefresh,
+        DocumentSave,
+        TasksToggle,
     ],
     Field(discriminator="action"),
 ]

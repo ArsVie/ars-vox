@@ -48,6 +48,105 @@
       "title": "AudioPlay",
       "type": "object"
     },
+    "BrowserBack": {
+      "properties": {
+        "action": {
+          "const": "browser.back",
+          "default": "browser.back",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserBack",
+      "type": "object"
+    },
+    "BrowserForward": {
+      "properties": {
+        "action": {
+          "const": "browser.forward",
+          "default": "browser.forward",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserForward",
+      "type": "object"
+    },
+    "BrowserNavigate": {
+      "properties": {
+        "action": {
+          "const": "browser.navigate",
+          "default": "browser.navigate",
+          "title": "Action",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "BrowserNavigate",
+      "type": "object"
+    },
+    "BrowserNavigateEvent": {
+      "properties": {
+        "type": {
+          "const": "browser.navigate",
+          "default": "browser.navigate",
+          "title": "Type",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "can_go_back": {
+          "default": false,
+          "title": "Can Go Back",
+          "type": "boolean"
+        },
+        "can_go_forward": {
+          "default": false,
+          "title": "Can Go Forward",
+          "type": "boolean"
+        },
+        "loading": {
+          "default": false,
+          "title": "Loading",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "title"
+      ],
+      "title": "BrowserNavigateEvent",
+      "type": "object"
+    },
+    "BrowserRefresh": {
+      "properties": {
+        "action": {
+          "const": "browser.refresh",
+          "default": "browser.refresh",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserRefresh",
+      "type": "object"
+    },
     "ConfigUpdateEvent": {
       "properties": {
         "type": {
@@ -167,6 +266,103 @@
       ],
       "title": "ConfirmationStatus",
       "type": "string"
+    },
+    "DocumentChapter": {
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "content"
+      ],
+      "title": "DocumentChapter",
+      "type": "object"
+    },
+    "DocumentKind": {
+      "enum": [
+        "txt",
+        "md",
+        "pdf",
+        "epub"
+      ],
+      "title": "DocumentKind",
+      "type": "string"
+    },
+    "DocumentLoadEvent": {
+      "properties": {
+        "type": {
+          "const": "document.load",
+          "default": "document.load",
+          "title": "Type",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DocumentKind"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "content": {
+          "default": "",
+          "title": "Content",
+          "type": "string"
+        },
+        "chapters": {
+          "items": {
+            "$ref": "#/$defs/DocumentChapter"
+          },
+          "title": "Chapters",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "kind",
+        "path"
+      ],
+      "title": "DocumentLoadEvent",
+      "type": "object"
+    },
+    "DocumentSave": {
+      "properties": {
+        "action": {
+          "const": "document.save",
+          "default": "document.save",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "title": "Panel Type",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "panel_type",
+        "content"
+      ],
+      "title": "DocumentSave",
+      "type": "object"
     },
     "ErrorEvent": {
       "properties": {
@@ -316,6 +512,53 @@
       "title": "LayoutTemplate",
       "type": "string"
     },
+    "MediaKind": {
+      "enum": [
+        "video",
+        "audio"
+      ],
+      "title": "MediaKind",
+      "type": "string"
+    },
+    "MediaPlayPause": {
+      "properties": {
+        "action": {
+          "const": "media.play_pause",
+          "default": "media.play_pause",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "MediaPlayPause",
+      "type": "object"
+    },
+    "MediaSeek": {
+      "properties": {
+        "action": {
+          "const": "media.seek",
+          "default": "media.seek",
+          "title": "Action",
+          "type": "string"
+        },
+        "position_s": {
+          "title": "Position S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position_s"
+      ],
+      "title": "MediaSeek",
+      "type": "object"
+    },
+    "MediaSource": {
+      "enum": [
+        "youtube",
+        "local"
+      ],
+      "title": "MediaSource",
+      "type": "string"
+    },
     "MediaState": {
       "enum": [
         "playing",
@@ -377,6 +620,81 @@
         "state"
       ],
       "title": "MediaStateChange",
+      "type": "object"
+    },
+    "MediaStateEvent": {
+      "properties": {
+        "type": {
+          "const": "media.state",
+          "default": "media.state",
+          "title": "Type",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/MediaState"
+        },
+        "source": {
+          "$ref": "#/$defs/MediaSource"
+        },
+        "kind": {
+          "$ref": "#/$defs/MediaKind"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "video_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Video Id"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "position_s": {
+          "default": 0,
+          "title": "Position S",
+          "type": "integer"
+        },
+        "duration_s": {
+          "default": 0,
+          "title": "Duration S",
+          "type": "integer"
+        },
+        "volume": {
+          "default": 1.0,
+          "title": "Volume",
+          "type": "number"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "source",
+        "kind"
+      ],
+      "title": "MediaStateEvent",
       "type": "object"
     },
     "NotificationEvent": {
@@ -633,6 +951,34 @@
       "title": "PongEvent",
       "type": "object"
     },
+    "ReminderItem": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "cadence": {
+          "title": "Cadence",
+          "type": "string"
+        },
+        "next_fire": {
+          "title": "Next Fire",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "cadence",
+        "next_fire"
+      ],
+      "title": "ReminderItem",
+      "type": "object"
+    },
     "StateUpdateEvent": {
       "properties": {
         "type": {
@@ -666,6 +1012,101 @@
         "voice_state"
       ],
       "title": "StateUpdateEvent",
+      "type": "object"
+    },
+    "TasksToggle": {
+      "properties": {
+        "action": {
+          "const": "tasks.toggle",
+          "default": "tasks.toggle",
+          "title": "Action",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "TasksToggle",
+      "type": "object"
+    },
+    "TasksUpdateEvent": {
+      "properties": {
+        "type": {
+          "const": "tasks.update",
+          "default": "tasks.update",
+          "title": "Type",
+          "type": "string"
+        },
+        "todos": {
+          "items": {
+            "$ref": "#/$defs/TodoItem"
+          },
+          "title": "Todos",
+          "type": "array"
+        },
+        "reminders": {
+          "items": {
+            "$ref": "#/$defs/ReminderItem"
+          },
+          "title": "Reminders",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "title": "TasksUpdateEvent",
+      "type": "object"
+    },
+    "TodoItem": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "done": {
+          "default": false,
+          "title": "Done",
+          "type": "boolean"
+        },
+        "priority": {
+          "default": "normal",
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "due": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Due"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "TodoItem",
       "type": "object"
     },
     "ToolCallEvent": {
@@ -762,15 +1203,25 @@
           "discriminator": {
             "mapping": {
               "audio.play": "#/$defs/AudioPlay",
+              "browser.back": "#/$defs/BrowserBack",
+              "browser.forward": "#/$defs/BrowserForward",
+              "browser.navigate": "#/$defs/BrowserNavigate",
+              "browser.refresh": "#/$defs/BrowserRefresh",
+              "document.save": "#/$defs/DocumentSave",
               "layout.apply": "#/$defs/LayoutApply",
               "layout.restore": "#/$defs/LayoutRestore",
+              "media.play_pause": "#/$defs/MediaPlayPause",
+              "media.seek": "#/$defs/MediaSeek",
               "media.state": "#/$defs/MediaStateChange",
               "notification.show": "#/$defs/NotificationShow",
               "panel.close": "#/$defs/PanelClose",
               "panel.fullscreen": "#/$defs/PanelFullscreen",
               "panel.open": "#/$defs/PanelOpen",
               "panel.set_primary": "#/$defs/PanelSetPrimary",
-              "tts.speak": "#/$defs/TtsSpeak"
+              "tasks.toggle": "#/$defs/TasksToggle",
+              "tts.speak": "#/$defs/TtsSpeak",
+              "youtube.play": "#/$defs/YoutubePlay",
+              "youtube.search": "#/$defs/YoutubeSearch"
             },
             "propertyName": "action"
           },
@@ -804,6 +1255,36 @@
             },
             {
               "$ref": "#/$defs/AudioPlay"
+            },
+            {
+              "$ref": "#/$defs/MediaPlayPause"
+            },
+            {
+              "$ref": "#/$defs/MediaSeek"
+            },
+            {
+              "$ref": "#/$defs/YoutubeSearch"
+            },
+            {
+              "$ref": "#/$defs/YoutubePlay"
+            },
+            {
+              "$ref": "#/$defs/BrowserNavigate"
+            },
+            {
+              "$ref": "#/$defs/BrowserBack"
+            },
+            {
+              "$ref": "#/$defs/BrowserForward"
+            },
+            {
+              "$ref": "#/$defs/BrowserRefresh"
+            },
+            {
+              "$ref": "#/$defs/DocumentSave"
+            },
+            {
+              "$ref": "#/$defs/TasksToggle"
             }
           ],
           "title": "Command"
@@ -861,21 +1342,146 @@
       ],
       "title": "VoiceState",
       "type": "string"
+    },
+    "YoutubePlay": {
+      "properties": {
+        "action": {
+          "const": "youtube.play",
+          "default": "youtube.play",
+          "title": "Action",
+          "type": "string"
+        },
+        "video_id": {
+          "title": "Video Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "video_id",
+        "title"
+      ],
+      "title": "YoutubePlay",
+      "type": "object"
+    },
+    "YoutubeSearch": {
+      "properties": {
+        "action": {
+          "const": "youtube.search",
+          "default": "youtube.search",
+          "title": "Action",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "YoutubeSearch",
+      "type": "object"
+    },
+    "YoutubeSearchEvent": {
+      "properties": {
+        "type": {
+          "const": "youtube.search",
+          "default": "youtube.search",
+          "title": "Type",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/YoutubeVideoResult"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "results"
+      ],
+      "title": "YoutubeSearchEvent",
+      "type": "object"
+    },
+    "YoutubeVideoResult": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "duration_s": {
+          "title": "Duration S",
+          "type": "integer"
+        },
+        "published": {
+          "title": "Published",
+          "type": "string"
+        },
+        "thumbnail_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thumbnail Url"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "channel",
+        "duration_s",
+        "published"
+      ],
+      "title": "YoutubeVideoResult",
+      "type": "object"
     }
   },
   "discriminator": {
     "mapping": {
       "agent_message": "#/$defs/AgentMessageEvent",
+      "browser.navigate": "#/$defs/BrowserNavigateEvent",
       "config_update": "#/$defs/ConfigUpdateEvent",
       "confirmation_requested": "#/$defs/ConfirmationRequestedEvent",
       "confirmation_resolved": "#/$defs/ConfirmationResolvedEvent",
+      "document.load": "#/$defs/DocumentLoadEvent",
       "error": "#/$defs/ErrorEvent",
+      "media.state": "#/$defs/MediaStateEvent",
       "notification": "#/$defs/NotificationEvent",
       "pong": "#/$defs/PongEvent",
       "state_update": "#/$defs/StateUpdateEvent",
+      "tasks.update": "#/$defs/TasksUpdateEvent",
       "tool_call": "#/$defs/ToolCallEvent",
       "ui_command": "#/$defs/UiCommandEvent",
-      "user_message": "#/$defs/UserMessageEvent"
+      "user_message": "#/$defs/UserMessageEvent",
+      "youtube.search": "#/$defs/YoutubeSearchEvent"
     },
     "propertyName": "type"
   },
@@ -909,6 +1515,21 @@
     },
     {
       "$ref": "#/$defs/ConfigUpdateEvent"
+    },
+    {
+      "$ref": "#/$defs/YoutubeSearchEvent"
+    },
+    {
+      "$ref": "#/$defs/BrowserNavigateEvent"
+    },
+    {
+      "$ref": "#/$defs/DocumentLoadEvent"
+    },
+    {
+      "$ref": "#/$defs/TasksUpdateEvent"
+    },
+    {
+      "$ref": "#/$defs/MediaStateEvent"
     },
     {
       "$ref": "#/$defs/PongEvent"

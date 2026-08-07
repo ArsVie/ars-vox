@@ -108,4 +108,26 @@ class EventType(str, Enum):
     NOTIFICATION = "notification"
     ERROR = "error"
     CONFIG_UPDATE = "config_update"
+    YOUTUBE_SEARCH = "youtube.search"
+    BROWSER_NAVIGATE = "browser.navigate"
+    DOCUMENT_LOAD = "document.load"
+    TASKS_UPDATE = "tasks.update"
+    MEDIA_STATE = "media.state"
     PONG = "pong"
+
+
+class MediaSource(str, Enum):
+    YOUTUBE = "youtube"
+    LOCAL = "local"
+
+
+class MediaKind(str, Enum):
+    VIDEO = "video"
+    AUDIO = "audio"
+
+
+class DocumentKind(str, Enum):
+    TXT = "txt"
+    MD = "md"
+    PDF = "pdf"
+    EPUB = "epub"
