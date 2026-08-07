@@ -15,10 +15,19 @@ description: Authoritative roadmap and latest session state. Session shipped con
 > TS mirrors + schemas). New components: YoutubePanel, BrowserPanel,
 > TasksPanel, DocumentPanel (reader+editor), unified MediaDock.
 > Mock opens a populated dashboard via demo_populate (policy-classified).
-> Tests: 84 vitest (desktop), 67 pytest. Next: backend runtime wiring —
+> Tests: 96 vitest (desktop), 67 pytest. Next: backend runtime wiring —
 > reminder cron context injection, message timestamps in agent context,
 > memory-driven search personalization, Electron webview for browser,
-> PDF/EPUB renderers, real media pipeline.
+> real media pipeline.
+>
+> UPDATE 2 (late 2026-08-07): REAL PDF/EPUB readers shipped (pdf.js v6 +
+> epub.js 0.3.x behind one Reader interface; ReaderView with nav/location/
+> font/theme controls; single-page spreads). Verified: 08-reading-epub.png
+> (serif book page) + 09-reading-pdf.png (rendered Quijote canvas).
+> document.load now carries url. Details + pitfalls in ars-vox skill ref
+> document-reader-2026-08.md. Fixture generator:
+> apps/desktop/scripts/gen-demo-fixtures.py. Remaining: Electron custom
+> protocol for local files, book position persistence pass.
 
 Supersedes the evening handoff (advisor round-2 state remains true; this
 session added the config-driven layer + demo hardening + cleanup).
