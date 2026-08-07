@@ -14,7 +14,14 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
-from arsvox_contracts import AppConfig, AgentEvent, ClientMessage, UiCommand
+from arsvox_contracts import (
+    AgentEvent,
+    AppConfig,
+    ClientMessage,
+    LayoutSpec,
+    SurfaceRegistration,
+    UiCommand,
+)
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "schemas"
 
@@ -23,6 +30,8 @@ MODELS = {
     "ui-commands": UiCommand,
     "client-messages": ClientMessage,
     "app-config": AppConfig,
+    "adaptive-layout": LayoutSpec,
+    "adaptive-surface-registration": SurfaceRegistration,
 }
 
 

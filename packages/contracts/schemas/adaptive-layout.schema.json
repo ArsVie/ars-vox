@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "AdaptiveTemplate": {
+      "description": "Allowed adaptive compositions. Geometry is owned by the layout\nimplementation (UI-102), never by the agent.",
+      "enum": [
+        "focus",
+        "sidecar",
+        "stack",
+        "split",
+        "triple"
+      ],
+      "title": "AdaptiveTemplate",
+      "type": "string"
+    },
+    "LayoutAssignment": {
+      "description": "One surface placed in one role at one semantic slot.",
+      "properties": {
+        "surface_id": {
+          "minLength": 1,
+          "title": "Surface Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/SurfaceRole"
+        },
+        "slot": {
+          "minLength": 1,
+          "title": "Slot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface_id",
+        "role",
+        "slot"
+      ],
+      "title": "LayoutAssignment",
+      "type": "object"
+    },
+    "Proportion": {
+      "description": "Allowed relative size of the primary region.",
+      "enum": [
+        "narrow",
+        "balanced",
+        "wide"
+      ],
+      "title": "Proportion",
+      "type": "string"
+    },
+    "SurfaceRole": {
+      "description": "Semantic role a surface may occupy at a given moment.",
+      "enum": [
+        "primary",
+        "companion",
+        "support",
+        "persistent"
+      ],
+      "title": "SurfaceRole",
+      "type": "string"
+    }
+  },
+  "description": "The ONLY layout shape the agent may produce.\n\nSemantic composition only \u2014 template, assignments, optional proportion.\nNo coordinates, no CSS, no pixel values anywhere in this shape.",
+  "properties": {
+    "template": {
+      "$ref": "#/$defs/AdaptiveTemplate"
+    },
+    "assignments": {
+      "items": {
+        "$ref": "#/$defs/LayoutAssignment"
+      },
+      "minItems": 1,
+      "title": "Assignments",
+      "type": "array"
+    },
+    "proportion": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Proportion"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "template",
+    "assignments"
+  ],
+  "title": "LayoutSpec",
+  "type": "object"
+}
