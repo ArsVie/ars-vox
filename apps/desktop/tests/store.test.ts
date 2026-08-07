@@ -624,6 +624,7 @@ describe("panel content events (content channel)", () => {
       title: "Cuento",
       kind: "md",
       path: "/docs/cuento.md",
+      url: null,
       content: "# Cuento\nHabía una vez...",
       chapters: [{ title: "Capítulo 1", content: "Había una vez..." }],
     });

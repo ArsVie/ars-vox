@@ -153,17 +153,18 @@ def test_youtube_search_event_carries_query_and_three_results():
         assert isinstance(r.duration_s, int) and r.duration_s > 0
 
 
-def test_document_load_event_kind_md_two_chapters():
+def test_document_load_event_kind_epub_with_url():
     tctx, bus, _ = _make_context(mock=True)
 
     _run(tctx)
 
     ev = next(e for e in bus.events if isinstance(e, DocumentLoadEvent))
-    assert ev.kind == "md"
-    assert ev.path == "documentos/notas-de-obra.md"
-    assert len(ev.chapters) == 2
-    assert [c.title for c in ev.chapters] == ["Reunión del lunes", "Pendiente"]
-    assert all(c.content for c in ev.chapters)
+    assert ev.kind == "epub"
+    assert ev.path == "biblioteca/don-quijote-fragmento.epub"
+    assert ev.url and ev.url.startswith("http://127.0.0.1:5173/")
+    assert ev.title == "Don Quijote de la Mancha (fragmento)"
+    assert ev.chapters == []
+    assert ev.content == ""
 
 
 def test_tasks_update_event_three_todos_two_reminders():

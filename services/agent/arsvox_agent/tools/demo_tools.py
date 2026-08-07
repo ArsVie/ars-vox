@@ -10,7 +10,6 @@ from arsvox_contracts import PanelType, PolicyKind
 from arsvox_contracts.commands import LayoutApply, LayoutSlots, PanelOpen
 from arsvox_contracts.events import (
     BrowserNavigateEvent,
-    DocumentChapter,
     DocumentLoadEvent,
     MediaStateEvent,
     ReminderItem,
@@ -110,31 +109,15 @@ async def demo_populate(tctx: ToolContext) -> str:
         )
     )
 
-    # Document: reader content (txt/md style) + editor source.
+    # Document: a real EPUB book rendered by epub.js (demo fixture).
     await tctx.emit(
         DocumentLoadEvent(
-            title="Notas de obra",
-            kind="md",
-            path="documentos/notas-de-obra.md",
+            title="Don Quijote de la Mancha (fragmento)",
+            kind="epub",
+            path="biblioteca/don-quijote-fragmento.epub",
+            url="http://127.0.0.1:5173/demo-book.epub",
             content="",
-            chapters=[
-                DocumentChapter(
-                    title="Reunión del lunes",
-                    content=(
-                        "Aprobado el calendario de pintura para las fachadas.\n\n"
-                        "- Fachada norte: semana del 17 al 21.\n"
-                        "- Fachada sur: semana del 24 al 28.\n\n"
-                        "Confirmar con el proveedor el tono de la muestra 4B."
-                    ),
-                ),
-                DocumentChapter(
-                    title="Pendiente",
-                    content=(
-                        "Solicitar presupuesto de barandillas para el segundo "
-                        "patio y revisar la garantía de la impermeabilización."
-                    ),
-                ),
-            ],
+            chapters=[],
         )
     )
 
