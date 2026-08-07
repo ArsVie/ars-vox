@@ -1,0 +1,42 @@
+{
+  "$defs": {
+    "SurfaceRole": {
+      "description": "Semantic role a surface may occupy at a given moment.",
+      "enum": [
+        "primary",
+        "companion",
+        "support",
+        "persistent"
+      ],
+      "title": "SurfaceRole",
+      "type": "string"
+    }
+  },
+  "description": "Contract a surface must satisfy to be placeable by the layout.\n\n``surface_id`` is the surface's stable identity \u2014 it does NOT change\nwhen the surface moves between roles or slots (state must survive).",
+  "properties": {
+    "surface_id": {
+      "minLength": 1,
+      "title": "Surface Id",
+      "type": "string"
+    },
+    "roles": {
+      "items": {
+        "$ref": "#/$defs/SurfaceRole"
+      },
+      "minItems": 1,
+      "title": "Roles",
+      "type": "array"
+    },
+    "persistent_capable": {
+      "default": false,
+      "title": "Persistent Capable",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "surface_id",
+    "roles"
+  ],
+  "title": "SurfaceRegistration",
+  "type": "object"
+}

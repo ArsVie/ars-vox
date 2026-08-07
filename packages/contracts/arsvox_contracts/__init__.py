@@ -11,6 +11,18 @@ pydantic model. This package is the single source of truth:
 Add or change a message shape here first, then regenerate schemas.
 """
 
+from arsvox_contracts.adaptive import (
+    ASSIGNABLE_ROLES,
+    EQUAL_SPLIT_TEMPLATES,
+    TEMPLATE_SLOTS,
+    AdaptiveTemplate,
+    LayoutAssignment,
+    LayoutSpec,
+    Proportion,
+    SurfaceRegistration,
+    SurfaceRole,
+    validate_layout_spec,
+)
 from arsvox_contracts.client_messages import (
     CancelMessage,
     ClientMessage,
@@ -79,6 +91,8 @@ from arsvox_contracts.events import (
 )
 
 __all__ = [
+    "ASSIGNABLE_ROLES",
+    "AdaptiveTemplate",
     "AgentEvent",
     "AgentMessageEvent",
     "AgentSection",
@@ -92,12 +106,15 @@ __all__ = [
     "ConfirmationResolvedEvent",
     "ConfirmationStatus",
     "DemoSection",
+    "EQUAL_SPLIT_TEMPLATES",
     "ErrorEvent",
     "EventType",
     "LayoutApply",
+    "LayoutAssignment",
     "LayoutRestore",
     "LayoutRole",
     "LayoutSlots",
+    "LayoutSpec",
     "LayoutTemplate",
     "MediaSection",
     "MediaState",
@@ -116,11 +133,15 @@ __all__ = [
     "PingMessage",
     "PolicyKind",
     "PongEvent",
+    "Proportion",
     "ReminderStatus",
     "RemindersSection",
     "ServerSection",
     "StateUpdateEvent",
     "StopMessage",
+    "SurfaceRegistration",
+    "SurfaceRole",
+    "TEMPLATE_SLOTS",
     "TaskStatus",
     "TelegramSection",
     "ToolCallEvent",
@@ -134,4 +155,5 @@ __all__ = [
     "VoiceSection",
     "VoiceState",
     "parse_client_message",
+    "validate_layout_spec",
 ]
