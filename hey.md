@@ -10,6 +10,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ## Active
 
+### hermes (config-driven UI + live windows demo + modularity cleanup)
+- timestamp: 2026-08-07T22:30:00Z
+- task: Wire configs/app.yaml into the UI (endpoints.ts single-source URLs, store.applyConfig: default template/primary, large_text/high_contrast, tts speed/queue_max); typed wire enum unions + extended conformance tests; live multi-turn LLM window-management demo (demo_live.py --scenario windows, MULTI_OK 5/5); modularity audit fixes (scripts/_harness.py, utcnow_iso dedup, enum-driven repos, conftest loads real app.yaml, max_steps via UsageLimits, system.md drift guard); taste-skill design-governance pass in styles.css.
+- files/dirs: apps/desktop/src/{endpoints.ts (new), store.ts, contracts.ts, App.tsx, TtsPlayer.tsx, mic.ts, ws/client.ts, main.tsx, styles.css}, apps/desktop/tests/*, services/agent/arsvox_agent/{runtime.py, __main__.py, prompts/system.md, tools/library_tools.py, tools/scheduler.py}, services/memory/arsvox_memory/repos/*, services/tts/arsvox_tts/providers.py, scripts/{_harness.py (new), demo_live.py, demo_voice.py, smoke_mock.py}, packages/contracts/** (_util.py new), configs/app.example.yaml, tests/python/{conftest.py, test_prompts.py}, docs/{audit-modularity-2026-08-07.md, taste-skill-analysis-2026-08-07.md}
+- boundaries: no pending collisions; all committed (28493cf). Ports 8765/5173 FREE at session end — kill leftovers before starting services.
+- status: resolved
+
 ### ⚡ PHASE 0 — FROZEN INTERFACE (ratify before ANY layout work)
 - timestamp: 2026-08-07T00:30:00Z
 - task: Multi-zone layout interface freeze. Both workstreams (UI + backend) MUST implement against this. Plan: `docs/plans/multi-zone-layout-advisor-plan-2026-08-07.md`; handoff: `docs/HANDOFF-multizone-layout.md`.
