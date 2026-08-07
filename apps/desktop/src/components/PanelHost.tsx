@@ -13,7 +13,9 @@ import { DocumentPanel } from "./DocumentPanel";
  * two panels: conversation and document_editor. Other panels may be
  * mounted/hidden by the engine but have no component yet.
  */
-const PANEL_COMPONENTS: Partial<Record<PanelId, ComponentType<{ meta?: PanelMeta }>>> = {
+const PANEL_COMPONENTS: Partial<
+  Record<PanelId, ComponentType<{ meta?: PanelMeta; panelId: PanelId }>>
+> = {
   conversation: ConversationPanel,
   document_editor: DocumentPanel,
 };
@@ -29,7 +31,7 @@ export function PanelHost() {
       return (
         <div className="panel-host">
           <div className="panel fullscreen">
-            <Component meta={panelMeta[fullscreenPanel]} />
+            <Component meta={panelMeta[fullscreenPanel]} panelId={fullscreenPanel} />
           </div>
         </div>
       );
@@ -52,7 +54,7 @@ export function PanelHost() {
           };
           return (
             <div key={g.panel} className={`panel-slot ${g.animation}`} style={style}>
-              <Component meta={panelMeta[g.panel]} />
+              <Component meta={panelMeta[g.panel]} panelId={g.panel} />
             </div>
           );
         })}

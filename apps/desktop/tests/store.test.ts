@@ -291,3 +291,44 @@ describe("panel close", () => {
     ).toBeUndefined();
   });
 });
+
+describe("local panel fullscreen toggle", () => {
+  it("toggles a panel into and out of fullscreen without sending transport", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "panel.open",
+        panel_type: "document_editor",
+        title: "Contrato",
+      },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "split",
+        primary_panel: "document_editor",
+        secondary_panel: "conversation",
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+
+    expect(store.getState().fullscreenPanel).toBeNull();
+    store.getState().toggleFullscreen("document_editor");
+    expect(store.getState().fullscreenPanel).toBe("document_editor");
+    // local UI action: nothing sent to the server
+    expect(sent).toHaveLength(0);
+
+    store.getState().toggleFullscreen("document_editor");
+    expect(store.getState().fullscreenPanel).toBeNull();
+
+    // a different panel's toggle while one is fullscreen switches target
+    store.getState().toggleFullscreen("document_editor");
+    store.getState().toggleFullscreen("conversation");
+    expect(store.getState().fullscreenPanel).toBe("conversation");
+  });
+});

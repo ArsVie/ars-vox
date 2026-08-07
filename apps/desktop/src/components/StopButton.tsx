@@ -1,8 +1,12 @@
 import { useStore } from "zustand";
 
 import { appStore } from "../store";
+import { StopIcon } from "./icons";
 
-/** Always-visible local stop control. Sends the protocol stop message. */
+/**
+ * Always-visible local stop control, docked in the status bar so it never
+ * overlaps panel content at any layout size. Sends the protocol stop.
+ */
 export function StopButton() {
   const stop = useStore(appStore, (s) => s.stop);
   const voiceState = useStore(appStore, (s) => s.voiceState);
@@ -16,7 +20,8 @@ export function StopButton() {
       aria-label="Stop"
       title="Stop"
     >
-      STOP
+      <StopIcon size={13} />
+      <span className="btn-label">DETENER</span>
     </button>
   );
 }

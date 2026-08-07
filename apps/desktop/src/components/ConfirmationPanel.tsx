@@ -1,6 +1,7 @@
 import { useStore } from "zustand";
 
 import { appStore } from "../store";
+import { ShieldIcon } from "./icons";
 
 /** Two-phase confirmation card. Approve executes the stored snapshot. */
 export function ConfirmationPanel() {
@@ -11,15 +12,20 @@ export function ConfirmationPanel() {
   return (
     <div className="overlay">
       <div className="confirmation-card" role="alertdialog" aria-label="Confirmation">
-        <h2>{pending.title}</h2>
+        <h2>
+          <span className="card-icon">
+            <ShieldIcon size={19} />
+          </span>
+          {pending.title}
+        </h2>
         <p className="confirmation-detail">{pending.detail}</p>
         <p className="confirmation-tool">tool: {pending.tool}</p>
         <div className="confirmation-actions">
           <button type="button" className="approve" onClick={() => confirm(true)}>
-            Approve
+            Aprobar
           </button>
           <button type="button" className="deny" onClick={() => confirm(false)}>
-            Deny
+            Rechazar
           </button>
         </div>
       </div>

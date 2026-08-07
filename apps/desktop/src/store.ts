@@ -67,6 +67,9 @@ export interface AppState {
   confirm: (approve: boolean) => void;
   dismissError: () => void;
 
+  /** Local UI action: toggle a panel's fullscreen state (never sent to the server). */
+  toggleFullscreen: (panel: PanelId) => void;
+
   applyUiCommand: (command: UiCommand) => void;
   recompute: () => void;
   enqueueTts: (text: string) => void;
@@ -319,6 +322,10 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         // No optimistic append: the server echoes user_message, which is
         // the single source of truth for the conversation history.
         get().send({ type: "user_text", text: trimmed });
+      },
+      toggleFullscreen: (panel) => {
+        const state = get();
+        set({ fullscreenPanel: state.fullscreenPanel === panel ? null : panel });
       },
       stop: () => {
         // Local stop: clear the speak queue so TtsPlayer interrupts
