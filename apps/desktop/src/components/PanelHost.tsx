@@ -6,6 +6,7 @@ import type { PanelMeta } from "../store";
 import { appStore } from "../store";
 
 import { ConversationPanel } from "./ConversationPanel";
+import { ContentPanel } from "./ContentPanel";
 import { DocumentPanel } from "./DocumentPanel";
 import { MediaDock } from "./MediaDock";
 
@@ -13,7 +14,7 @@ import { MediaDock } from "./MediaDock";
  * Renders the layout computed by the engine. Panels are placed by SLOT:
  * each rendered slot carries `panel-slot--<slot>` and `density-<density>`
  * classes so the chrome (headers, composer) adapts deterministically.
- * Unmapped panels (no component registered) render nothing — no crash.
+ * Panel types without a component render nothing — no crash.
  */
 const PANEL_COMPONENTS: Partial<
   Record<PanelId, ComponentType<{ meta?: PanelMeta; panelId: PanelId }>>
@@ -22,6 +23,14 @@ const PANEL_COMPONENTS: Partial<
   document_editor: DocumentPanel,
   youtube: MediaDock,
   media: MediaDock,
+  browser: ContentPanel,
+  book_reader: ContentPanel,
+  news: ContentPanel,
+  notes: ContentPanel,
+  tasks: ContentPanel,
+  reminders: ContentPanel,
+  telegram_preview: ContentPanel,
+  settings: ContentPanel,
 };
 
 export function PanelHost() {

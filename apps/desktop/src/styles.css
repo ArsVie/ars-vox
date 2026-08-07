@@ -19,7 +19,7 @@
   --bg: #080b10;
   --bg-wash: rgba(90, 167, 255, 0.05);
   --panel: #121826;
-  --panel-2: #1a2233;
+  --panel-2: #1d2738;
   --panel-3: #222c3f;
   --panel-border: #2b3949;
   --panel-border-soft: #1f2a37;
@@ -41,7 +41,7 @@
   --warning: #e3b341;
 
   /* elevation shadows */
-  --shadow-panel: 0 18px 44px rgba(0, 0, 0, 0.55), 0 3px 8px rgba(0, 0, 0, 0.45);
+  --shadow-panel: 0 20px 50px rgba(0, 0, 0, 0.6), 0 3px 8px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --glow-accent: 0 0 0 1px rgba(90, 167, 255, 0.4), 0 0 26px rgba(90, 167, 255, 0.3);
 
@@ -208,8 +208,8 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
@@ -296,12 +296,13 @@ body,
 }
 
 .message.user .message-role {
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .message.assistant {
   align-self: flex-start;
   align-items: flex-start;
+  min-width: 260px;
   background: var(--panel-3);
   border: 1px solid var(--panel-border);
   border-bottom-left-radius: 6px;
@@ -790,19 +791,21 @@ body,
 }
 
 /* --------------------------------------------------------- stop button */
+/* The single most important affordance in a voice-first app: always
+   visible, filled, red-tinted (stop is a legitimate exception to the
+   single-blue system), sized for an older user. */
 .stop-button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 32px;
-  padding: 0 15px;
-  margin-left: 4px;
+  height: 40px;
+  padding: 0 18px;
   border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  color: var(--text-faint);
+  border: 1px solid rgba(255, 107, 87, 0.6);
+  background: rgba(255, 107, 87, 0.22);
+  color: #ff8a76;
   font-weight: 800;
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 1.6px;
   font-family: inherit;
   cursor: pointer;
@@ -811,9 +814,9 @@ body,
 }
 
 .stop-button:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-dim);
-  border-color: var(--panel-border);
+  background: rgba(255, 107, 87, 0.32);
+  color: #ffa08f;
+  border-color: rgba(255, 107, 87, 0.75);
 }
 
 .stop-button:active {
@@ -828,32 +831,37 @@ body,
 }
 
 /* --------------------------------------------------- slot chrome (A5/A6) */
-/* Non-main slots get reduced elevation so the anchor panel reads first. */
+/* Non-main slots get reduced elevation so the anchor panel reads first:
+   flat surface (no lift gradient) + softer shadow. */
 .panel-slot--side .panel,
 .panel-slot--dock .panel,
 .panel-slot--rail .panel {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  background: var(--panel);
 }
 
 .panel-slot--rail .panel {
   border-color: var(--panel-border-soft);
 }
 
-/* density: rail = icon-only header, no chrome actions */
+/* density: rail = icon + one-word label header, no chrome actions */
 .density-rail .panel-header {
-  padding: 10px 0;
-  justify-content: center;
-  gap: 0;
+  padding: 10px 12px;
+  justify-content: flex-start;
 }
 
-.density-rail .panel-header-title,
+.density-rail .panel-header-title {
+  max-width: 9ch;
+}
+
 .density-rail .panel-action {
   display: none;
 }
 
 /* density: compact / rail — composer collapses to icon-only controls.
    Driven by the engine's computed density (deterministic), NOT a raw
-   container query; full density never collapses. */
+   container query; full density never collapses. The placeholder is
+   hidden (not half-clipped) so a narrow slot never reads as broken. */
 .composer-collapsed .composer {
   gap: 7px;
   padding: 11px 11px;
@@ -870,6 +878,11 @@ body,
 
 .composer-collapsed .composer input {
   height: 48px;
+  padding: 0 14px;
+}
+
+.composer-collapsed .composer input::placeholder {
+  color: transparent;
 }
 
 .composer-collapsed .message-list {
@@ -908,6 +921,61 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* --------------------------------------------- generic content panel */
+.content-panel-body {
+  flex: 1;
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+
+.content-panel-body h2 {
+  margin: 0 0 10px 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.content-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  color: var(--text-faint);
+  font-size: 14.5px;
+  text-align: center;
+  padding: 20px;
+}
+
+.content-panel-empty-icon {
+  color: var(--text-faint);
+  opacity: 0.8;
+  display: inline-flex;
+}
+
+/* rail density: icon-only body (the header keeps icon + one-word label) */
+.density-rail .content-panel-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.density-rail .content-panel-body h2,
+.density-rail .content-panel-empty-text {
+  display: none;
+}
+
+.density-rail .content-panel-empty {
+  gap: 0;
+  padding: 0;
+}
+
+.density-rail .content-panel-empty-icon {
+  opacity: 1;
 }
 
 /* ------------------------------------------------------------ overlays */

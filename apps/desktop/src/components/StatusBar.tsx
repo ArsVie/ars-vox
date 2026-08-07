@@ -36,12 +36,12 @@ export function StatusBar() {
         <span className="status-voice">{label}</span>
       </span>
       {activity ? <span className="status-activity">{activity}</span> : null}
+      <StopButton />
       <span className="status-spacer" />
       <span className="status-conn">
         <span className={`conn-dot ${connected ? "on" : "off"}`} />
         {connected ? "agente conectado" : "agente sin conexión"}
       </span>
-      <StopButton />
     </div>
   );
 }

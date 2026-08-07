@@ -51,7 +51,7 @@ describe("PanelHost slot rendering", () => {
     expect(html).toContain("Vídeo de prueba");
   });
 
-  it("renders nothing (no crash) for mounted panels without a component", () => {
+  it("renders generic content panels for non-specialized types (rail included)", () => {
     const layout = computeLayout(
       {
         template: "dashboard",
@@ -74,7 +74,8 @@ describe("PanelHost slot rendering", () => {
     });
     const html = renderToString(<PanelHost />);
     expect(html).toContain("Conversación");
-    expect(html).not.toContain("panel-slot--rail");
-    expect(html).not.toContain("Notas");
+    expect(html).toContain("panel-slot--rail");
+    expect(html).toContain("content-panel--notes");
+    expect(html).toContain("Notas");
   });
 });
