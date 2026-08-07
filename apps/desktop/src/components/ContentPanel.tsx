@@ -63,15 +63,14 @@ export function ContentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pan
         {title}
       </PanelHeader>
       <div className="content-panel-body">
-        {meta?.title || meta?.contentReference ? (
+        {meta?.contentReference ? (
           <>
             {meta.title ? <h2>{meta.title}</h2> : null}
-            {meta.contentReference ? (
-              <p className="document-reference">{meta.contentReference}</p>
-            ) : null}
+            <p className="document-reference">{meta.contentReference}</p>
           </>
         ) : (
           <div className="content-panel-empty">
+            {meta?.title ? <h2 className="content-panel-empty-title">{meta.title}</h2> : null}
             <span className="content-panel-empty-icon">
               {PANEL_ICONS[panelId] ?? <DocumentIcon size={30} />}
             </span>

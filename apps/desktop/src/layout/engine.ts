@@ -77,6 +77,9 @@ export interface PanelGeometry {
   density: ChromeDensity;
   /** Conversation composer collapses to icon-only when true. */
   composerCollapsed: boolean;
+  /** Conversation composer placeholder hidden (full density, slot too
+   * narrow to fit it unclipped — deterministic, engine-computed). */
+  placeholderHidden: boolean;
   /** All geometry is a fraction (0..1) of the content viewport. */
   x: number;
   y: number;
@@ -128,6 +131,15 @@ export const MIN_SLOT_PX: Record<SlotName, { width: number; height: number }> = 
   rail: { width: 240, height: 240 },
   dock: { width: 240, height: 64 },
 };
+
+/**
+ * Minimum slot px width for the FULL-density composer to render its
+ * placeholder unclipped (input + placeholder + mic + labeled send).
+ * Below this the placeholder is hidden by the engine (advisor round-2:
+ * a half-clipped placeholder reads as broken; hiding is deterministic
+ * and width-aware without container queries).
+ */
+export const PLACEHOLDER_MIN_PX = 540;
 
 interface Rect {
   x: number;
@@ -248,6 +260,17 @@ function densityFor(slot: SlotName, pxWidth: number): ChromeDensity {
 /** Whether the conversation composer collapses to icon-only controls. */
 function composerCollapsedFor(panel: PanelId, density: ChromeDensity): boolean {
   return panel === DEFAULT_PRIMARY && density !== "full";
+}
+
+/** Whether the conversation placeholder is hidden because the full-density
+ * composer is too narrow to fit it unclipped. Compact/rail already hide the
+ * placeholder via the collapsed composer, so this only fires at full. */
+function placeholderHiddenFor(
+  panel: PanelId,
+  density: ChromeDensity,
+  pxWidth: number,
+): boolean {
+  return panel === DEFAULT_PRIMARY && density === "full" && pxWidth < PLACEHOLDER_MIN_PX;
 }
 
 function fitsFloor(template: LayoutTemplateId, viewport: Viewport): boolean {
@@ -469,6 +492,7 @@ export function computeLayout(spec: LayoutSpec, opts: ComputeLayoutOptions): Lay
       slot,
       density,
       composerCollapsed: composerCollapsedFor(panel, density),
+      placeholderHidden: placeholderHiddenFor(panel, density, pxWidth),
       ...rect,
       zIndex: zForSlot(slot),
       visible: true,
@@ -485,6 +509,7 @@ export function computeLayout(spec: LayoutSpec, opts: ComputeLayoutOptions): Lay
       slot: null,
       density: "full",
       composerCollapsed: false,
+      placeholderHidden: false,
       ...fallbackRect,
       zIndex: 0,
       visible: false,

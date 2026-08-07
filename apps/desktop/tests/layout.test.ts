@@ -523,6 +523,30 @@ describe("chrome density", () => {
     );
     expect(panelOf(narrow, "conversation").composerCollapsed).toBe(true);
   });
+
+  it("hides the composer placeholder when full density cannot fit it", () => {
+    // dashboard side @ 1600px = 384px: ≥ 360 -> full, but < PLACEHOLDER_MIN_PX
+    const result = computeLayout(
+      spec({ template: "dashboard", primaryPanel: "document_editor" }),
+      options({ viewport: { width: 1600, height: 900 } }),
+    );
+    const conv = panelOf(result, "conversation");
+    expect(conv.density).toBe("full");
+    expect(conv.composerCollapsed).toBe(false);
+    expect(conv.placeholderHidden).toBe(true);
+  });
+
+  it("keeps the composer placeholder when the slot fits it", () => {
+    // split @ 1920px = 595px side column: full density, placeholder fits
+    const result = computeLayout(
+      spec({ template: "split", primaryPanel: "document_editor" }),
+      options({ viewport: { width: 1920, height: 900 } }),
+    );
+    const conv = panelOf(result, "conversation");
+    expect(conv.density).toBe("full");
+    expect(conv.composerCollapsed).toBe(false);
+    expect(conv.placeholderHidden).toBe(false);
+  });
 });
 
 describe("reduced motion", () => {

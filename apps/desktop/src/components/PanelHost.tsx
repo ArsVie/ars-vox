@@ -87,6 +87,7 @@ export function PanelHost() {
             g.slot ? `panel-slot--${g.slot}` : "",
             `density-${g.density}`,
             g.composerCollapsed ? "composer-collapsed" : "",
+            g.placeholderHidden ? "placeholder-hidden" : "",
             g.animation,
           ]
             .filter(Boolean)

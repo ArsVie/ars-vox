@@ -885,6 +885,13 @@ body,
   color: transparent;
 }
 
+/* full density but the slot is too narrow to fit the placeholder unclipped
+   (engine-computed `placeholderHidden`, PLACEHOLDER_MIN_PX) — hide instead
+   of clipping; the input and labeled controls stay usable */
+.placeholder-hidden .composer input::placeholder {
+  color: transparent;
+}
+
 .composer-collapsed .message-list {
   padding: 12px 12px;
 }
@@ -956,7 +963,8 @@ body,
   display: inline-flex;
 }
 
-/* rail density: icon-only body (the header keeps icon + one-word label) */
+/* rail density: icon + one-line muted hint (advisor round-2 — the body
+   used to be fully empty; the hint now shows ellipsized on one line) */
 .density-rail .content-panel-body {
   display: flex;
   align-items: center;
@@ -964,18 +972,30 @@ body,
   padding: 10px;
 }
 
-.density-rail .content-panel-body h2,
-.density-rail .content-panel-empty-text {
+.density-rail .content-panel-body h2 {
   display: none;
 }
 
 .density-rail .content-panel-empty {
-  gap: 0;
+  flex-direction: row;
+  gap: 8px;
   padding: 0;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.density-rail .content-panel-empty-text {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  font-size: 13px;
 }
 
 .density-rail .content-panel-empty-icon {
   opacity: 1;
+  flex: none;
 }
 
 /* ------------------------------------------------------------ overlays */
