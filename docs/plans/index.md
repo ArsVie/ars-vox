@@ -1,11 +1,12 @@
 ---
 type: index
 title: plans
-description: Implementation plans for ars-vox (advisor-produced, two-workstream)
+description: Implementation plans for ars-vox (all current plans implemented; see docs/HANDOFF.md for open work)
 ---
 
 # docs/plans
 
-| File | Content |
-|------|---------|
-| `multi-zone-layout-advisor-plan-2026-08-07.md` | Multi-zone layout: frozen interface + UI workstream A1-A8 + backend workstream B1-B6 + sequencing + risks (claude-opus-4.8) |
+No active plans. The multi-zone layout advisor plan (2026-08-07) was fully
+implemented by both workstreams and has been removed. Open work is tracked
+in `docs/HANDOFF.md` (advisor round-2 items, media dock controls, real-mic
+smoke test).

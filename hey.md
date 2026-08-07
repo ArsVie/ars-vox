@@ -33,7 +33,8 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - task: Implement plan Workstream A1-A8 (slot vocabulary, reading/dashboard templates, px floors + degrade, slot-affinity, MediaDock, chrome densities, store slots)
 - files/dirs: `apps/desktop/src/layout/engine.ts`, `apps/desktop/src/store.ts`, `apps/desktop/src/contracts.ts`, `apps/desktop/src/components/*.tsx`, `apps/desktop/src/styles.css`, `apps/desktop/tests/*.ts`
 - boundaries: will NOT touch `packages/contracts/**`, `services/**` (backend agent owns B1-B6). Wire shape per Phase 0. Mock payloads only.
-- status: active
+- UPDATE 2026-08-07: A1-A8 + ContentPanel + advisor round-1 fixes shipped (commits 049f697, c787eb2; B's backend work committed as 6a3328c — backend agent left it uncommitted). 62/62 vitest, 57/57 pytest, 7/7 WS e2e, conformance test green. Advisor round-2: 4 small items open (composer placeholder clip, NOTICIAS title-only empty state, rail body line, media controls later) — see docs/HANDOFF.md. Phase 2 handshake done.
+- status: resolved
 
 ## Done
 
