@@ -7,6 +7,12 @@ description: Electron shell (TypeScript) + separate Python agent service (FastAP
 
 Status: Accepted (Electron version pin pending the target-machine spike)
 
+> Status note (2026-08-07): target hardware is now the physical
+> Windows 11 desktop (mic + speakers). The 2014 Intel MacBook Air /
+> Big Sur described below was an early compatibility eval only; the
+> decision rationale is unchanged, and the final Electron pin is
+> validated on the Windows box. Current state: docs/STATUS.md.
+
 ## Context
 
 The product is a voice-operated desktop assistant for an older user on

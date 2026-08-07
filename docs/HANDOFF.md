@@ -1,7 +1,7 @@
 ---
 type: handoff
 title: "Ars-Vox handoff — 2026-08-07 (night): config-driven UI + live windows demo + modularity audit fixes"
-description: Authoritative roadmap and latest session state. Session shipped config-driven UI wiring (endpoints.ts, store.applyConfig, a11y modes, tts knobs), live multi-turn LLM window-management demo (MULTI_OK 5/5), modularity audit fixes, and the taste-skill design-governance pass.
+description: Roadmap and session history. CURRENT-STATE AUTHORITY is docs/STATUS.md — current-state claims in this file may be stale by design.
 ---
 
 # Ars-Vox handoff — 2026-08-07 (night session)
@@ -31,6 +31,10 @@ description: Authoritative roadmap and latest session state. Session shipped con
 
 Supersedes the evening handoff (advisor round-2 state remains true; this
 session added the config-driven layer + demo hardening + cleanup).
+
+> ⚠️ CURRENT STATE: docs/STATUS.md is the single authority for what is
+> implemented/verified RIGHT NOW. This file is roadmap + session history;
+> older verification blocks below are historical records, not truth.
 
 ## State summary
 
@@ -95,7 +99,7 @@ duplicated/reinvented parts.
    highlight, tabular-nums in status bar, tactile press on mic button,
    hardened reduced-motion block, accessibility-mode blocks.
 
-## Verification (all real, this session)
+## Verification (historical — night session; current counts in STATUS.md)
 
 - 58/58 pytest (was 57; +1 drift-guard), 74/74 vitest (was 64),
   typecheck clean, build clean.
@@ -109,13 +113,12 @@ duplicated/reinvented parts.
 
 ## Still open (deliberately not started)
 
-1. Real media playback controls in MediaDock (media.state still no-ops
-   in the store).
-2. Real-mic smoke test on the physical Windows machine.
-3. copilot-advisor (claude-opus-4.8) review of the NEW screenshots —
-   planned but not run (browser screenshot/eval targets diverged; see
-   pitfall). Vision review passed in-session; the advisor round is
-   polish, not a blocker.
+1. ~~Real media playback controls~~ — DONE (unified MediaDock + media.state
+   reducer + controls, 2026-08-07 late session).
+2. Real-mic smoke test on the physical Windows machine (voice loop
+   proof — STATUS.md gap #1).
+3. ~~copilot-advisor review of the NEW screenshots~~ — DONE (full review
+   dossier evaluated 2026-08-07; findings feeding the next plan).
 4. Remaining taste-skill items (optional): Geist display font eval,
    full skeleton-loader states, copy discipline sweep (one label per
    intent, em-dash audit in chrome strings).
@@ -124,9 +127,9 @@ duplicated/reinvented parts.
 
 ```bash
 # python suite (repo root, .venv)
-.venv/bin/python -m pytest tests/python -q          # 58/58
+.venv/bin/python -m pytest tests/python -q          # 67 passed (see STATUS.md)
 # desktop suite + typecheck + build
-cd apps/desktop && npm test && npm run typecheck && npm run build   # 74/74
+cd apps/desktop && npm test && npm run typecheck && npm run build   # 96 passed (see STATUS.md)
 # live multi-turn window-management demo (needs OPENCODE_GO_API_KEY)
 source /tmp/arsvox-env.sh   # or export the key from ~/.hermes/.env
 .venv/bin/python scripts/demo_live.py --scenario windows --wait-s 90

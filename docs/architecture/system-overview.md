@@ -43,8 +43,8 @@ description: Components, turn path, event bus, layout engine, SQLite data model,
 | Tool registry | registration, gated execution, ui_command emission | `services/agent/arsvox_agent/tools/` |
 | Confirmation coordinator | two-phase approval with stored snapshots | `services/agent/arsvox_agent/confirmations.py` |
 | Memory service | SQLite repos, FTS5 search, migrations | `services/memory/` |
-| Voice pipeline | voice state machine, silence timer (providers mocked) | `services/voice/` |
-| TTS | provider interface + queue (providers mocked) | `services/tts/` |
+| Voice pipeline | voice state machine, silence timer — real; audio providers mocked until physical-mic verification | `services/voice/` |
+| TTS | provider interface + queue — mocked in demo, real provider path pending | `services/tts/` |
 | Contracts | single source of truth for wire types | `packages/contracts/` |
 
 ## The turn path (verified live)
@@ -81,7 +81,8 @@ them out as JSON. Slow subscribers drop events with a warning (queue cap
 
 The model NEVER sends pixel coordinates. The `ui_command` vocabulary is:
 
-- `layout.apply` — template (focus | split) + primary/secondary panels
+- `layout.apply` — template (focus | split | reading | dashboard) +
+  primary/secondary panels + slot assignments (main/side/rail/dock)
 - `panel.open` / `panel.close` — mount/unmount panels
 - `panel.set_primary` — promote a panel
 - `panel.fullscreen` — one panel full-bleed
@@ -96,6 +97,22 @@ animation under reduced motion. Deterministic rules:
 - the conversation panel is always mounted; in split it fills the
   secondary slot when the model names only a primary panel
 - panels referenced by the spec are mounted by the layout command itself
+
+## Content channel and readers
+
+Five typed events carry panel content over the same bus: `youtube.search`,
+`browser.navigate`, `document.load` (now carries a fetchable `url` for
+real pdf/epub rendering), `tasks.update`, `media.state`. Panels render
+from store content state; user interactions (task toggle, document
+save, media controls, youtube play) return as `ui_command`s through the
+policy gate.
+
+Document formats: TXT/MD use the text renderer (chapters, editable MD);
+PDF renders via pdf.js v6 (`src/readers/pdfReader.ts`) and EPUB via
+epub.js 0.3.x (`src/readers/epubReader.ts`) behind one `Reader`
+interface (`src/readers/reader.ts`), surfaced by `ReaderView`
+(nav/location/A−/A+/theme). Lazy-loaded so test environments never
+touch the engines. Details: ars-vox skill ref document-reader-2026-08.md.
 
 ## Data model (SQLite)
 

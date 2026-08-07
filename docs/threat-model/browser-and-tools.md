@@ -53,13 +53,18 @@ opens and the model's tool calls are NOT trusted inputs.
 
 ### T3. Malicious or broken page drives the embedded browser
 
-- Navigation is restricted by the browser allowlist in config
-  (`browser.allowlist`), with a curated home URL.
+- PLANNED (before enabling arbitrary remote browsing): navigation
+  restricted by a browser allowlist in config (`browser.allowlist`)
+  with a curated home URL. NOT enforced today — `browser.allowlist`
+  has zero readers and the Electron browser is not shipped yet; the
+  web demo renders only same-origin fixture content.
 - There is no generic "browser agent" tool; page interaction uses a
   fixed action vocabulary (open, back, forward, reload, scroll, read,
   fill, submit, media controls) — no arbitrary script execution.
-- Panel content is rendered inside the Electron renderer sandbox with
-  `contextIsolation: true` and `nodeIntegration: false`.
+- In Electron, remote content renders in a WebContentsView owned by
+  the main process, outside the renderer DOM, with
+  `contextIsolation: true` and `nodeIntegration: false` (planned
+  shape; web demo uses an iframe).
 
 ### T4. Prompt injection via documents / library content
 
@@ -103,14 +108,34 @@ opens and the model's tool calls are NOT trusted inputs.
 - Event bus queues are capped; slow subscribers drop events instead of
   blocking the service.
 
+### T9. Unauthenticated local WebSocket (127.0.0.1:8765)
+
+- GAP (accepted today, must close before the Electron browser ships):
+  the WebSocket endpoint has NO client authentication and NO Origin
+  check. Any process on the machine — including a malicious web page
+  in the future embedded browser — could connect and send `user_text`,
+  `confirm`, `cancel`, or browser commands.
+- Current exposure is limited: the service binds loopback only, the
+  web demo renders same-origin fixture content, and no remote
+  navigation exists yet.
+- PLANNED MITIGATION (before enabling arbitrary remote browsing):
+  per-launch unguessable session credential required in the WebSocket
+  handshake + strict Origin check; alternatively, the Electron main
+  process becomes the only WebSocket client and the trusted renderer
+  reaches the agent through a narrow IPC API. The embedded remote
+  browser must have zero path to the agent channel.
+- STATUS: docs/STATUS.md (Security posture) tracks this as the top
+  gap.
+
 ## Residual risks (accepted)
 
 - A compromised model provider could attempt malicious tool calls; the
   policy gate and confirmation remain the defense, and the user can
   always press stop.
 - The embedded browser's security depends on the Electron/Chromium
-  version; the target machine (2014 Intel MacBook Air, macOS Big Sur)
-  requires a compatibility spike before the final Electron version is
-  pinned (ADR 0001).
+  version; the target machine is the physical Windows 11 desktop (the
+  2014 MacBook Air / Big Sur was an early compatibility eval only —
+  ADR 0001 status note), and the final Electron version is pinned
+  there before the real browser ships.
 - Local alarms cannot alert while the computer is off (accepted product
   limitation).
