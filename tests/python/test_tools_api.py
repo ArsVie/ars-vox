@@ -11,7 +11,7 @@ from arsvox_agent.tools.register import register_all
 def test_registry_registers_all_tools():
     registry = ToolRegistry()
     n = register_all(registry)
-    assert n == 41
+    assert n == 42
     assert registry.get("ui.apply_layout") is not None
     assert registry.get("shell.exec") is None
 

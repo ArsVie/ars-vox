@@ -554,3 +554,328 @@ describe("config-driven UI state (config_update)", () => {
     expect(state.fullscreenPanel).toBeNull();
   });
 });
+
+describe("panel content events (content channel)", () => {
+  it("youtube.search event fills the youtube panel content", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "youtube.search",
+      query: "gatos",
+      results: [
+        {
+          id: "v1",
+          title: "Gatos jugando",
+          channel: "Canal Mascotas",
+          duration_s: 95,
+          published: "2026-01-01",
+          thumbnail_url: null,
+        },
+      ],
+      created_at: ts(),
+    });
+    expect(store.getState().content.youtube).toEqual({
+      query: "gatos",
+      loading: false,
+      results: [
+        {
+          id: "v1",
+          title: "Gatos jugando",
+          channel: "Canal Mascotas",
+          duration_s: 95,
+          published: "2026-01-01",
+          thumbnail_url: null,
+        },
+      ],
+    });
+  });
+
+  it("browser.navigate event fills the browser content (snake_case -> camelCase)", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "browser.navigate",
+      url: "https://example.com",
+      title: "Example",
+      can_go_back: true,
+      can_go_forward: false,
+      loading: false,
+      created_at: ts(),
+    });
+    expect(store.getState().content.browser).toEqual({
+      url: "https://example.com",
+      title: "Example",
+      canGoBack: true,
+      canGoForward: false,
+      loading: false,
+    });
+  });
+
+  it("document.load event fills the document editor panel content", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "document.load",
+      title: "Cuento",
+      kind: "md",
+      path: "/docs/cuento.md",
+      content: "# Cuento\nHabía una vez...",
+      chapters: [{ title: "Capítulo 1", content: "Había una vez..." }],
+      created_at: ts(),
+    });
+    expect(store.getState().content.document_editor).toEqual({
+      title: "Cuento",
+      kind: "md",
+      path: "/docs/cuento.md",
+      content: "# Cuento\nHabía una vez...",
+      chapters: [{ title: "Capítulo 1", content: "Había una vez..." }],
+    });
+  });
+
+  it("tasks.update event fills the tasks panel content", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "tasks.update",
+      todos: [
+        { id: "t1", title: "Comprar pan", done: false, priority: "normal", due: null },
+      ],
+      reminders: [
+        { id: "r1", title: "Reunión", cadence: "Cada día 9:00", next_fire: "2026-08-08T09:00:00Z" },
+      ],
+      created_at: ts(),
+    });
+    expect(store.getState().content.tasks).toEqual({
+      todos: [
+        { id: "t1", title: "Comprar pan", done: false, priority: "normal", due: null },
+      ],
+      reminders: [
+        { id: "r1", title: "Reunión", cadence: "Cada día 9:00", next_fire: "2026-08-08T09:00:00Z" },
+      ],
+    });
+  });
+
+  it("media.state event fills the media content (snake_case -> camelCase)", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "media.state",
+      state: "playing",
+      source: "youtube",
+      kind: "video",
+      title: "Gatos",
+      video_id: "abc123",
+      url: "https://www.youtube.com/embed/abc123",
+      position_s: 12.5,
+      duration_s: 300,
+      volume: 0.8,
+      created_at: ts(),
+    });
+    expect(store.getState().content.media).toEqual({
+      state: "playing",
+      source: "youtube",
+      kind: "video",
+      title: "Gatos",
+      videoId: "abc123",
+      url: "https://www.youtube.com/embed/abc123",
+      positionS: 12.5,
+      durationS: 300,
+      volume: 0.8,
+    });
+  });
+
+  it("dispatchCommand youtube.search marks loading and sends the ui_command", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().dispatchCommand({ action: "youtube.search", query: "gatos" });
+    expect(store.getState().content.youtube).toEqual({
+      query: "gatos",
+      loading: true,
+      results: [],
+    });
+    expect(sent).toEqual([
+      expect.objectContaining({
+        type: "ui_command",
+        command: { action: "youtube.search", query: "gatos" },
+        created_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it("dispatchCommand youtube.play optimistically plays the video and sends", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    // a prior media.state sets volume; play must preserve it
+    store.getState().applyEvent({
+      type: "media.state",
+      state: "stopped",
+      source: "local",
+      kind: "audio",
+      title: "",
+      video_id: null,
+      url: null,
+      position_s: 0,
+      duration_s: 0,
+      volume: 0.5,
+      created_at: ts(),
+    });
+    store.getState().dispatchCommand({
+      action: "youtube.play",
+      video_id: "abc123",
+      title: "Gatos jugando",
+    });
+    expect(store.getState().content.media).toEqual({
+      state: "playing",
+      source: "youtube",
+      kind: "video",
+      title: "Gatos jugando",
+      videoId: "abc123",
+      url: "https://www.youtube.com/embed/abc123",
+      positionS: 0,
+      durationS: 0,
+      volume: 0.5,
+    });
+    expect(sent).toEqual([
+      expect.objectContaining({
+        type: "ui_command",
+        command: {
+          action: "youtube.play",
+          video_id: "abc123",
+          title: "Gatos jugando",
+        },
+        created_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it("dispatchCommand tasks.toggle flips done on the matching todo and sends", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().applyEvent({
+      type: "tasks.update",
+      todos: [
+        { id: "t1", title: "Comprar pan", done: false, priority: "normal", due: null },
+        { id: "t2", title: "Regar plantas", done: true, priority: "low", due: null },
+      ],
+      reminders: [],
+      created_at: ts(),
+    });
+    store.getState().dispatchCommand({ action: "tasks.toggle", task_id: "t1" });
+    let todos = store.getState().content.tasks!.todos;
+    expect(todos.find((t) => t.id === "t1")?.done).toBe(true);
+    expect(todos.find((t) => t.id === "t2")?.done).toBe(true); // untouched
+    store.getState().dispatchCommand({ action: "tasks.toggle", task_id: "t2" });
+    todos = store.getState().content.tasks!.todos;
+    expect(todos.find((t) => t.id === "t2")?.done).toBe(false);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toEqual(
+      expect.objectContaining({
+        type: "ui_command",
+        command: { action: "tasks.toggle", task_id: "t1" },
+      }),
+    );
+    expect(sent[1]).toEqual(
+      expect.objectContaining({
+        command: { action: "tasks.toggle", task_id: "t2" },
+      }),
+    );
+  });
+
+  it("dispatchCommand tasks.toggle without tasks content still forwards the command", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().dispatchCommand({ action: "tasks.toggle", task_id: "ghost" });
+    expect(store.getState().content.tasks).toBeUndefined();
+    expect(sent).toEqual([
+      expect.objectContaining({
+        type: "ui_command",
+        command: { action: "tasks.toggle", task_id: "ghost" },
+        created_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it("dispatchCommand media.play_pause toggles playing<->paused and sends", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().applyEvent({
+      type: "media.state",
+      state: "playing",
+      source: "local",
+      kind: "audio",
+      title: "Canción",
+      video_id: null,
+      url: null,
+      position_s: 10,
+      duration_s: 180,
+      volume: 1,
+      created_at: ts(),
+    });
+    store.getState().dispatchCommand({ action: "media.play_pause" });
+    expect(store.getState().content.media!.state).toBe("paused");
+    store.getState().dispatchCommand({ action: "media.play_pause" });
+    expect(store.getState().content.media!.state).toBe("playing");
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toEqual(
+      expect.objectContaining({
+        type: "ui_command",
+        command: { action: "media.play_pause" },
+      }),
+    );
+    expect(sent[1]).toEqual(
+      expect.objectContaining({
+        command: { action: "media.play_pause" },
+      }),
+    );
+  });
+
+  it("dispatchCommand media.play_pause does not change a stopped player (still sends)", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().applyEvent({
+      type: "media.state",
+      state: "stopped",
+      source: "local",
+      kind: "audio",
+      title: "",
+      video_id: null,
+      url: null,
+      position_s: 0,
+      duration_s: 0,
+      volume: 1,
+      created_at: ts(),
+    });
+    store.getState().dispatchCommand({ action: "media.play_pause" });
+    expect(store.getState().content.media!.state).toBe("stopped");
+    expect(sent).toEqual([
+      expect.objectContaining({
+        type: "ui_command",
+        command: { action: "media.play_pause" },
+        created_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it("dispatchCommand media.seek updates positionS and sends", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().applyEvent({
+      type: "media.state",
+      state: "playing",
+      source: "local",
+      kind: "audio",
+      title: "Canción",
+      video_id: null,
+      url: null,
+      position_s: 10,
+      duration_s: 180,
+      volume: 1,
+      created_at: ts(),
+    });
+    store.getState().dispatchCommand({ action: "media.seek", position_s: 42 });
+    expect(store.getState().content.media!.positionS).toBe(42);
+    expect(store.getState().content.media!.durationS).toBe(180); // rest untouched
+    expect(sent).toEqual([
+      expect.objectContaining({
+        type: "ui_command",
+        command: { action: "media.seek", position_s: 42 },
+        created_at: expect.any(String),
+      }),
+    ]);
+  });
+});

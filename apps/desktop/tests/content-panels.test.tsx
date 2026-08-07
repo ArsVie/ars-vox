@@ -1,0 +1,205 @@
+/**
+ * SSR render coverage for the five content panels (YoutubePanel,
+ * BrowserPanel, TasksPanel, DocumentPanel, MediaDock) — renderToString,
+ * no DOM/jsdom needed. Same zustand SSR trick as panelhost.test.tsx:
+ * useStore snapshots via `api.getServerState || api.getInitialState`,
+ * so we attach a live getServerState in beforeEach and seed the
+ * singleton store through the real event path (applyEvent) or setState.
+ */
+import { beforeEach, describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { appStore } from "../src/store";
+import { YoutubePanel } from "../src/components/YoutubePanel";
+import { BrowserPanel } from "../src/components/BrowserPanel";
+import { TasksPanel } from "../src/components/TasksPanel";
+import { DocumentPanel } from "../src/components/DocumentPanel";
+import { MediaDock } from "../src/components/MediaDock";
+
+function ts(): string {
+  return new Date().toISOString();
+}
+
+beforeEach(() => {
+  (appStore as unknown as { getServerState: () => unknown }).getServerState = () =>
+    appStore.getState();
+  // Start every test with an empty content surface.
+  appStore.setState({ content: {} });
+});
+
+describe("YoutubePanel", () => {
+  it("renders each search result title and channel", () => {
+    appStore.getState().applyEvent({
+      type: "youtube.search",
+      query: "sinfonía",
+      results: [
+        {
+          id: "v1",
+          title: "Sinfonía nº 9",
+          channel: "Orquesta Clásica",
+          duration_s: 4520,
+          published: "hace 2 años",
+          thumbnail_url: null,
+        },
+        {
+          id: "v2",
+          title: "Concierto de piano",
+          channel: "Música Viva",
+          duration_s: 95,
+          published: "hace 1 mes",
+          thumbnail_url: "https://example.com/thumb.jpg",
+        },
+      ],
+      created_at: ts(),
+    });
+
+    const html = renderToStaticMarkup(<YoutubePanel />);
+    expect(html).toContain("youtube-search");
+    expect(html).toContain("Sinfonía nº 9");
+    expect(html).toContain("Orquesta Clásica");
+    expect(html).toContain("Concierto de piano");
+    expect(html).toContain("Música Viva");
+    expect(html).toContain("1:15:20"); // 4520s -> h:mm:ss
+    expect(html).toContain("1:35"); // 95s -> m:ss
+    expect(html).not.toContain("Pídeme que busque un vídeo");
+  });
+
+  it("renders the empty-state text when there is no youtube content", () => {
+    const html = renderToStaticMarkup(<YoutubePanel />);
+    expect(html).toContain("content-panel-empty-text");
+    expect(html).toContain("Pídeme que busque un vídeo o escribe aquí arriba.");
+    expect(html).not.toContain("youtube-card");
+  });
+});
+
+describe("BrowserPanel", () => {
+  it("renders the toolbar and an iframe with the current url", () => {
+    appStore.getState().applyEvent({
+      type: "browser.navigate",
+      url: "http://127.0.0.1:5173/demo-news.html",
+      title: "Demo News",
+      can_go_back: true,
+      can_go_forward: false,
+      loading: false,
+      created_at: ts(),
+    });
+
+    const html = renderToStaticMarkup(<BrowserPanel />);
+    expect(html).toContain("browser-toolbar");
+    expect(html).toContain('aria-label="Atrás"');
+    expect(html).toContain('aria-label="Recargar"');
+    expect(html).toContain('src="http://127.0.0.1:5173/demo-news.html"');
+    expect(html).toContain('title="Página web"');
+    expect(html).not.toContain("Pídeme que abra una página");
+  });
+
+  it("renders the empty-state text when there is no browser content", () => {
+    const html = renderToStaticMarkup(<BrowserPanel />);
+    expect(html).toContain("content-panel-empty-text");
+    expect(html).toContain("Pídeme que abra una página o escribe una dirección arriba.");
+    expect(html).not.toContain("<iframe");
+  });
+});
+
+describe("TasksPanel", () => {
+  it("renders todo rows with check buttons and reminder rows with cadence", () => {
+    appStore.getState().applyEvent({
+      type: "tasks.update",
+      todos: [
+        { id: "t1", title: "Comprar leche", done: false, priority: "high", due: "hoy" },
+        { id: "t2", title: "Llamar a María", done: true, priority: "normal", due: null },
+      ],
+      reminders: [
+        { id: "r1", title: "Revisar correo", cadence: "Cada día 9:00", next_fire: "2026-08-08 09:00" },
+      ],
+      created_at: ts(),
+    });
+
+    const html = renderToStaticMarkup(<TasksPanel />);
+    expect(html).toContain("Pendientes · 1/2");
+    expect(html).toContain("Comprar leche");
+    expect(html).toContain("Llamar a María");
+    expect(html).toContain('aria-label="Marcar como hecha"');
+    expect(html).toContain("task-check");
+    expect(html).toContain("task-due");
+    expect(html).toContain("hoy");
+    expect(html).toContain("Revisar correo");
+    expect(html).toContain("Cada día 9:00 · próxima 2026-08-08 09:00");
+    expect(html).not.toContain("No hay tareas");
+  });
+
+  it("renders the empty-state text when there are no tasks", () => {
+    const html = renderToStaticMarkup(<TasksPanel />);
+    expect(html).toContain("content-panel-empty-text");
+    expect(html).toContain("No hay tareas. Pídeme que anote una.");
+  });
+});
+
+describe("DocumentPanel", () => {
+  it("renders chapters, paragraphs, kind label and the edit button", () => {
+    appStore.getState().applyEvent({
+      type: "document.load",
+      title: "Reunión",
+      kind: "md",
+      path: "/docs/reunion.md",
+      content: "",
+      chapters: [
+        { title: "Reunión", content: "Aprobado el calendario.\n\n- Punto uno." },
+      ],
+      created_at: ts(),
+    });
+
+    const html = renderToStaticMarkup(<DocumentPanel panelId="document_editor" />);
+    expect(html).toContain("doc-h2");
+    expect(html).toContain("Reunión");
+    expect(html).toContain("doc-paragraph");
+    expect(html).toContain("Aprobado el calendario.");
+    expect(html).toContain("Markdown");
+    expect(html).toContain("document-mode-btn");
+    expect(html).toContain("Editar");
+    expect(html).toContain("document-path");
+    expect(html).toContain("/docs/reunion.md");
+  });
+
+  it("renders the empty-state text when no document is open", () => {
+    const html = renderToStaticMarkup(<DocumentPanel panelId="document_editor" />);
+    expect(html).toContain("content-panel-empty-text");
+    expect(html).toContain("No hay documento abierto. Pídeme que abra uno.");
+    expect(html).not.toContain("document-mode-btn");
+  });
+});
+
+describe("MediaDock", () => {
+  it("renders play/pause button, elapsed/total time and the source badge", () => {
+    appStore.getState().applyEvent({
+      type: "media.state",
+      state: "playing",
+      source: "local",
+      kind: "audio",
+      title: "Sinfonía",
+      video_id: null,
+      url: null,
+      position_s: 60,
+      duration_s: 300,
+      volume: 0.8,
+      created_at: ts(),
+    });
+
+    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    expect(html).toContain("media-dock");
+    expect(html).toContain("media-player");
+    expect(html).toContain('aria-label="Pausar"');
+    expect(html).toContain("1:00 / 5:00");
+    expect(html).toContain("media-player-source");
+    expect(html).toContain("Local");
+    expect(html).toContain("Sinfonía");
+    expect(html).not.toContain("Reproducción en espera");
+  });
+
+  it("renders the waiting text when there is no media content", () => {
+    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    expect(html).toContain("media-dock-empty");
+    expect(html).toContain("Reproducción en espera.");
+    expect(html).not.toContain("media-player");
+  });
+});
