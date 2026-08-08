@@ -29,6 +29,10 @@
  */
 import { useEffect, useState } from "react";
 import type { AdaptiveGeometry } from "./adaptiveEngine";
+import type { SurfaceRole } from "../adaptive/contracts";
+import { surfaceComponent } from "../adaptive/surfaces";
+import { SurfaceRoleProvider } from "../roles/context";
+import { surfaceRegistry } from "../roles/registry";
 
 /** Fraction → CSS percentage string with FP noise trimmed (3 decimals:
  * sub-pixel precision for any stage up to ~100k px). Geometry fractions
@@ -106,24 +110,51 @@ export function PlaceholderSurface({
  * Never key by slot name: that would remount on every move.
  */
 export function stageSlotElements(geometry: AdaptiveGeometry) {
-  return geometry.slots.map((g) => (
-    <div
-      key={g.surfaceId}
-      className={`panel-slot panel-slot--${g.slot}`}
-      style={{
-        left: pct(g.x),
-        top: pct(g.y),
-        width: pct(g.width),
-        height: pct(g.height),
-        zIndex: g.zIndex,
-      }}
-      data-slot={g.slot}
-      data-role={g.role}
-      data-surface-id={g.surfaceId}
-    >
-      <PlaceholderSurface surfaceId={g.surfaceId} role={g.role} slot={g.slot} />
-    </div>
-  ));
+  return geometry.slots.map((g) => {
+    const Component = surfaceComponent(g.surfaceId);
+    const role = g.role as SurfaceRole;
+    return (
+      <div
+        key={g.surfaceId}
+        className={`panel-slot panel-slot--${g.slot}`}
+        style={{
+          left: pct(g.x),
+          top: pct(g.y),
+          width: pct(g.width),
+          height: pct(g.height),
+          zIndex: g.zIndex,
+        }}
+        data-slot={g.slot}
+        data-role={g.role}
+        data-surface-id={g.surfaceId}
+      >
+        {Component ? (
+          // GATE-2 (Wave 2): registered product surfaces render through the
+          // role host contract — SurfaceRoleProvider hands the surface its
+          // semantic role (UI-103); key stays the surfaceId (no remount).
+          <SurfaceRoleProvider
+            value={{
+              surfaceId: g.surfaceId,
+              role,
+              requestedRole: role,
+              capabilities: surfaceRegistry.capabilitiesOf(g.surfaceId),
+              degraded: !surfaceRegistry
+                .capabilitiesOf(g.surfaceId)
+                .includes(role),
+            }}
+          >
+            <Component panelId={g.surfaceId} />
+          </SurfaceRoleProvider>
+        ) : (
+          <PlaceholderSurface
+            surfaceId={g.surfaceId}
+            role={g.role}
+            slot={g.slot}
+          />
+        )}
+      </div>
+    );
+  });
 }
 
 /** Renders an AdaptiveGeometry: one .panel-slot per occupied slot. */
