@@ -1329,6 +1329,43 @@ body,
   white-space: nowrap;
 }
 
+/* UI-205 adaptive media surface:
+   - companion: same player, header removed — less visual dominance next to
+     the primary activity (the slot/density chrome already scopes it).
+   - persistent: compact shell-level playback bar (persistent media host):
+     title + play/pause + progress, minimal footprint, no video stage/art. */
+.media-player--compact {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: none;
+  min-height: var(--control-height-md);
+  padding: 0 var(--spacing-md);
+  min-width: 0;
+}
+
+.media-player--compact .media-player-bar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.media-player--compact .media-player-progress {
+  flex: 0 1 220px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.media-player--compact .media-play-btn {
+  flex: none;
+}
+
 /* --------------------------------------------- generic content panel */
 .content-panel-body {
   flex: 1;

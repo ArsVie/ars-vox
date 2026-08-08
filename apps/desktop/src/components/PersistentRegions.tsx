@@ -7,16 +7,18 @@
  * persistent-capable surfaces live. It is a sibling of the activity stage
  * (never inside it), so persistent regions survive any template change.
  *
- * Wave 1: the host accepts surfaces via props and renders region shells with
- * placeholders. Product media/notifications surfaces move here in Wave 2
- * (UI-205 media, UI-204 notifications) — the wiring point is the `surfaces`
- * prop; until then the demo passes the fixture persistent surface.
+ * UI-205 (Wave 2): the media slot is wired to the real adaptive MediaDock
+ * compact playback bar. The host hands it a persistent role through
+ * SurfaceRoleProvider (same contract SurfaceHost uses), so MediaDock renders
+ * its `persistent` variant: title + play/pause + progress, no competition
+ * with the primary activity. Playback state stays in store.content.media —
+ * the bar merely mirrors it, so primary -> persistent never resets playback.
+ * Notifications remain the placeholder until UI-204 lands.
  */
 
-import {
-  PersistentMediaPlaceholder,
-  PersistentNotificationsPlaceholder,
-} from "./PlaceholderSurface";
+import { SurfaceRoleProvider } from "../roles/context";
+import { PersistentNotificationsPlaceholder } from "./PlaceholderSurface";
+import { MediaDock } from "./MediaDock";
 
 export interface PersistentSurface {
   surfaceId: string;
@@ -33,7 +35,18 @@ export function PersistentRegions({
     <div className="app-persistent" role="region" aria-label="Regiones persistentes">
       {surfaces.map((s) =>
         s.kind === "media" ? (
-          <PersistentMediaPlaceholder key={s.surfaceId} />
+          <SurfaceRoleProvider
+            key={s.surfaceId}
+            value={{
+              surfaceId: s.surfaceId,
+              role: "persistent",
+              requestedRole: "persistent",
+              capabilities: ["persistent"],
+              degraded: false,
+            }}
+          >
+            <MediaDock panelId="media" />
+          </SurfaceRoleProvider>
         ) : (
           <PersistentNotificationsPlaceholder key={s.surfaceId} />
         ),

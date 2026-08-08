@@ -1,0 +1,157 @@
+/**
+ * UI-205 — adaptive media surface (SSR render coverage).
+ *
+ * Renders MediaDock per semantic role (via SurfaceRoleProvider, the same
+ * context SurfaceHost provides) and proves the contract acceptance:
+ *   1. primary   -> large player (header, video stage/art, full controls).
+ *   2. companion -> secondary visible media (player + controls, no header).
+ *   3. persistent-> compact shell-level playback bar (title + play/pause +
+ *      progress; no video stage, no art, no header, no source badge).
+ *   4. THE key test: playback state (store.content.media via the real
+ *      media.state event path) SURVIVES a primary -> persistent role
+ *      transition — playing state, position and controls are all preserved.
+ *   5. Legacy fallback: mounted without a provider, MediaDock keeps its
+ *      classic full rendering (existing DOM contracts stay green).
+ */
+import { beforeEach, describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { appStore } from "../src/store";
+import { MediaDock } from "../src/components/MediaDock";
+import {
+  SurfaceRoleProvider,
+  type SurfaceRoleInfo,
+} from "../src/roles/context";
+
+function ts(): string {
+  return new Date().toISOString();
+}
+
+beforeEach(() => {
+  (appStore as unknown as { getServerState: () => unknown }).getServerState = () =>
+    appStore.getState();
+  // Start every test with an empty content surface.
+  appStore.setState({ content: {} });
+});
+
+function roleInfo(role: "primary" | "companion" | "persistent"): SurfaceRoleInfo {
+  return {
+    surfaceId: "media",
+    role,
+    requestedRole: role,
+    capabilities: ["primary", "companion", "persistent"],
+    degraded: false,
+  };
+}
+
+function renderWithRole(role: "primary" | "companion" | "persistent"): string {
+  return renderToStaticMarkup(
+    <SurfaceRoleProvider value={roleInfo(role)}>
+      <MediaDock panelId="media" />
+    </SurfaceRoleProvider>,
+  );
+}
+
+function seedPlayingMedia(): void {
+  appStore.getState().applyEvent({
+    type: "media.state",
+    state: "playing",
+    source: "local",
+    kind: "audio",
+    title: "Sinfonía",
+    video_id: null,
+    url: null,
+    position_s: 60,
+    duration_s: 300,
+    volume: 0.8,
+    created_at: ts(),
+  });
+}
+
+describe("UI-205 MediaDock adaptive variants", () => {
+  it("primary renders the large player with header and full controls", () => {
+    seedPlayingMedia();
+    const html = renderWithRole("primary");
+    expect(html).toContain("media-dock");
+    expect(html).toContain("data-media-variant=\"primary\"");
+    expect(html).toContain("media-player");
+    expect(html).toContain("media-player-art");
+    expect(html).toContain('aria-label="Pausar"');
+    expect(html).toContain("1:00 / 5:00");
+    expect(html).toContain("media-player-source");
+    expect(html).not.toContain("media-player--compact");
+  });
+
+  it("companion renders the player with controls but no header chrome", () => {
+    seedPlayingMedia();
+    const html = renderWithRole("companion");
+    expect(html).toContain("media-dock--companion");
+    expect(html).toContain("data-media-variant=\"companion\"");
+    expect(html).toContain("media-player");
+    expect(html).toContain('aria-label="Pausar"');
+    expect(html).toContain("1:00 / 5:00");
+    expect(html).not.toContain("media-player--compact");
+  });
+
+  it("persistent renders a compact playback bar — no stage, art or header", () => {
+    seedPlayingMedia();
+    const html = renderWithRole("persistent");
+    expect(html).toContain("media-dock--persistent");
+    expect(html).toContain("data-media-variant=\"persistent\"");
+    expect(html).toContain("media-player--compact");
+    expect(html).toContain("media-player-bar-title");
+    expect(html).toContain("Sinfonía");
+    expect(html).toContain('aria-label="Pausar"');
+    expect(html).toContain('type="range"');
+    // Minimal footprint: nothing that competes with the primary activity.
+    expect(html).not.toContain("media-player-video");
+    expect(html).not.toContain("media-player-art");
+    expect(html).not.toContain("media-player-source");
+    expect(html).not.toContain("youtube.com/embed");
+    expect(html).not.toContain("media-player-time");
+  });
+
+  it("KEY: media state survives the primary -> persistent role transition", () => {
+    seedPlayingMedia();
+
+    // Watch the media surface as the PRIMARY activity (full player).
+    const primaryHtml = renderWithRole("primary");
+    expect(primaryHtml).toContain("media-player");
+    expect(primaryHtml).toContain('aria-label="Pausar"');
+
+    // Role change (same store, same surfaceId — no re-seed, no remount):
+    // the same playback must continue in the compact persistent bar.
+    const persistentHtml = renderWithRole("persistent");
+    expect(persistentHtml).toContain("media-player--compact");
+    // Playing state preserved (still Pausar, not Reproducir).
+    expect(persistentHtml).toContain('aria-label="Pausar"');
+    expect(persistentHtml).not.toContain('aria-label="Reproducir"');
+    // Position/progress preserved (60s of 300s).
+    expect(persistentHtml).toContain('value="60"');
+    expect(persistentHtml).toContain('max="300"');
+    // Controls remain accessible.
+    expect(persistentHtml).toContain('type="range"');
+    expect(persistentHtml).toContain("media-player-bar-title");
+    // Store still holds the authoritative playback state.
+    expect(appStore.getState().content.media?.state).toBe("playing");
+    expect(appStore.getState().content.media?.positionS).toBe(60);
+    expect(appStore.getState().content.media?.title).toBe("Sinfonía");
+  });
+
+  it("persistent bar shows the waiting state when nothing is playing", () => {
+    const html = renderWithRole("persistent");
+    expect(html).toContain("media-dock-empty");
+    expect(html).toContain("Reproducción en espera.");
+    expect(html).not.toContain("media-player--compact");
+  });
+
+  it("legacy mounts without a role provider keep the classic dock rendering", () => {
+    seedPlayingMedia();
+    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    expect(html).toContain("media-dock");
+    expect(html).toContain("media-player");
+    expect(html).toContain('aria-label="Pausar"');
+    expect(html).toContain("1:00 / 5:00");
+    expect(html).not.toContain("media-player--compact");
+  });
+});
