@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { useStore } from "zustand";
 
+import type { AdaptiveTemplate } from "./adaptive/contracts";
+import { TEMPLATE_FIXTURES } from "./adaptive/fixtures";
 import { ConfirmationPanel } from "./components/ConfirmationPanel";
 import { ErrorPanel } from "./components/ErrorPanel";
 import { PanelHost } from "./components/PanelHost";
+import { PersistentRegions, type PersistentSurface } from "./components/PersistentRegions";
 import { StatusBar } from "./components/StatusBar";
 import { TtsPlayer } from "./components/TtsPlayer";
 import { appStore } from "./store";
@@ -10,14 +14,32 @@ import { appStore } from "./store";
 export default function App() {
   const largeText = useStore(appStore, (s) => s.largeText);
   const highContrast = useStore(appStore, (s) => s.highContrast);
+  // Shell demo toggle: renders the frozen template fixtures with placeholder
+  // children so the unified shell can be evaluated against all five adaptive
+  // templates before UI-102 geometry integration (GATE-1). null = normal mode.
+  const [demoTemplate, setDemoTemplate] = useState<AdaptiveTemplate | null>(null);
+
+  const demoSpec = demoTemplate ? TEMPLATE_FIXTURES[demoTemplate] : null;
+
+  // Shell-owned persistent surfaces (contract: persistent = shell-owned, NOT
+  // template slots). Wave 1: the demo proves the shell hosts them; Wave 2
+  // (UI-204/205) wires the real media/notifications surfaces here.
+  const persistentSurfaces: PersistentSurface[] = demoSpec
+    ? [
+        { surfaceId: "placeholder.persistent", kind: "media" },
+        { surfaceId: "shell.notifications", kind: "notifications" },
+      ]
+    : [];
+
   return (
     <div
       className="app"
       data-large-text={largeText ? "" : undefined}
       data-high-contrast={highContrast ? "" : undefined}
     >
-      <PanelHost />
-      <StatusBar />
+      <StatusBar demoValue={demoTemplate} onDemoChange={setDemoTemplate} />
+      <PanelHost demoSpec={demoSpec} />
+      <PersistentRegions surfaces={persistentSurfaces} />
       <ConfirmationPanel />
       <ErrorPanel />
       <TtsPlayer />

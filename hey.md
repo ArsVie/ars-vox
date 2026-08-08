@@ -17,6 +17,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - boundaries: do NOT touch packages/contracts/**, src/adaptive/**, layout/engine.ts, services/agent, main, wip/advisor-round2-reader-polish, wave-1 worktrees. Work in own worktree/branch.
 - status: in_progress
 
+### hermes-ui-101 (Wave 1 — unified application shell)
+- timestamp: 2026-08-07T23:40:00Z
+- task: UI-101 Unified application shell — make Ars Vox read as ONE application: continuous activity stage (no per-panel card chrome, no dark moat), one divider/gutter language (frozen `divider-*` token names), global top bar (brand + assistant state + STOP ≥48px), shell-owned persistent regions (media/notifications host), placeholder children + demo toggle rendering all five TEMPLATE_FIXTURES. Surfaces stay as placeholders (Wave 2 owns real adaptive rendering).
+- files/dirs: `apps/desktop/src/App.tsx`, `apps/desktop/src/components/{PanelHost,StatusBar,PlaceholderSurface(new),PersistentRegions(new)}.tsx`, `apps/desktop/src/styles.css`, `hey.md`
+- boundaries: will NOT touch `src/layout/engine.ts`, `src/adaptive/**`, Browser/Conversation/Reader/Tasks/Media component internals (only shared shell chrome in styles.css: `.panel`, `.panel-header`, `.panel-slot`, `.status-bar`, `.stop-button`). DOM contract `.panel-slot` etc. preserved.
+- status: resolved (GATE-1 merged, commit on main)
+
 ### hermes (orchestrator — adaptive UI redesign)
 - timestamp: 2026-08-07T23:30:00Z
 - task: Execution contract encoded + owner-reviewed: `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md` (4 roles / 5 templates / 3 proportions, LayoutSpec, 4-wave DAG). ✅ WAVE 0 COMPLETE — UI-000 froze the adaptive UI contract: `packages/contracts/arsvox_contracts/adaptive.py` (SurfaceRole/AdaptiveTemplate/Proportion/LayoutSpec + TEMPLATE_SLOTS + validate_layout_spec), TS mirror `apps/desktop/src/adaptive/{contracts,fixtures,tokens}.ts`, placeholder fixtures for all 5 templates, token naming contract, 2 JSON schemas, docs/adaptive-ui-contract.md. Verified: 110 pytest (17 new), 111 vitest (15 new), typecheck+build clean, OKF OK. GATE CONTRACT_FROZEN CLOSED (merge a3e996d).

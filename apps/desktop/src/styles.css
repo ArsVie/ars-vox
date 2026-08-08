@@ -23,6 +23,10 @@
    .mic-button, .status-bar, .status-dot, .stop-button, .overlay,
    .confirmation-card, .error-banner, .document-body, .document-reference,
    .media-dock.
+   UI-101 shell layer (2026-08-07): .app-topbar, .shell-region (+
+   .shell-region--{main,side,rail,dock,unassigned}, --seam-right/--seam-top),
+   .shell-demo, .app-persistent, .shell-persistent-region, .placeholder-*,
+   .status-demo. One separator language: --divider-strong/normal/subordinate.
    ========================================================================== */
 
 :root {
@@ -59,17 +63,39 @@
   --glow-accent: 0 0 0 1px rgba(90, 167, 255, 0.4), 0 0 26px rgba(90, 167, 255, 0.3);
 
   /* SHAPE CONSISTENCY LOCK — one radius scale, used everywhere:
-     --radius-xs  6px  inline micro-elements (error dismiss)
-     --radius-sm  10px chips, small controls (panel actions)
-     --radius     14px panels (the main surface radius)
-     --radius-lg  16px large surfaces (message bubbles, cards)
-     --radius-pill 999px mic, stop, pills (circular/tactile controls only) */
+    --radius-xs  6px  inline micro-elements (error dismiss)
+    --radius-sm  10px chips, small controls (panel actions)
+    --radius     14px panels (the main surface radius)
+    --radius-lg  16px large surfaces (message bubbles, cards)
+    --radius-pill 999px mic, stop, pills (circular/tactile controls only) */
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 16px;
   --radius-xs: 6px;
   --radius-pill: 999px;
   --ease: cubic-bezier(0.33, 1, 0.68, 1);
+
+  /* UI-101 SEPARATOR LANGUAGE — the ONE divider scale for every region seam.
+     Names frozen by UI-000 (tokens.ts divider-*); values are provisional
+     references so high-contrast mode strengthens seams automatically.
+     UI-104 owns the final values. No other divider/border color may appear
+     in shell-level chrome. */
+  --divider-strong: var(--panel-border);
+  --divider-normal: var(--panel-border-soft);
+  --divider-subordinate: rgba(255, 255, 255, 0.06);
+
+  /* UI-101 SURFACE TOKENS (names frozen by UI-000; provisional values):
+     the application background, the continuous activity-stage surface, the
+     primary-region wash, overlay surfaces, and content-level cards. */
+  --surface-app: var(--bg);
+  --surface-region: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 45%);
+  --surface-region-active: linear-gradient(
+    180deg,
+    rgba(90, 167, 255, 0.07),
+    transparent 45%
+  );
+  --surface-overlay: rgba(10, 14, 20, 0.94);
+  --surface-card: var(--panel-3);
 }
 
 * {
@@ -120,20 +146,66 @@ body,
   position: relative;
   height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(1200px 700px at 70% -10%, var(--bg-wash), transparent 60%),
-    var(--bg);
+    var(--surface-app);
 }
 
-/* ---------------------------------------------------------- panel host */
+/* ============================================================= UI-101 SHELL
+   One continuous application: a global top bar, one activity stage, and
+   shell-owned persistent regions. Regions are ARCHITECTURAL — separated only
+   by the shared divider language (--divider-*), never by per-panel card
+   chrome (no region borders beyond the seam, no radius, no shadows, no moat).
+   ======================================================================== */
+
+/* ------------------------------------------------- global top bar (chrome) */
+.app-topbar {
+  flex: none;
+  z-index: 100;
+}
+
+/* -------------------------------------------- activity stage (the surface) */
 .panel-host {
-  position: absolute;
-  inset: 0 0 48px 0; /* leave room for the status bar */
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* The stage IS the continuous region surface: engine % margins around
+     regions read as the same surface (no dark moat between regions). */
+  background: var(--surface-region);
 }
 
+/* ---------------------------------------------------------- shell regions */
+.shell-region {
+  position: absolute;
+  overflow: hidden;
+  /* The primary activity region carries a subtle active wash; every other
+     region is transparent so the stage surface flows through continuously. */
+  background: transparent;
+}
+
+.shell-region--main {
+  background: var(--surface-region-active);
+}
+
+/* The ONE separator language: a 1px seam on the side facing a neighboring
+   region. Only these seam classes may draw region boundaries. */
+.shell-region--seam-right {
+  border-right: 1px solid var(--divider-normal);
+}
+
+.shell-region--seam-top {
+  border-top: 1px solid var(--divider-normal);
+}
+
+/* ----------------------------------------------------- slot (DOM contract)
+   The region's content box. Kept as the DOM-contract element carrying slot,
+   density and animation classes; no longer a geometry or chrome element. */
 .panel-slot {
   position: absolute;
-  border-radius: var(--radius);
+  inset: 0;
 }
 
 .panel-slot.fade {
@@ -144,32 +216,23 @@ body,
   animation: panel-slide 0.3s var(--ease);
 }
 
+/* The surface container: transparent region content (no card chrome). The
+   FULLSCREEN variant is an explicit immersive overlay and keeps elevation. */
 .panel {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(600px 260px at 30% 0%, var(--bg-wash), transparent 70%),
-    linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow-panel), inset 0 1px 0 var(--panel-highlight);
-}
-
-.panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--panel-highlight), transparent);
-  pointer-events: none;
 }
 
 .panel.fullscreen {
   inset: 6px;
   z-index: 50;
+  background: var(--surface-region);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
 }
 
 @keyframes panel-fade {
@@ -193,18 +256,19 @@ body,
 }
 
 /* ------------------------------------------------------------- panels */
+/* Region caption — NOT a card titlebar: no bar background, no full-width
+   divider. The heading is subordinate to the content it labels; product
+   surfaces remove it entirely in Wave 2 (UI-201..205). */
 .panel-header {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 12px 14px;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 1.7px;
+  padding: 12px 16px 6px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
-  color: var(--text);
-  border-bottom: 1px solid var(--panel-border-soft);
-  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
   user-select: none;
   flex: none;
 }
@@ -255,7 +319,7 @@ body,
   align-items: center;
   gap: 8px;
   padding: 7px 16px;
-  border-top: 1px solid var(--panel-border-soft);
+  border-top: 1px solid var(--divider-subordinate);
   color: var(--text-faint);
   font-size: 12.5px;
 }
@@ -530,7 +594,7 @@ body,
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  border-top: 1px solid var(--panel-border-soft);
+  border-top: 1px solid var(--divider-subordinate);
   background: rgba(255, 255, 255, 0.02);
   flex: none;
 }
@@ -676,19 +740,20 @@ body,
   line-height: 1.65;
 }
 
-/* ----------------------------------------------------- presence strip */
+/* ------------------------------------------------- global chrome (UI-101) */
+/* The status/presence bar is the application's GLOBAL top bar: brand,
+   assistant state, STOP and connection live here — Ars Vox chrome, never
+   panel chrome. It is a sibling of the activity stage and stays visible in
+   every template. */
 .status-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
   height: 48px;
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 0 16px;
   background: linear-gradient(180deg, #0d131c, #0a0e14);
-  border-top: 1px solid var(--panel-border-soft);
+  border-bottom: 1px solid var(--divider-strong);
   font-size: 13.5px;
   font-variant-numeric: tabular-nums;
   user-select: none;
@@ -824,14 +889,16 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 40px;
-  padding: 0 18px;
+  /* Advisor P0: the stop control must be >= 48px and globally visible. It
+     sits in the global top bar, always rendered, in every template. */
+  height: 48px;
+  padding: 0 22px;
   border-radius: 999px;
   border: 1px solid rgba(255, 107, 87, 0.6);
   background: rgba(255, 107, 87, 0.22);
   color: #ff8a76;
   font-weight: 800;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 1.6px;
   font-family: inherit;
   cursor: pointer;
@@ -856,23 +923,176 @@ body,
   box-shadow: 0 0 18px rgba(255, 107, 87, 0.55);
 }
 
-/* --------------------------------------------------- slot chrome (A5/A6) */
-/* Non-main slots get reduced elevation so the anchor panel reads first:
-   flat surface (no lift gradient) + softer shadow. */
-.panel-slot--side .panel,
-.panel-slot--dock .panel,
-.panel-slot--rail .panel {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  background: var(--panel);
+/* --------------------------------------------------- shell demo (UI-101) */
+/* Fixture demo mode: the frozen template fixtures rendered with placeholder
+   children. The arrangement is a simple shell-level grid by slot — NOT real
+   geometry (that is UI-102's job, integrated at GATE-1). */
+.shell-demo {
+  display: grid;
+  grid-template-rows: 1fr;
+  grid-auto-flow: column;
 }
 
-.panel-slot--rail .panel {
-  border-color: var(--panel-border-soft);
+.shell-demo[data-template="focus"] {
+  grid-template-columns: 1fr;
+}
+
+.shell-demo[data-template="sidecar"],
+.shell-demo[data-template="stack"],
+.shell-demo[data-template="split"] {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.shell-demo[data-template="triple"] {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(0, 1.4fr);
+}
+
+.shell-demo .shell-region {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ------------------------------------------------- placeholder surfaces */
+/* Ghost regions: same continuous surface, no card chrome — the region seams
+   and the stage surface do the architectural work. The role label is demo
+   scaffolding (removed when real surfaces land in Wave 2). */
+.placeholder-surface {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.placeholder-role {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.placeholder-id {
+  font-size: 12px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--text-faint);
+  opacity: 0.75;
+}
+
+.placeholder-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  width: min(320px, 70%);
+}
+
+.placeholder-skeleton span {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.placeholder-skeleton span:nth-child(1) {
+  width: 100%;
+}
+
+.placeholder-skeleton span:nth-child(2) {
+  width: 72%;
+}
+
+.placeholder-skeleton span:nth-child(3) {
+  width: 46%;
+}
+
+/* ------------------------------------- shell-owned persistent regions */
+/* Persistent surfaces (media playback bar, notifications) are controlled by
+   the shell, NOT template slots (frozen contract). This bar is a sibling of
+   the activity stage so persistent regions survive any template change. */
+.app-persistent {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-app);
+  border-top: 1px solid var(--divider-strong);
+}
+
+.shell-persistent-region {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 18px;
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-persistent-region + .shell-persistent-region {
+  border-left: 1px solid var(--divider-normal);
+}
+
+.shell-persistent-icon {
+  display: inline-flex;
+  color: var(--accent);
+  opacity: 0.85;
+  flex: none;
+}
+
+.shell-persistent-label {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+  flex: none;
+}
+
+.shell-persistent-hint {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------- demo select (top bar) */
+.status-demo {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+
+.status-demo-label {
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.status-demo-select {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--divider-normal);
+  background: var(--panel-3);
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.status-demo-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* density: rail = icon + one-word label header, no chrome actions */
 .density-rail .panel-header {
-  padding: 10px 12px;
+  padding: 10px 16px 4px;
   justify-content: flex-start;
 }
 
@@ -1259,6 +1479,14 @@ body,
 
 .app[data-high-contrast] .panel {
   border-width: 2px;
+}
+
+/* High contrast: region seams strengthen automatically (divider values
+   reference --panel-border, overridden above). */
+.app[data-high-contrast] .shell-region--seam-right,
+.app[data-high-contrast] .shell-region--seam-top {
+  border-width: 2px;
+  border-color: var(--divider-strong);
 }
 
 .app[data-high-contrast] .composer input {
