@@ -6,9 +6,10 @@ silently ignored. The UI mirrors this through GET /config and persists
 changes through PATCH /config.
 """
 
+from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 _STRICT = ConfigDict(extra="forbid")
 
@@ -131,6 +132,44 @@ class DemoSection(BaseModel):
     step_delay_s: float = Field(default=6.0, ge=1.0, le=120.0)
 
 
+class ResolvedPaths:
+    """Canonical absolute paths derived once at config load.
+
+    Relative values resolve against the path anchor; absolute values are
+    kept as-is (normalized). The process CWD is never consulted, so every
+    subsystem sees the same directories regardless of where the service
+    is started.
+    """
+
+    __slots__ = (
+        "db_path",
+        "library_dir",
+        "documents_dir",
+        "system_prompt_file",
+        "wake_sound",
+        "sleep_sound",
+    )
+
+    def __init__(
+        self, anchor: Path, memory: MemorySection, agent: AgentSection, voice: VoiceSection
+    ) -> None:
+        self.db_path = _canonical_path(anchor, memory.db_path)
+        self.library_dir = _canonical_path(anchor, memory.library_dir)
+        self.documents_dir = _canonical_path(anchor, memory.documents_dir)
+        self.system_prompt_file = _canonical_path(anchor, agent.system_prompt_file)
+        self.wake_sound = _canonical_path(anchor, voice.wake_sound)
+        self.sleep_sound = _canonical_path(anchor, voice.sleep_sound)
+
+
+def _canonical_path(anchor: Path, value: str | None) -> Path | None:
+    """Absolute, normalized path for a config value: relative values
+    resolve against the anchor (repo root for the standard layout),
+    absolute values pass through untouched. Never CWD-relative."""
+    if value is None:
+        return None
+    return (anchor / Path(value)).resolve()
+
+
 class AppConfig(BaseModel):
     model_config = _STRICT
     app: AppSection = AppSection()
@@ -145,3 +184,35 @@ class AppConfig(BaseModel):
     browser: BrowserSection = BrowserSection()
     media: MediaSection = MediaSection()
     demo: DemoSection = DemoSection()
+
+    # ---- H6: canonical path resolution (region: path resolution) ---- #
+    _config_dir: Path | None = PrivateAttr(default=None)
+
+    def anchor(self, config_file_dir: Path | str) -> "AppConfig":
+        """Bind this config to its file location and derive the path anchor.
+
+        Relative path fields resolve against the anchor: the repository
+        root for the standard layout (``configs/app.yaml`` — the parent of
+        the ``configs/`` directory), or the config file's own directory
+        for configs placed elsewhere. The process CWD is never used.
+        Returns self so callers can chain.
+        """
+        config_dir = Path(config_file_dir).resolve()
+        self._config_dir = config_dir.parent if config_dir.name == "configs" else config_dir
+        return self
+
+    @property
+    def resolved_paths(self) -> ResolvedPaths:
+        """Canonical absolute paths for every path-typed config field.
+
+        Requires :meth:`anchor` — performed by ``config_loader.load_config``
+        and by the PATCH /config handler — so a caller can never silently
+        fall back to CWD-relative resolution.
+        """
+        if self._config_dir is None:
+            raise RuntimeError(
+                "AppConfig is not anchored to a config file location; load it "
+                "with arsvox_agent.config_loader.load_config() (or call "
+                "config.anchor(config_file_dir)) before reading resolved_paths."
+            )
+        return ResolvedPaths(self._config_dir, self.memory, self.agent, self.voice)

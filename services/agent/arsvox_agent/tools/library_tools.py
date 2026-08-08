@@ -3,7 +3,6 @@ track and restore reading positions. EPUB support lands in Phase 2;
 iteration 1 reads plain-text books (.txt) directly."""
 
 import json
-from pathlib import Path
 
 from arsvox_contracts import PanelType
 from arsvox_contracts.commands import PanelOpen
@@ -16,7 +15,7 @@ _TEXT_EXTS = {".txt", ".md"}
 
 
 def list_books(config) -> list[dict]:
-    library_dir = Path(config.memory.library_dir)
+    library_dir = config.resolved_paths.library_dir
     books = []
     if library_dir.is_dir():
         for path in sorted(library_dir.iterdir()):
@@ -26,7 +25,7 @@ def list_books(config) -> list[dict]:
 
 
 def read_book_text(config, book_id: str) -> str:
-    library_dir = Path(config.memory.library_dir)
+    library_dir = config.resolved_paths.library_dir
     for ext in _TEXT_EXTS:
         path = library_dir / f"{book_id}{ext}"
         if path.is_file():
