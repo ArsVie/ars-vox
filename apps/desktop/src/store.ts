@@ -39,6 +39,11 @@ import { surfaceRegistry } from "./roles/registry";
 import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
 import type { LayoutSpec as AdaptiveLayoutSpec } from "./adaptive/contracts";
 import { scoreChange } from "./layout/inertia";
+import {
+  planLayout,
+  type PlannerInput,
+  type PlannerRejection,
+} from "./adaptive/planner";
 
 /** Default content viewport used until the renderer reports real size. */
 export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 800 };
@@ -57,13 +62,23 @@ export interface PanelMeta {
 /**
  * UI-103 adaptive state: the last validated adaptive LayoutSpec plus its
  * role-resolved assignments (empty until the agent sends one).
+ *
+ * UI-301: `lastRejection` records the planner's rejection reason for the
+ * most recent agent layout intent that did NOT reach state (invalid model
+ * output can never corrupt layout state — the rejection is the observable
+ * trace). Null after a valid apply or a fresh store.
  */
 export interface AdaptiveState {
   spec: AdaptiveLayoutSpec | null;
   assignments: ResolvedAssignment[];
+  lastRejection: PlannerRejection | null;
 }
 
-export const EMPTY_ADAPTIVE: AdaptiveState = { spec: null, assignments: [] };
+export const EMPTY_ADAPTIVE: AdaptiveState = {
+  spec: null,
+  assignments: [],
+  lastRejection: null,
+};
 
 export interface ConfirmationInfo {
   pendingId: string;
@@ -199,6 +214,12 @@ export interface AppState {
   /** UI-103: validate + apply an adaptive LayoutSpec (registry + fallback
    *  ladder). Throws on invalid specs; state is never partially updated. */
   applyAdaptiveSpec: (spec: AdaptiveLayoutSpec) => void;
+  /** UI-301: route an agent layout intent (adaptive-native or legacy wire
+   *  layout.apply) through the planner. Invalid intents are rejected with
+   *  a structured reason and NEVER reach state; valid intents apply through
+   *  the same choke as applyAdaptiveSpec (registry + inertia guard).
+   *  Returns the rejection reason when the intent was rejected, else null. */
+  applyLayoutIntent: (intent: PlannerInput) => PlannerRejection | null;
   /** UI-103: write a per-surface state value (keyed by surfaceId). */
   setSurfaceState: (surfaceId: string, key: string, value: unknown) => void;
   recompute: () => void;
@@ -448,12 +469,57 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
      * policy never blocks a real signal. The legacy engine path
      * (applyUiCommand / layout.apply) does not flow through this choke
      * point and is untouched.
+     *
+     * UI-301: agent layout intents (wire ui_command/layout.apply) now flow
+     * through the planner (adaptive/planner.ts) into THIS choke via
+     * applyLayoutIntent — the inertia guard stays active for agent-initiated
+     * changes. User-initiated overrides are UI-302's hook, not wired here.
      */
     const applyAdaptiveSpec = (spec: AdaptiveLayoutSpec): void => {
       const assignments = resolveLayout(spec, surfaceRegistry);
       const verdict = scoreChange(get().adaptive.spec, spec);
       if (verdict.decision === "keep") return; // keep current — no churn
-      set({ adaptive: { spec, assignments } });
+      set({ adaptive: { spec, assignments, lastRejection: null } });
+    };
+
+    /**
+     * UI-301: route an agent layout intent through the planner (semantic
+     * composition authority — the agent says WHAT, never HOW). The planner
+     * maps the intent (adaptive-native LayoutIntent or the legacy wire
+     * layout.apply payload) to a LayoutSpec and validates it deterministically
+     * (frozen validateLayoutSpec + computeAdaptiveGeometry); invalid model
+     * output is REJECTED with a structured reason and can never corrupt
+     * layout state. Valid intents flow through the same choke as
+     * applyAdaptiveSpec — the UI-207 inertia guard remains active for
+     * agent-initiated changes.
+     *
+     * @returns The rejection reason when the intent was rejected (recorded
+     *          in adaptive.lastRejection), else null.
+     */
+    const applyLayoutIntent = (intent: PlannerInput): PlannerRejection | null => {
+      const state = get();
+      const result = planLayout(intent, surfaceRegistry, {
+        viewport: state.viewport,
+      });
+      if (!result.ok) {
+        // Invalid model output: record the rejection, never touch layout.
+        set({ adaptive: { ...state.adaptive, lastRejection: result.rejection } });
+        return result.rejection;
+      }
+      const assignments = resolveLayout(result.spec, surfaceRegistry);
+      const verdict = scoreChange(state.adaptive.spec, result.spec);
+      if (verdict.decision === "keep") {
+        set({ adaptive: { ...state.adaptive, lastRejection: null } });
+        return null; // keep current — zero churn
+      }
+      set({
+        adaptive: {
+          spec: result.spec,
+          assignments,
+          lastRejection: null,
+        },
+      });
+      return null;
     };
 
     /** UI-103: write one value into a surface's per-surfaceId state bag. */
@@ -473,6 +539,14 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       const state = get();
       switch (command.action) {
         case "layout.apply": {
+          // UI-301: the agent's layout intent (H1 wire path) also flows
+          // through the planner into the adaptive layer. The planner maps
+          // the legacy wire vocabulary to a LayoutSpec and validates it
+          // deterministically — invalid intents are rejected and recorded
+          // (adaptive.lastRejection), never thrown and never corrupting
+          // layout state. The legacy engine path below stays authoritative
+          // for state.spec and is untouched.
+          applyLayoutIntent(command);
           layoutApplied = true;
           const next: LayoutSpec = {
             template: command.template,
@@ -1026,6 +1100,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
 
       applyUiCommand,
       applyAdaptiveSpec,
+      applyLayoutIntent,
       setSurfaceState,
       recompute,
       enqueueTts: pushSpeak,
