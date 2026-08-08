@@ -19,10 +19,19 @@ export function MicButton() {
 
   // Abort the recording when the user hits STOP (barge-in: stop() clears
   // the speak queue; an in-flight utterance must not be sent afterwards).
+  // This covers BOTH phases — while recording AND while transcribing
+  // (the STT fetch must be aborted so a post-STOP transcript cannot
+  // become a new user turn). Primary coverage is store.stop()'s local
+  // cancellation boundary; this effect is the fallback for stops that
+  // arrive via the service (keyword stop, server-initiated).
   const stopping = voiceState === "stopping" || voiceState === "sleeping";
   const wasStopping = useRef(false);
   useEffect(() => {
-    if (stopping && !wasStopping.current && phase === "recording") {
+    if (
+      stopping &&
+      !wasStopping.current &&
+      (phase === "recording" || phase === "transcribing")
+    ) {
       void micHub.abort();
     }
     wasStopping.current = stopping;

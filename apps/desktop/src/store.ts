@@ -659,8 +659,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         set({ fullscreenPanel: state.fullscreenPanel === panel ? null : panel });
       },
       stop: () => {
-        // Local stop: clear the speak queue so TtsPlayer interrupts
-        // playback, then tell the service to cancel the running turn.
+        // STOP is locally authoritative: run the LOCAL cancellation
+        // boundary first — abort mic capture (which also aborts any
+        // in-flight STT fetch and bumps the capture generation so late
+        // transcripts are dropped), clear the TTS queue so TtsPlayer
+        // interrupts playback — THEN notify the service. All of this
+        // works with the socket down or the service slow to ack.
+        captureAbort?.();
         set({ speakTexts: [] });
         get().send({ type: "stop" });
       },
@@ -804,6 +809,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
  * main.tsx (the WebSocket client); until then sends are no-ops.
  */
 export const appStore = createAppStore(() => {});
+
+/**
+ * Local cancellation hook for stop(): the mic module registers its abort
+ * here (one-way dependency, no store->mic import cycle) so stop() can
+ * cancel capture + in-flight STT before the stop message is sent.
+ */
+let captureAbort: (() => void) | null = null;
+export function registerCaptureAbort(fn: () => void): void {
+  captureAbort = fn;
+}
 
 export function bindTransport(send: SendFn): void {
   appStore.setState({ send });

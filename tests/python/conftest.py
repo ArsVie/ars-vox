@@ -12,6 +12,19 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
+# GATE-2.5 worktree shim: the shared venv installs the project packages
+# EDITABLE pointing at the MAIN repo; running tests from a worktree would
+# silently exercise main's code. Prepend this worktree's package roots so
+# the code under test is the code being committed. (wsl-windows-python-
+# worktrees pattern; additive, safe for any launch context.)
+import sys
+
+_WT_ROOT = Path(__file__).resolve().parents[2]
+for _rel in ("services/memory", "services/agent", "packages/contracts", "services/tts", "services/voice"):
+    _root = str(_WT_ROOT / _rel)
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
 from arsvox_agent.app import create_app
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

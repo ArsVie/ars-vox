@@ -2,11 +2,16 @@
  * Shared microphone controller — one MicCapture instance for the whole
  * app, so the composer MicButton and the empty-state mic hero stay in
  * sync. Phase/error live in a vanilla zustand store (node-testable).
+ *
+ * The singleton registers its abort hook with the app store (one-way
+ * dependency: store -> micHub would be a cycle) so store.stop() can run
+ * the LOCAL cancellation boundary (capture + in-flight STT) before the
+ * stop message reaches the service.
  */
 
-import { createStore } from "zustand/vanilla";
+import { createStore, type StoreApi } from "zustand/vanilla";
 
-import { appStore } from "../store";
+import { appStore, registerCaptureAbort } from "../store";
 import { MicCapture, type MicPhase } from "./mic";
 
 export interface MicHubState {
@@ -14,50 +19,68 @@ export interface MicHubState {
   error: string | null;
 }
 
-export const micHubStore = createStore<MicHubState>(() => ({
-  phase: "idle",
-  error: null,
-}));
-
-let capture: MicCapture | null = null;
-
-function getCapture(): MicCapture {
-  if (!capture) {
-    capture = new MicCapture({
-      onPhase: (phase, detail) => {
-        micHubStore.setState({
-          phase,
-          error: phase === "error" ? (detail ?? "mic error") : null,
-        });
-      },
-      onTranscript: (text) => appStore.getState().sendText(text),
-    });
-  }
-  return capture;
+export interface MicHub {
+  phase: MicPhase;
+  store: StoreApi<MicHubState>;
+  start: () => Promise<void>;
+  stop: () => void;
+  abort: () => void;
+  /** Start if idle, stop if recording (tap-to-talk toggle). */
+  toggle: () => void;
 }
 
-export const micHub = {
-  get phase(): MicPhase {
-    return micHubStore.getState().phase;
-  },
-  async start(): Promise<void> {
-    micHubStore.setState({ error: null });
-    try {
-      await getCapture().start();
-    } catch {
-      // onPhase already reported the error
+export function createMicHub(onTranscript: (text: string) => void): MicHub {
+  const hubStore = createStore<MicHubState>(() => ({
+    phase: "idle",
+    error: null,
+  }));
+  let capture: MicCapture | null = null;
+
+  const getCapture = (): MicCapture => {
+    if (!capture) {
+      capture = new MicCapture({
+        onPhase: (phase, detail) => {
+          hubStore.setState({
+            phase,
+            error: phase === "error" ? (detail ?? "mic error") : null,
+          });
+        },
+        onTranscript,
+      });
     }
-  },
-  stop(): void {
-    getCapture().stop();
-  },
-  abort(): void {
-    void getCapture().abort();
-  },
-  /** Start if idle, stop if recording (tap-to-talk toggle). */
-  toggle(): void {
-    const { phase } = micHubStore.getState();
-    if (phase === "recording") getCapture().stop();
-    else void micHub.start();
-  },
-};
+    return capture;
+  };
+
+  return {
+    store: hubStore,
+    get phase(): MicPhase {
+      return hubStore.getState().phase;
+    },
+    async start(): Promise<void> {
+      hubStore.setState({ error: null });
+      try {
+        await getCapture().start();
+      } catch {
+        // onPhase already reported the error
+      }
+    },
+    stop(): void {
+      getCapture().stop();
+    },
+    abort(): void {
+      void getCapture().abort();
+    },
+    toggle(): void {
+      const { phase } = hubStore.getState();
+      if (phase === "recording") getCapture().stop();
+      else void this.start();
+    },
+  };
+}
+
+export const micHub = createMicHub((text) => appStore.getState().sendText(text));
+export const micHubStore = micHub.store;
+
+// The app store's stop() aborts capture/STT locally before notifying the
+// service — STOP stays authoritative even with the socket down.
+registerCaptureAbort(() => micHub.abort());
