@@ -31,7 +31,11 @@ export class PdfReader implements Reader {
   private pageNum = 1;
   private fontSize = 17;
   private canvas: HTMLCanvasElement | null = null;
+  /** Fit-width by default: the first page scales so its width fills the
+   *  panel (advisor review: fit-page left the text tiny for the target
+   *  user). A−/A+ then zoom relative to that base. */
   private scale = 1.4;
+  private baseScale = 1.4;
   onLocationChange?: (loc: ReaderLocation) => void;
 
   async open(url: string, container: HTMLElement): Promise<void> {
@@ -41,10 +45,37 @@ export class PdfReader implements Reader {
     container.appendChild(this.canvas);
     const pdfjs = await loadPdfjs();
     this.loadTask = pdfjs.getDocument({ url });
-    const doc = await this.loadTask.promise;
+    let doc: PDFDocumentProxy;
+    try {
+      doc = await this.loadTask.promise;
+    } catch (err) {
+      // Intermittent open failures flashed "No se pudo abrir el documento"
+      // (round-2); make the error deterministic and drop the blank canvas.
+      this.canvas?.remove();
+      this.canvas = null;
+      throw new Error(
+        `No se pudo abrir el documento: ${(err as Error).message}`,
+      );
+    }
     this.doc = doc;
-    this.fontSize = defaultFontSize(container.clientWidth || 700);
-    await this.showPage(1);
+    const width = container.clientWidth || 700;
+    this.fontSize = defaultFontSize(width);
+    // Fit-width: base scale makes page 1 exactly panel-wide (clamped
+    // so tiny or huge PDFs stay readable).
+    const page1 = await doc.getPage(1);
+    const vp = page1.getViewport({ scale: 1 });
+    page1.cleanup();
+    this.baseScale = Math.min(2.5, Math.max(0.6, (width - 32) / vp.width));
+    this.scale = this.baseScale;
+    try {
+      await this.showPage(1);
+    } catch (err) {
+      this.canvas?.remove();
+      this.canvas = null;
+      throw new Error(
+        `No se pudo mostrar la página: ${(err as Error).message}`,
+      );
+    }
     this.emit();
   }
 
@@ -60,10 +91,24 @@ export class PdfReader implements Reader {
     this.canvas.height = Math.floor(viewport.height * dpr);
     this.canvas.style.width = `${Math.floor(viewport.width)}px`;
     this.canvas.style.height = `${Math.floor(viewport.height)}px`;
-    await this.page.render({
-      canvas: this.canvas,
-      viewport,
-    }).promise;
+    const ctx = this.canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo obtener el contexto 2D");
+    // pdfjs-dist v6: render() reads the canvas ONLY via canvasContext.canvas
+    // — a bare `canvas` param is a SILENT NO-OP (6.2.108, verified
+    // empirically: render resolves, nothing paints, canvas stays black).
+    // Device-pixel scale through the context transform, then render.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    try {
+      // `canvas` satisfies pdfjs's RenderParameters TYPE; the v6 RUNTIME
+      // reads the surface via canvasContext.canvas (bare canvas no-ops).
+      await this.page
+        .render({ canvas: this.canvas, canvasContext: ctx, viewport })
+        .promise;
+    } catch (err) {
+      throw new Error(
+        `No se pudo dibujar la página: ${(err as Error).message}`,
+      );
+    }
     this.emit();
   }
 
@@ -112,7 +157,8 @@ export class PdfReader implements Reader {
 
   setFontSize(px: number): void {
     this.fontSize = px;
-    this.scale = 1.2 + (px - 14) * 0.08;
+    // Zoom relative to the fit-width base: 17px = base scale.
+    this.scale = this.baseScale * (px / 17);
     if (this.doc) void this.showPage(this.pageNum);
   }
 

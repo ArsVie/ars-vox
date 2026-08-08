@@ -6,7 +6,7 @@ import { appStore } from "../store";
 import { StopButton } from "./StopButton";
 
 const VOICE_LABELS: Record<string, string> = {
-  sleeping: "Inactivo",
+  sleeping: "En espera",
   listening: "Escuchando",
   thinking: "Pensando",
   speaking: "Hablando",

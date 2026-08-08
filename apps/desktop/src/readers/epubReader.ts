@@ -13,18 +13,22 @@ function loadEpubjs(): Promise<EpubModule> {
   return epubPromise;
 }
 
-const THEME_STYLES: Record<ReaderTheme, Record<string, string>> = {
+// epub.js Themes.register rules must be NESTED OBJECTS per selector
+// ({ selector: { prop: value } }) — CSS STRINGS break addStylesheetRules:
+// it iterates Object.keys(value) and emits body{0:b;1:a;...}, an invalid
+// rule, leaving the body transparent (black text on the dark stage).
+const THEME_STYLES: Record<ReaderTheme, Record<string, Record<string, string>>> = {
   light: {
-    body: "background:#f7f4ee; color:#26221c;",
-    a: "color:#2b6cb0;",
+    body: { background: "#f7f4ee", color: "#26221c" },
+    a: { color: "#2b6cb0" },
   },
   sepia: {
-    body: "background:#f1e8d7; color:#4a3f2e;",
-    a: "color:#8a6d3b;",
+    body: { background: "#f1e8d7", color: "#4a3f2e" },
+    a: { color: "#8a6d3b" },
   },
   dark: {
-    body: "background:#141b26; color:#c9d2df;",
-    a: "color:#5aa7ff;",
+    body: { background: "#141b26", color: "#c9d2df" },
+    a: { color: "#5aa7ff" },
   },
 };
 
@@ -87,6 +91,12 @@ export class EpubReader implements Reader {
 
     this.rendition.on("relocated", this.onRelocated);
     await this.rendition.display();
+    // Re-apply theme + font AFTER the content loads: epub.js applies
+    // theme styles to each section's document as it loads; a select()
+    // before display() can leave the body transparent (black text on
+    // the app's dark stage = invisible page).
+    this.applyTheme();
+    this.applyFontSize();
   }
 
   private applyTheme(): void {

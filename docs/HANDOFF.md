@@ -82,7 +82,7 @@ duplicated/reinvented parts.
    the layout registry.
 3. **Live multi-turn window-management demo** — `scripts/demo_live.py`
    gained `--scenario windows` (5 turns: open youtube, split document
-   + conversation, news main + conversation, fullscreen, restore).
+   + conversation, browser main + conversation, fullscreen, restore).
    Result: **MULTI_OK turns=5, 0 errors** (ran twice, incl. after the
    harness refactor; turn 1 emitted 2 typed commands). `--scenario
    single` preserved byte-compatible.
