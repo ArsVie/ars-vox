@@ -350,4 +350,6 @@ def test_youtube_search_emits_results_event(client):
         searches = [e for e in events if e["type"] == "youtube.search"]
         assert searches and searches[-1]["query"] == "carpintería"
         assert searches[-1]["results"], "expected fixture results"
-        assert searches[-1]["results"][0]["id"] == "yt-1"
+        # H7: fixture ids are real playable YouTube ids now (the media
+        # surface derives videoId from the url and renders the embed)
+        assert searches[-1]["results"][0]["id"] == "dQw4w9WgXcQ"
