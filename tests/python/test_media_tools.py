@@ -26,9 +26,6 @@ from arsvox_agent.tools.media_tools import (
     media_stop,
 )
 
-SAMPLE_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-
-
 class _CaptureBus:
     def __init__(self) -> None:
         self.events: list = []
@@ -111,14 +108,18 @@ def test_play_real_video_id_emits_panel_open_and_media_state_with_youtube_url():
     assert cmd.url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
-def test_play_fixture_id_falls_back_to_sample_video_url():
+def test_play_unknown_id_falls_back_to_default_fixture_with_youtube_url():
     tctx, bus, _ = _make_context()
 
-    result = _run(media_play(tctx, "yt-1"))
+    result = _run(media_play(tctx, "not-a-fixture-id"))
 
     assert "Reproduciendo" in result
     states = [e.command for e in bus.events if isinstance(e, UiCommandEvent) and isinstance(e.command, MediaStateChange)]
-    assert states[0].url == SAMPLE_URL
+    assert states[0].title == FIXTURE_RESULTS[0].title
+    # Unknown ids resolve to the default fixture — a REAL 11-char id now, so
+    # the media.state command carries the real YouTube watch url (the store
+    # derives videoId from it and renders the embed).
+    assert states[0].url == f"https://www.youtube.com/watch?v={FIXTURE_RESULTS[0].id}"
 
 
 def test_pause_resume_stop_emit_media_state_commands():
