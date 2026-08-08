@@ -115,3 +115,16 @@ def test_progress(tmp_path):
     store.set("book", "don-quijote", {"section": 3, "progress": 0.5})
     assert store.get("book", "don-quijote")["section"] == 3
     assert store.latest("book")["ref_id"] == "don-quijote"
+
+
+def test_panels_clear_all_fresh_desk(tmp_path):
+    """GATE-3.5: panels survive reconnects but NOT service restarts —
+    boot-time clear_all() restores the central-mic default."""
+    db = _make_db(tmp_path)
+    from arsvox_memory.repos import PanelStore
+    store = PanelStore(db)
+    store.upsert("document_editor", "Documento nuevo")
+    store.upsert("conversation")
+    assert len(store.list()) == 2
+    store.clear_all()
+    assert store.list() == []

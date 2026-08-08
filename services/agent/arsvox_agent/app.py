@@ -209,6 +209,9 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
     async def lifespan(app: FastAPI):
         log.info("ars-vox agent service starting (model=%s mock=%s)",
                  config.agent.model.name, config.agent.mock)
+        # Fresh desk per launch: panels belong to the running session, not
+        # to a previous boot (default screen = central mic hero).
+        services.panels.clear_all()
         await services.scheduler.start()
         await services.pipeline.start()
         yield

@@ -38,6 +38,16 @@ class PanelStore:
         self.db.execute("DELETE FROM panel_instances WHERE id = ?", (panel_type,))
         self.db.commit()
 
+    def clear_all(self) -> None:
+        """Start every launch with a fresh desk (central-mic default).
+
+        Panels persist across connections (mid-session reconnect restores
+        them via state_snapshot) but NOT across service restarts — the
+        default screen is the mic hero, not the last session's panels.
+        """
+        self.db.execute("DELETE FROM panel_instances")
+        self.db.commit()
+
     def list(self) -> list[dict]:
         return self.db.rows(
             "SELECT * FROM panel_instances ORDER BY last_used_at DESC"
