@@ -1601,6 +1601,21 @@ body,
   background: var(--state-hover);
 }
 
+/* -------------------------------------------------------- UI-206 MOTION
+   Layout transition system: slot geometry changes animate in place
+   (resize/move, never remount — slots are keyed by surfaceId in
+   AdaptiveStage.tsx). ~240ms restrained rearrange; % geometry on 2-3
+   absolutely-positioned slot nodes is cheap and deterministic. Gated by
+   JS matchMedia (data-motion on the stage) AND the reduced-motion media
+   block below. No custom properties — plain rules only. */
+.panel-host[data-motion="enabled"] .panel-slot {
+  transition:
+    left 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    top 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    width 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    height 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* -------------------------------------------------------- reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .panel-slot.fade,
@@ -1621,6 +1636,11 @@ body,
   .stop-button {
     transition: none;
     transform: none !important; /* tactile press collapse */
+  }
+  /* UI-206: the stage motion gate is killed at the CSS level too, so a
+     stale data-motion state can never animate under reduced motion. */
+  .panel-host[data-motion="enabled"] .panel-slot {
+    transition: none;
   }
 }
 
