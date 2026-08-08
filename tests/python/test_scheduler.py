@@ -76,19 +76,20 @@ def test_snooze_and_dismiss(tmp_path):
         assert "pospuesto" in msg
         n = notifications.latest_active()
         assert n is None  # snoozed resolves the active notification
-        # force due again directly, then refire
-        db.execute(
-            "UPDATE reminders SET due_at = ? WHERE id = ?",
-            ((now - timedelta(seconds=1)).isoformat(timespec="seconds"), rid),
-        )
-        db.commit()
-        await scheduler.tick()
+        # refire at the snooze target (scheduler promotes snoozed -> active)
+        row = reminders.get(rid)
+        assert row["occ_status"] == "snoozed"
+        await scheduler.tick(now_iso=row["due_at"])
+        assert notifications.latest_active() is not None
         msg2 = await scheduler.dismiss_top()
         assert "descartado" in msg2
         return rid
 
     rid = asyncio_run(run())
-    assert reminders.get(rid)["status"] == "active"
+    row = reminders.get(rid)
+    assert row["status"] == "active"  # recurring schedule stays live
+    assert row["occ_status"] == "active"
+    assert row["due_at"] > datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def test_list_active_text(tmp_path):

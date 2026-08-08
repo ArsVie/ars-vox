@@ -110,6 +110,9 @@ class RemindersSection(BaseModel):
     scheduler_interval_s: int = Field(default=5, ge=1, le=60)
     snooze_seconds: int = Field(default=600, ge=10, le=86400)
     confirmation_timeout_s: int = Field(default=120, ge=10, le=3600)
+    # IANA timezone name for local-clock reminder schedules ("" = system
+    # local zone). GATE-2.5 H2: naive due datetimes are LOCAL, never UTC.
+    timezone: str = ""
 
 
 class BrowserSection(BaseModel):

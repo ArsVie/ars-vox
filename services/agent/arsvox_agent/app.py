@@ -74,7 +74,7 @@ class AppServices:
         self.sessions = SessionStore(self.db)
         self.notes = NoteStore(self.db)
         self.tasks = TaskStore(self.db)
-        self.reminders = ReminderStore(self.db)
+        self.reminders = ReminderStore(self.db, tz_name=config.reminders.timezone or None)
         self.notifications = NotificationStore(self.db)
         self.panels = PanelStore(self.db)
         self.preferences = PreferenceStore(self.db)

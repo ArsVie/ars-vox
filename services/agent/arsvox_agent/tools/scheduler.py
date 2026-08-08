@@ -67,8 +67,10 @@ class ReminderScheduler:
                 log.exception("scheduler tick failed")
 
     # ------------------------------------------------------------------ #
-    async def tick(self) -> None:
-        now = _utcnow()
+    async def tick(self, now_iso: str | None = None) -> None:
+        now = now_iso or _utcnow()
+        # snoozed occurrences whose snoozed_until passed become active
+        self.reminders.promote_snoozed(now)
         for reminder in self.reminders.due(now):
             self.reminders.mark_fired(reminder["id"], now)
             nid = self.notifications.insert(
@@ -106,7 +108,9 @@ class ReminderScheduler:
         n = self.notifications.latest_active()
         if not n or not n["reminder_id"]:
             return "No hay ningún recordatorio activo para posponer."
-        self.reminders.snooze(n["reminder_id"], seconds, datetime.now(timezone.utc))
+        ok = self.reminders.snooze(n["reminder_id"], seconds, datetime.now(timezone.utc))
+        if not ok:
+            return "No pude posponer el recordatorio."
         self.notifications.resolve(n["id"], NotificationStatus.SNOOZED.value)
         minutes = seconds // 60
         await self.bus.publish(
@@ -118,6 +122,8 @@ class ReminderScheduler:
         n = self.notifications.latest_active()
         if not n:
             return "No hay ningún recordatorio activo que descartar."
+        if n["reminder_id"]:
+            self.reminders.dismiss(n["reminder_id"])
         self.notifications.resolve(n["id"], NotificationStatus.DISMISSED.value)
         await self.bus.publish(AgentMessageEvent(text="Recordatorio descartado.", delta=False))
         return "Recordatorio descartado."

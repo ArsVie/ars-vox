@@ -1,18 +1,23 @@
 """Reminder tools. Creating a reminder goes through the confirmation
 coordinator (policy approval override): the user always sees the exact
-date/time and text before it is scheduled."""
+date/time and text before it is scheduled.
 
-from datetime import datetime
+GATE-2.5 H2: due_at is normalized to a UTC instant. Naive input is treated
+as LOCAL wall time (the store's configured/system zone), never UTC.
+"""
 
 from arsvox_agent.tools.context import ToolContext
+from arsvox_memory.repos.reminders import normalize_due_utc
 
 
-def _normalize_due(due_at: str) -> str | None:
-    try:
-        parsed = datetime.fromisoformat(due_at)
-    except ValueError:
-        return None
-    return parsed.isoformat(timespec="seconds")
+def _normalize_due(due_at: str, tz) -> str | None:
+    """Parse ``due_at`` into a UTC instant (``+00:00`` ISO string).
+
+    Naive datetimes are interpreted as LOCAL wall time in the store's
+    timezone; offset-aware datetimes are converted. Returns None if the
+    string is not ISO-parseable.
+    """
+    return normalize_due_utc(due_at, tz)
 
 
 async def reminders_create(
@@ -23,7 +28,7 @@ async def reminders_create(
 ) -> str:
     if repeat_rule not in ("none", "daily", "weekly"):
         return "La repetición debe ser none, daily o weekly."
-    due = _normalize_due(due_at)
+    due = _normalize_due(due_at, tctx.deps.reminders.tz)
     if due is None:
         return f"No entendí la fecha '{due_at}'. Usa formato ISO (2026-08-06T08:00:00)."
     reminder_id = tctx.deps.reminders.create(text, due, repeat_rule)
