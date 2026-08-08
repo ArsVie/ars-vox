@@ -692,6 +692,13 @@ execution:
       - Invalid requested arrangements degrade to nearest valid template.
       - No draggable freeform window system is introduced.
 
+    notes:
+      - UI-207 (merged GATE-2) already exposes the signal hooks: the inertia
+        scorer API accepts `materialActivityChange`/`userInitiated` context,
+        and the store guard currently passes NEITHER. UI-302 wires the
+        user-initiated signal through applyAdaptiveSpec (user command →
+        always apply, bypassing the damping wall).
+
 
   - id: UI-303
     name: Consumer usability and accessibility pass
