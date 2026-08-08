@@ -26,6 +26,11 @@ def test_system_prompt_names_all_panel_types():
 
     text = _prompt()
     for panel in PanelType:
+        if panel.value == "news":
+            # frozen product direction (panel-vision): NO news panel — the
+            # browser covers it. The model must never see news as a surface.
+            assert panel.value not in text
+            continue
         assert (
             panel.value in text
         ), f"system.md no longer names panel '{panel.value}'"

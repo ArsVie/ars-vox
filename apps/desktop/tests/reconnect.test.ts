@@ -35,7 +35,7 @@ function snapshot(overrides: Partial<StateSnapshotEvent> = {}): StateSnapshotEve
 }
 
 describe("H5 state_snapshot application on connect", () => {
-  it("restores the pending confirmation card, layout panels, media and voice", () => {
+  it("restores pending card, media and voice but NOT panels (mic-hero default)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent(
       snapshot({
@@ -78,14 +78,13 @@ describe("H5 state_snapshot application on connect", () => {
       expiresInS: 30,
     });
     expect(state.voiceState).toBe("waiting_for_confirmation");
-    expect(state.panelMeta.document_editor).toEqual({
-      title: "Doc",
-      contentReference: "doc-1",
-    });
-    // layout recomputed: the restored panel is visible in the engine
-    const panel = state.layout.panels.find((p) => p.panel === "document_editor");
-    expect(panel).toBeDefined();
-    expect(panel!.visible).toBe(true);
+    // user directive 2026-08-08: snapshot panels are NOT restored — a
+    // fresh load starts at the central-mic hero; the agent's own commands
+    // re-populate the desk.
+    expect(state.panelMeta.document_editor).toBeUndefined();
+    expect(
+      state.layout.panels.find((p) => p.panel === "document_editor"),
+    ).toBeUndefined();
     expect(state.content.media?.videoId).toBe("abc123");
     expect(state.content.media?.state).toBe("playing");
   });
@@ -107,9 +106,10 @@ describe("H5 state_snapshot application on connect", () => {
     expect(store.getState().pending).toBeNull();
   });
 
-  it("replaces stale panels and ignores non-layout panel types", () => {
+  it("keeps in-memory panels across a reconnect and ignores snapshot panels", () => {
     const store = createAppStore(() => {});
-    // stale panel from before the disconnect
+    // panel opened before the disconnect stays (same-tab reconnect keeps
+    // its desk — like media, the snapshot cannot fabricate one)
     store.getState().applyEvent({
       type: "ui_command",
       command: { action: "panel.open", panel_type: "browser" },
@@ -127,14 +127,13 @@ describe("H5 state_snapshot application on connect", () => {
         },
       }),
     );
-    expect(store.getState().panelMeta.browser).toBeUndefined();
+    // the in-memory desk survives; the snapshot's panels are ignored
+    expect(store.getState().panelMeta.browser).toBeDefined();
     expect(
       (store.getState().panelMeta as Record<string, PanelMeta | undefined>)
         .confirmation,
     ).toBeUndefined();
-    expect(store.getState().panelMeta.document_editor).toEqual({
-      contentReference: "doc-2",
-    });
+    expect(store.getState().panelMeta.document_editor).toBeUndefined();
   });
 
   it("leaves the media player untouched when the snapshot has no media", () => {

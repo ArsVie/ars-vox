@@ -811,12 +811,11 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         case "state_snapshot": {
           // H5 reconnect: apply the canonical snapshot sent once per WS
-          // connect. Authoritative server state — pending card, open
-          // panels and voice are REPLACED (a reconnect after a service
-          // restart must clear stale UI state, not merge into it). Media
-          // is restored only when the service reports it; an absent media
-          // field leaves the current player untouched (no fabricated
-          // "stopped" — the next media.state event re-syncs).
+          // connect. Authoritative server state — pending card and voice
+          // are REPLACED. Panels are NOT restored: a fresh page load must
+          // start at the central-mic hero (user directive, 2026-08-08),
+          // and a same-tab reconnect keeps its in-memory desk (like media:
+          // the agent's own commands re-populate the desk on demand).
           const snap = event as StateSnapshotEvent;
           const patch: Partial<AppState> = {
             voiceState: snap.voice_state,
@@ -830,34 +829,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                 }
               : null,
           };
-          const panelMeta: Partial<Record<PanelId, PanelMeta>> = {};
-          for (const p of snap.layout?.panels ?? []) {
-            if (isPanelId(p.panel_type)) {
-              panelMeta[p.panel_type as PanelId] = {
-                title: p.title ?? undefined,
-                contentReference: p.content_reference ?? undefined,
-              };
-            }
-          }
-          patch.panelMeta = panelMeta;
-          layoutApplied = true; // snapshot is authoritative server layout
-          // Template upgrade: the snapshot carries panels, not a template.
-          // The engine always anchors conversation (affinity: side/main) and
-          // hides panels that fit no offered slot — on a one-slot template a
-          // restored non-conversation panel would come back invisible. Step
-          // up to "split" (the canonical two-panel template) so the engine's
-          // deterministic fill places restored panels (conversation -> side,
-          // first restored panel -> main). No history push — a reconnect
-          // restore is not an undoable user action.
-          const restored = Object.keys(panelMeta) as PanelId[];
-          const nonConversation = restored.filter((p) => p !== DEFAULT_PRIMARY);
-          if (
-            nonConversation.length > 0 &&
-            (TEMPLATE_SLOTS[state.spec.template as LayoutTemplateId] ?? TEMPLATE_SLOTS.split)
-              .length < 2
-          ) {
-            patch.spec = { ...state.spec, template: "split" };
-          }
           if (snap.media) {
             patch.content = {
               ...state.content,
