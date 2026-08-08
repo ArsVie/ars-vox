@@ -1,9 +1,21 @@
 # UI Screenshots — current state
 
-Current UI screenshots, captured 2026-08-07 from the live mock-mode app
+Current UI screenshots, captured 2026-08-07/08 from the live mock-mode app
 (vite 5173 + mock agent on 8765, Edge CDP). Standing rule (owner, 2026-08-08):
 refresh this folder after EVERY redesign wave — new wave shots get the next
 free numbers, and the wave list below stays current.
+
+## Wave 3 — planner/overrides/a11y (merged 2026-08-08)
+
+Post-GATE-2.5 + wave-3 state. Agent layout intents route through the
+planner (UI-301), user overrides apply on top (UI-302), and the a11y pass
+(UI-303) landed: dark-on-bright ink for contrast (4.8–7.7:1), status
+icons + Spanish aria labels, focus-visible rings, hit-target floor,
+reduced-motion coverage, STOP active while listening.
+
+* [Shell](23-wave3-shell.png) - boot state after wave 3 (En espera status
+  with icon, DETENER, template selector, conversation hero) — captured
+  with real Chrome headless at 1920x1080.
 
 ## Wave 2 — adaptive surfaces + motion (GATE-2, merged 2026-08-08)
 

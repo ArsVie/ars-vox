@@ -59,8 +59,10 @@ opens and the model's tool calls are NOT trusted inputs.
   has zero readers and the Electron browser is not shipped yet; the
   web demo renders only same-origin fixture content.
 - There is no generic "browser agent" tool; page interaction uses a
-  fixed action vocabulary (open, back, forward, reload, scroll, read,
-  fill, submit, media controls) — no arbitrary script execution.
+  fixed navigation vocabulary (navigate/back/forward/refresh) + media
+  controls today — no arbitrary script execution. A richer
+  page-interaction vocabulary (open/scroll/read/fill/submit) is PLANNED
+  with the Electron browser.
 - In Electron, remote content renders in a WebContentsView owned by
   the main process, outside the renderer DOM, with
   `contextIsolation: true` and `nodeIntegration: false` (planned
@@ -119,10 +121,12 @@ opens and the model's tool calls are NOT trusted inputs.
 ### T9. Unauthenticated local WebSocket (127.0.0.1:8765)
 
 - RESOLVED (GATE-2.5 H4, 2026-08-08): the local service now requires a
-  per-launch bearer token on every HTTP route AND in the WebSocket
-  handshake (query param); CORS is locked to the configured origins
-  (no wildcard); the Electron main process generates the token and the
-  trusted renderer receives it via preload IPC.
+  per-launch bearer token on every HTTP route except `/health` (probes)
+  AND in the WebSocket handshake (query param); CORS is locked to the
+  configured origins (no wildcard); uvicorn runs with access logging
+  disabled so the WS token never lands in request logs; the Electron
+  main process generates the token and the trusted renderer receives it
+  via preload IPC.
 - Remaining boundary work: the embedded browser (WebContentsView) must
   have zero path to the agent channel — remote content is never
   granted the token; allowlist + sandboxing ship before arbitrary

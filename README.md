@@ -23,7 +23,8 @@ Working end to end (verified live):
 - Electron vertical slice: one window, one React renderer, one WebSocket
   client, one Zustand store, a persistent status bar, an always-visible
   stop button, a conversation panel, a document panel, a confirmation
-  panel, an error panel, and two layout templates (focus, split).
+  panel, an error panel, and layout templates (focus/split/reading/
+  dashboard; adaptive contract: focus/sidecar/stack/split/triple).
 - Deterministic layout engine: the model selects template + panels, the
   engine computes position, size, z-order, animation, and reduced-motion
   behavior. Pure TypeScript, covered by Vitest.
@@ -33,22 +34,22 @@ Working end to end (verified live):
 - Local stop path: the protocol `stop` message cancels the running turn
   without ever involving the LLM.
 
-- Voice path: `GET /tts?text=...` synthesizes Spanish speech
-  (edge-tts) and `POST /api/stt` transcribes uploaded audio
+- Voice path: `POST /tts` (JSON `{"text": ...}`) synthesizes Spanish
+  speech (edge-tts) and `POST /api/stt` transcribes uploaded audio
   (faster-whisper, es); `auto_speak` emits a real `tts.speak` and the
   renderer plays it (Electron disables the autoplay policy; plain
   browsers get a muted-then-unmute fallback). The composer MIC button
   records with getUserMedia + MediaRecorder, a pure energy VAD ends the
   utterance on ~900ms silence (or 30s cap), and the blob is POSTed to
   `/api/stt` — the transcript flows in as a normal `user_text` message.
-  Verified live: real CDP click on Send produced `GET /tts` with 200 and
+  Verified live: real CDP click on Send produced `POST /tts` with 200 and
   playback started; the full mic→VAD→STT→agent→TTS loop was verified in
   real Edge with a fake audio device (see `docs/HANDOFF.md`).
 
-Not yet done: the remaining panels (browser, media,
-news, notes, tasks, settings), a real-microphone smoke test on the
-target Windows machine, Electron version pinning for the target
-2014 Intel MacBook Air, and the product documentation listed under
+Not yet done: notes + settings panels, the Electron WebContentsView
+browser (the iframe is web-demo-only), a real-microphone smoke test on
+the target Windows machine, Electron version pinning for the target
+Windows 11 desktop, and the product documentation listed under
 `docs/`.
 
 ## Repository structure
@@ -109,9 +110,9 @@ npm install
 cd apps/desktop && npm run dev        # or: npm run build && npm start
 ```
 
-Mock demo scenario: type `Open a document.` in the UI. The scripted
-model emits `ui_apply_layout(split, document_editor)`, the layout
-changes to split, the document panel appears, and the assistant answers.
+Mock demo scenario: type anything — the scripted model emits
+`demo_populate` (browser/tasks/document/media panels populate), then a
+greeting. Template shots via the 'Plantilla de demostración' selector.
 
 ## Run — live model
 
@@ -159,18 +160,24 @@ Relative paths in the config resolve against the config file's directory.
 
 `ws://127.0.0.1:8765/ws`
 
-Client → server: `user_text`, `confirm`, `cancel`, `stop`, `ping`.
+Client → server: `user_text`, `ui_command`, `confirm`, `cancel`,
+`stop`, `ping`.
 
 Server → client (typed events): `state_update`, `user_message`,
 `agent_message` (with `delta` flag), `tool_call`, `ui_command`,
 `confirmation_requested`, `confirmation_resolved`, `notification`,
-`error`, `config_update`, `pong`.
+`error`, `config_update`, `pong`, plus the GATE-2.5 additions:
+`action_result` (H1), `state_snapshot` (H5) and the content events
+(`youtube.search`, `browser.navigate`, `document.load`, `tasks.update`,
+`media.state`).
 
 `ui_command` is a discriminated union on `action`: `layout.apply`,
 `panel.open`, `panel.close`, `panel.set_primary`, `panel.fullscreen`,
 `layout.restore`, `notification.show`, `media.state`, `tts.speak`,
-`audio.play`. The model never sends coordinates; it selects template and
-panels, and the UI computes geometry.
+`audio.play`, plus the H1/H5 additions: `browser.navigate/back/forward/
+refresh`, `document.save`, `tasks.toggle`, `media.play_pause/seek`,
+`youtube.search/play`. The model never sends coordinates; it selects
+template and panels, and the UI computes geometry.
 
 ## Known limitations
 
@@ -181,9 +188,10 @@ panels, and the UI computes geometry.
 - TS types in the renderer are hand-mirrored from the Python contracts;
   the JSON schemas in `packages/contracts/schemas/` exist for future
   code generation.
-- Electron 33 is the working build; compatibility with the target 2014
-  Intel MacBook Air (macOS Big Sur) is NOT verified — a spike on the
-  real machine is required before pinning the final version.
+- Electron 33 is the working build; compatibility with the target
+  Windows 11 desktop is the remaining spike before pinning the final
+  version (the 2014 MacBook Air / Big Sur was an early eval only — ADR
+  0001 status note).
 - Local alarms cannot alert while the computer is off.
 - The `--mock` service flag writes a temporary config file (it never
   modifies `configs/app.yaml`).
@@ -217,7 +225,7 @@ panels, and the UI computes geometry.
   document panel → agent response; stop button returns the app to
   sleeping and the service stays responsive.
 - TTS playback: verified in a real Chromium against the mock service
-  with edge TTS — a real CDP click on Send issued `GET /tts` (200) and
+  with edge TTS — a real CDP click on Send issued `POST /tts` (200) and
   playback started (unmuted, resolved). Autoplay-safe: Electron ships
   with `autoplay-policy=no-user-gesture-required`; plain browsers fall
   back to muted-then-unmute when no user activation exists yet.

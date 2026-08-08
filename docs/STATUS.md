@@ -2,7 +2,7 @@
 type: status
 title: Ars-Vox current state
 description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-08.
-timestamp: 2026-08-08T09:00:00Z
+timestamp: 2026-08-08T06:15:00Z
 ---
 
 # Ars-Vox — current state (2026-08-08)
@@ -17,14 +17,15 @@ wins.
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-08 ~05:50Z, post GATE-2.5 + WAVE 3)
+## Test gates (last full run, 2026-08-08 ~06:11 CST, post GATE-2.5 + WAVE 3)
 
-- vitest: 419 passed (34 files) — apps/desktop (306 baseline + 46 GATE-2.5
-  + 67 wave-3: 15 planner, 30 overrides, 22 a11y)
-- pytest: 193 passed — tests/python (110 baseline + 83 GATE-2.5)
+- vitest: 441 passed (35 files) — apps/desktop (306 baseline + 46 GATE-2.5
+  + 89 wave-3: 27 planner, 40 overrides, 22 a11y)
+- pytest: 194 passed — tests/python (110 baseline + 83 GATE-2.5
+  + youtube.play client-local ack)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
-- OKF docs validator: 18 concepts validated (2026-08-08)
+- OKF docs validator: 19 concepts validated (2026-08-08)
 
 ## Adaptive UI redesign (waves)
 
@@ -52,7 +53,7 @@ wins.
   always applies). Verified live in CDP: split browser+conversation with
   real surfaces, media primary→persistent bar without playback reset,
   readers pixel-verified (below). Screenshots: docs/screenshots/12..22-wave2-*.
-- WAVE 3 DONE (2026-08-08, 3 tracks merged): UI-301 agent layout planner
+- WAVE 3 DONE (2026-08-08, 3 of 3 tracks merged): UI-301 agent layout planner
   (semantic composition authority — agent says WHAT never HOW; invalid
   model output rejected with structured reasons, never reaches state;
   legacy wire layout.apply routed through the planner), UI-302 user
@@ -62,8 +63,8 @@ wins.
   deterministically to nearest valid), UI-303 usability+a11y (hit-target
   floor, focus-visible rings + tab order, reduced-motion coverage,
   status icons + Spanish aria labels, STOP accessibility, 12px text
-  floor, contrast fixes — token catalog only, no redesign). +67 tests
-  (15 planner / 30 overrides / 22 a11y).
+  floor, contrast fixes — token catalog only, no redesign). +89 tests
+  (27 planner / 40 overrides / 22 a11y).
 - GATE-2.5 HARDENING DONE (2026-08-08, 7 tracks merged): H1 bidirectional
   client-action protocol (authoritative ui_command handlers + action_result
   verdicts + cross-language fixtures), H2 reminder correctness (UTC
@@ -114,8 +115,10 @@ wins.
   `MockWakeWordDetector`, `Vad` exist in services/voice but have ZERO
   consumers, and `voice.wake_word.*` / `voice.vad.provider` config has
   zero readers. Wiring is IMPLEMENTATION WORK, not just verification.
-- STT / TTS providers: run in MOCK mode for the demo; real provider
-  path exists but is NOT verified end-to-end.
+- STT / TTS providers: real (faster-whisper / edge-tts) with mock
+  fallback; verified end to end with a fake audio device
+  (scripts/demo_voice.py VOICE_OK, CDP TTS playback). Wake-word/VAD
+  providers remain unwired (above).
 - STOP vocabulary (utterance-level, accent-stripped): stop, detente,
   deten, alto, basta. "para" was REMOVED (2026-08-07, Ars's decision)
   because it is a common mid-sentence Spanish word.
