@@ -1,6 +1,8 @@
 import { useStore } from "zustand";
 import { useState } from "react";
 
+import type { SurfaceRole } from "../adaptive/contracts";
+import { useSurfaceRole } from "../roles/context";
 import { appStore } from "../store";
 import { PanelHeader } from "./PanelHeader";
 import { ChevronLeftIcon, ChevronRightIcon, GlobeIcon, ReloadIcon, SearchIcon } from "./icons";
@@ -8,20 +10,49 @@ import { ChevronLeftIcon, ChevronRightIcon, GlobeIcon, ReloadIcon, SearchIcon } 
 const START_URL = "about:blank";
 
 /**
+ * Read the semantic surface role (UI-103) when mounted through
+ * SurfaceHost. Legacy PanelHost mounts have no role provider and render
+ * the full primary experience — the pre-adaptive default.
+ */
+function useSurfaceRoleOrDefault(): SurfaceRole {
+  try {
+    return useSurfaceRole().role;
+  } catch {
+    return "primary";
+  }
+}
+
+/**
  * Integrated browser panel — the agent drives it (browser.navigate events
  * and DOM snapshot through the backend bridge) and the user drives it
  * directly (address bar, back/forward, refresh). News and anything else
  * on the web live here. The web demo renders an iframe; the Electron
  * build swaps in a real webview with the same chrome.
+ *
+ * UI-201: renders adaptively per its semantic role. primary = the full
+ * browsing experience (Ars Vox IS the browser); companion = reduced
+ * chrome for side-by-side workflows (subdued, smaller controls);
+ * support = compact contextual representation (nav-only toolbar, no
+ * address entry). The .browser-viewport DOM contract is preserved in
+ * every variant. State lives in store.content.browser and local
+ * component state (address draft) — the role host keys surfaces by
+ * surfaceId, so role/template changes never remount this component.
  */
 export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
   const browser = useStore(appStore, (s) => s.content.browser);
   const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
   const [draft, setDraft] = useState("");
 
+  const role = useSurfaceRoleOrDefault();
+
   const url = browser?.url ?? "";
   const loading = browser?.loading ?? false;
   const hasPage = url !== "" && url !== START_URL;
+  // The header label is the PAGE title (functional), never a surface name.
+  const title = browser?.title || meta?.title;
+  // Support = compact contextual representation: nav chrome without the
+  // address entry.
+  const showAddress = role !== "support";
 
   const go = (raw: string): void => {
     const text = raw.trim();
@@ -32,9 +63,12 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
   };
 
   return (
-    <section className="panel browser-panel">
+    <section
+      className={`panel browser-panel browser-surface--${role}`}
+      data-browser-role={role}
+    >
       <PanelHeader panelId="browser" icon={<GlobeIcon size={15} />}>
-        {browser?.title || meta?.title || "Navegador"}
+        {title}
       </PanelHeader>
       <div className="browser-toolbar">
         <button
@@ -63,24 +97,26 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
         >
           <ReloadIcon size={15} />
         </button>
-        <form
-          className="browser-address"
-          onSubmit={(e) => {
-            e.preventDefault();
-            go(draft);
-          }}
-        >
-          <SearchIcon size={13} className="browser-address-icon" />
-          <input
-            type="text"
-            value={draft}
-            placeholder="Busca o escribe una dirección…"
-            aria-label="Dirección web"
-            onChange={(e) => setDraft(e.target.value)}
-            spellCheck={false}
-          />
-          {loading ? <span className="browser-spinner" aria-label="Cargando" /> : null}
-        </form>
+        {showAddress ? (
+          <form
+            className="browser-address"
+            onSubmit={(e) => {
+              e.preventDefault();
+              go(draft);
+            }}
+          >
+            <SearchIcon size={13} className="browser-address-icon" />
+            <input
+              type="text"
+              value={draft}
+              placeholder="Busca o escribe una dirección…"
+              aria-label="Dirección web"
+              onChange={(e) => setDraft(e.target.value)}
+              spellCheck={false}
+            />
+            {loading ? <span className="browser-spinner" aria-label="Cargando" /> : null}
+          </form>
+        ) : null}
       </div>
       <div className="browser-viewport">
         {hasPage ? (
