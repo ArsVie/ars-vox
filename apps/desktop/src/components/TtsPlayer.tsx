@@ -1,15 +1,16 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "zustand";
 
-import { TTS_URL } from "../endpoints";
+import { authHeaders, TTS_URL } from "../endpoints";
 import { appStore } from "../store";
 
 /**
- * Plays the store's speak queue: fetches each phrase from the agent
- * service (GET /tts), plays it, and advances. Playback rate follows the
- * config-driven tts.speed. When the queue is cleared (the stop button)
- * the current playback is interrupted immediately. Never touches the
- * store's voice state — that stays server-owned.
+ * Plays the store's speak queue: POSTs each phrase to the agent service
+ * (/tts, JSON body — never the text in a URL), plays the returned audio,
+ * and advances. Playback rate follows the config-driven tts.speed. When
+ * the queue is cleared (the stop button) the current playback is
+ * interrupted immediately. Never touches the store's voice state — that
+ * stays server-owned.
  */
 export function TtsPlayer() {
   const speakTexts = useStore(appStore, (s) => s.speakTexts);
@@ -26,7 +27,8 @@ export function TtsPlayer() {
       return;
     }
     let finished = false;
-    const audio = new Audio(`${TTS_URL}?text=${encodeURIComponent(text)}`);
+    let objectUrl: string | null = null;
+    const audio = new Audio();
     audio.playbackRate = ttsSpeed > 0 ? ttsSpeed : 1;
     audioRef.current = audio;
     const advance = () => {
@@ -36,11 +38,28 @@ export function TtsPlayer() {
     };
     audio.onended = advance;
     audio.onerror = advance; // never block the queue on a failed fetch
-    void playWithFallback(audio).catch(advance);
+    void (async () => {
+      try {
+        const res = await fetch(TTS_URL, {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        if (!res.ok) throw new Error(`tts ${res.status}`);
+        const blob = await res.blob();
+        if (finished) return; // queue advanced while we were fetching
+        objectUrl = URL.createObjectURL(blob);
+        audio.src = objectUrl;
+        await playWithFallback(audio);
+      } catch {
+        advance();
+      }
+    })();
     return () => {
       finished = true;
       audio.pause();
       audioRef.current = null;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [text, ttsDone, ttsSpeed]);
 

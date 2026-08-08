@@ -35,6 +35,9 @@ def dump_mock_config(
     config, _ = load_config(config_path)
     cfg = config.model_dump(mode="json")
     cfg["agent"]["mock"] = mock
+    # Mock/dev harness: auth explicitly disabled (the security boundary
+    # is exercised by tests/python/test_security.py with auth on).
+    cfg["auth"]["enabled"] = False
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
         yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
         tmp = f.name
