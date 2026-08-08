@@ -208,6 +208,98 @@ function nextMessageId(prefix: string): string {
   return `${prefix}${messageSeq.toString(36)}`;
 }
 
+/**
+ * H7 (GATE-2.5): extract a YouTube video id from a watch/embed/short URL so
+ * the media.state COMMAND path (UiCommandEvent media.state carries only
+ * url/title/volume — no video_id field) can drive the real YouTube iframe
+ * surface. Non-YouTube or unparseable urls yield null.
+ */
+function mediaVideoIdFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null; // local path or bare name — not a YouTube URL
+  }
+  const host = parsed.hostname.replace(/^www\./, "");
+  if (host === "youtu.be") {
+    const id = parsed.pathname.slice(1);
+    return id.length > 0 ? id : null;
+  }
+  if (host === "youtube.com" || host === "m.youtube.com") {
+    const v = parsed.searchParams.get("v");
+    if (v) return v;
+    const embed = parsed.pathname.match(/^\/embed\/([\w-]+)/);
+    if (embed) return embed[1];
+  }
+  return null;
+}
+
+/**
+ * H7 (GATE-2.5): the media.state COMMAND payload (MediaStateChange) is a
+ * partial update — it carries state/title/url/volume but no source/kind/
+ * video_id/position. Merge it over the current media surface state (the
+ * same surface the MediaStateEvent path populates), deriving the youtube
+ * source/kind/videoId from the url when one is provided.
+ */
+function applyMediaStateCommand(
+  state: AppState,
+  command: Extract<UiCommand, { action: "media.state" }>,
+): Partial<AppState> {
+  const m = state.content.media ?? EMPTY_MEDIA;
+  const url = command.url ?? m.url;
+  const videoId =
+    command.url != null ? (mediaVideoIdFromUrl(command.url) ?? m.videoId) : m.videoId;
+  const isYoutube = videoId !== null;
+  return {
+    content: {
+      ...state.content,
+      media: {
+        ...m,
+        state: command.state,
+        title: command.title ?? m.title,
+        url,
+        videoId,
+        source: command.url != null ? (isYoutube ? "youtube" : "local") : m.source,
+        kind: command.url != null ? (isYoutube ? "video" : "audio") : m.kind,
+        volume: command.volume ?? m.volume,
+      },
+    },
+  };
+}
+
+/**
+ * H7 (GATE-2.5): the audio.play COMMAND payload names an asset (url, path or
+ * bare name). Treat it as a fresh local audio track on the media surface —
+ * the same state the MediaStateEvent path would carry for local audio.
+ */
+function applyAudioPlayCommand(
+  state: AppState,
+  command: Extract<UiCommand, { action: "audio.play" }>,
+): Partial<AppState> {
+  const m = state.content.media ?? EMPTY_MEDIA;
+  const asset = command.asset;
+  const isUrl =
+    /^(https?:)?\/\//.test(asset) || asset.startsWith("/") || asset.startsWith(".");
+  const title = m.title || asset.split(/[\\/]/).pop() || asset;
+  return {
+    content: {
+      ...state.content,
+      media: {
+        ...m,
+        state: "playing",
+        source: "local",
+        kind: "audio",
+        title,
+        url: isUrl ? asset : m.url,
+        videoId: null,
+        positionS: 0,
+      },
+    },
+  };
+}
+
 function initialSpec(): LayoutSpec {
   return {
     template: "focus",
@@ -452,11 +544,18 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           pushSpeak(command.text);
           return;
         }
-        case "media.state":
-        case "audio.play":
-          // Slice: no media surface yet; the command is acknowledged by
-          // the service but has no visible effect here.
+        case "media.state": {
+          // H7 (GATE-2.5): the media surface exists — merge the backend
+          // command into the surface state (same state MediaStateEvent
+          // populates) instead of dropping it.
+          set(applyMediaStateCommand(state, command));
           return;
+        }
+        case "audio.play": {
+          // H7 (GATE-2.5): surface the named asset as a local audio track.
+          set(applyAudioPlayCommand(state, command));
+          return;
+        }
       }
     };
 
