@@ -39,6 +39,10 @@ def base_config(tmp_path: Path) -> dict:
     cfg["telegram"]["chat_id"] = "12345"
     cfg["media"]["sample_video_url"] = "https://example.com/sample.mp4"
     cfg["demo"]["enabled"] = False
+    # Mock/dev path: auth is OFF by default in the shared fixture (the
+    # brief allows explicit disable); test_security.py builds its own
+    # app with auth.enabled=True to exercise the boundary.
+    cfg.setdefault("auth", {})["enabled"] = False
     return cfg
 
 
