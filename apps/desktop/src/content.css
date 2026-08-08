@@ -877,7 +877,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  background: #10151f;
+  background: var(--surface-card);
 }
 
 .reader-stage .pdf-page {
@@ -894,4 +894,79 @@
 .density-rail .reader-stage iframe {
   width: 100%;
   height: 100%;
+}
+
+/* ----------------------------------------------------- reader variants (UI-203)
+   The reading surface (DocumentPanel + ReaderView) adapts to its semantic
+   role (useSurfaceRole). Catalog tokens only; no new group-prefixed props.
+
+   EPUB book column: same ≈72ch readable measure as .document-reader (text
+   docs) — the stage centers the book instead of full-bleed lines. In a
+   narrow rail min(100%, 72ch) degrades to 100%, matching density-rail. */
+.reader-view--epub .reader-stage iframe {
+  width: min(100%, 72ch);
+  height: 100%;
+}
+
+/* primary = maximal reading experience: distinct paper backdrop (token
+   --surface-card replaces the old hardcoded #10151f). */
+.reader-view--primary .reader-stage {
+  background: var(--surface-card);
+}
+
+/* companion = reduced visual dominance so a sidecar conversation works:
+   no dark slab, no floating page shadow, seam-only toolbar divider. */
+.reader-view--companion .reader-stage {
+  background: transparent;
+}
+
+.reader-view--companion .reader-stage .pdf-page {
+  box-shadow: none;
+}
+
+.reader-view--companion .reader-toolbar {
+  border-bottom-color: var(--divider-subordinate);
+}
+
+/* support = compact contextual representation (title + position). The
+   reader stays MOUNTED (display:none) so the engine instance and its
+   position/font/theme state survive support -> primary transitions. */
+.reading-surface--support .reader-view {
+  display: none;
+}
+
+.reading-position-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--divider-subordinate);
+  color: var(--text-dim);
+  font: var(--typography-caption-normal);
+}
+
+.reading-position-strip svg {
+  flex: none;
+  opacity: 0.8;
+}
+
+.reading-position-title {
+  font: var(--typography-caption-strong);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reading-position-sep {
+  flex: none;
+  width: 1px;
+  height: 12px;
+  background: var(--divider-normal);
+}
+
+.reading-position-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
