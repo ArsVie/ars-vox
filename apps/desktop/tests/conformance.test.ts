@@ -106,6 +106,9 @@ describe("wire enum parity with the Python schemas", () => {
     const tsValues: ConfirmationStatus[] = [
       "pending",
       "approved",
+      "executing",
+      "executed",
+      "failed",
       "cancelled",
       "expired",
       "superseded",

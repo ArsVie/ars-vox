@@ -128,18 +128,20 @@ class AgentRuntime:
         self._set_voice(VoiceState.THINKING, activity=text[:80])
         if self.session_id is None:
             self.session_id = self.deps_base.sessions.create()
-        self.deps_base.sessions.append_turn(self.session_id, "user", text)
-        await self.bus.publish(
-            UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
-        )
-
         agent = self._build_agent()
         deps = dataclasses.replace(
             self.deps_base,
             run_id=uuid.uuid4().hex[:12],
             session_id=self.session_id,
         )
+        # H5: build the context BEFORE persisting the current turn — the
+        # recent-turn history must not include the instruction the model
+        # is about to receive (it already gets it verbatim in `prompt`).
         context = build_context(self.config, deps)
+        self.deps_base.sessions.append_turn(self.session_id, "user", text)
+        await self.bus.publish(
+            UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
+        )
         prompt = f"{text}\n\n[Estado actual de la aplicación]\n{context}"
 
         timeout = self.config.agent.model.timeout_s
@@ -166,8 +168,10 @@ class AgentRuntime:
 
     # ------------------------------------------------------------------ #
     async def cancel(self) -> None:
-        """The local stop path: cancels the running turn, clears TTS, and
-        returns the app to SLEEPING. Never involves the LLM."""
+        """The local stop path: cancels the running turn, invalidates any
+        pending confirmation (documented semantic: stop/cancel aborts the
+        action), clears TTS, and returns the app to SLEEPING. Never
+        involves the LLM."""
         task = self._active_task
         self._active_task = None
         if task and not task.done():
@@ -176,6 +180,14 @@ class AgentRuntime:
                 await task
             except (asyncio.CancelledError, Exception):
                 pass
+        # H5: stop must also abort pending confirmations, not just the
+        # model task — otherwise an invisible pending row stays stuck in
+        # SQLite (and in the UI after a reconnect).
+        await self.deps_base.confirmations.invalidate_all(
+            "Acción cancelada por stop."
+        )
+        # H3: publish into the canonical voice state machine (bus carries
+        # it back to the UI).
         self._set_voice(VoiceState.STOPPING)
         self.deps_base.audit.log("control", "stop", {"scope": "run"})
         await asyncio.sleep(0.05)

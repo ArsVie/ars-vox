@@ -61,6 +61,12 @@ class PolicyKind(str, Enum):
 class ConfirmationStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
+    # H5: explicit execution lifecycle — approval state is separate from
+    # the execution result. Rows walk pending -> approved -> executing ->
+    # executed | failed | cancelled | expired | superseded.
+    EXECUTING = "executing"
+    EXECUTED = "executed"
+    FAILED = "failed"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
     SUPERSEDED = "superseded"
@@ -114,6 +120,9 @@ class EventType(str, Enum):
     TASKS_UPDATE = "tasks.update"
     MEDIA_STATE = "media.state"
     PONG = "pong"
+    # H5: canonical state snapshot replayed on every WS connect (reconnect
+    # recovery). Carries its own session sequence for gap detection.
+    STATE_SNAPSHOT = "state_snapshot"
 
 
 class MediaSource(str, Enum):

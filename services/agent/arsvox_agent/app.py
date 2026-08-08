@@ -40,6 +40,7 @@ from arsvox_agent.deps import Deps
 from arsvox_agent.events import EventBus
 from arsvox_agent.policy import PolicyEngine
 from arsvox_agent.runtime import AgentRuntime
+from arsvox_agent.snapshot import SnapshotTracker
 from arsvox_agent.telegram_client import build_telegram
 from arsvox_agent.tools import ToolRegistry
 from arsvox_agent.tools.library_tools import list_books, read_book_text
@@ -134,6 +135,10 @@ class AppServices:
         self.documents = DocumentStore(self.db)
         self.audit = AuditStore(self.db)
         self.bus = EventBus()
+        # H5: reconnect snapshots need the latest media/voice state; the
+        # tracker records it from the bus without a background task.
+        self.tracker = SnapshotTracker(self.bus)
+        self.tracker.start()
         self.registry = ToolRegistry()
         register_all(self.registry)
         self.policy = PolicyEngine()
@@ -415,6 +420,7 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
             services.runtime,
             services.scheduler,
             services.config_snapshot(),
+            services.tracker,
         )
 
     return app

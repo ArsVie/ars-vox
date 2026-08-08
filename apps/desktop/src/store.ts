@@ -16,6 +16,7 @@ import type {
   MediaStateEvent,
   ReminderItem,
   ServerEvent,
+  StateSnapshotEvent,
   TodoItem,
   UiCommand,
   VoiceState,
@@ -26,8 +27,10 @@ import {
   DEFAULT_PRIMARY,
   isPanelId,
   resolveTemplate,
+  TEMPLATE_SLOTS,
   type LayoutResult,
   type LayoutSpec,
+  type LayoutTemplateId,
   type PanelId,
   type SlotName,
   type Viewport,
@@ -230,11 +233,42 @@ function slotsEqual(
   return true;
 }
 
+/** H5: raw transport send slot for the outbound buffer. Rebound by
+ *  bindTransport (singleton) or left as the createAppStore argument for
+ *  per-store instances; the store's `send` stays the buffering wrapper
+ *  so reconnect sends are queued, never silently dropped. Declared
+ *  before createAppStore so the singleton's module-load instantiation
+ *  can register its rebind hook. */
+let rebindRawSend: (send: SendFn) => void = () => {};
+
 export function createAppStore(send: SendFn): StoreApi<AppState> {
   const store = createStore<AppState>((set, get) => {
     /** True once any server layout command has been applied; guards the
      *  config-driven default from clobbering later user state on reconnect. */
     let layoutApplied = false;
+    // H5 reconnect: outbound buffering. The raw transport send is rebound
+    // by bindTransport (the singleton); per-store instances keep the send
+    // passed to createAppStore. While the store is in a known-disconnected
+    // state (connected before, now not), outgoing messages are queued and
+    // flushed in order on the next connect — the WebSocket client's send()
+    // silently drops frames when the socket is not OPEN, which is exactly
+    // the loss this buffer prevents. Before the FIRST connection sends
+    // pass straight through (legacy startup behavior, tiny window).
+    let rawSend: SendFn = send;
+    let hasConnected = false;
+    const outbox: unknown[] = [];
+    const OUTBOX_CAP = 200;
+    rebindRawSend = (next: SendFn): void => {
+      rawSend = next;
+    };
+    const transportSend = (message: unknown): void => {
+      if (hasConnected && !get().connected) {
+        outbox.push(message);
+        if (outbox.length > OUTBOX_CAP) outbox.shift();
+        return;
+      }
+      rawSend(message);
+    };
     const spec = initialSpec();
     const layout = computeLayout(spec, {
       reducedMotion: false,
@@ -533,6 +567,75 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         case "config_update":
           applyConfig(event.config);
           return;
+        case "state_snapshot": {
+          // H5 reconnect: apply the canonical snapshot sent once per WS
+          // connect. Authoritative server state — pending card, open
+          // panels and voice are REPLACED (a reconnect after a service
+          // restart must clear stale UI state, not merge into it). Media
+          // is restored only when the service reports it; an absent media
+          // field leaves the current player untouched (no fabricated
+          // "stopped" — the next media.state event re-syncs).
+          const snap = event as StateSnapshotEvent;
+          const patch: Partial<AppState> = {
+            voiceState: snap.voice_state,
+            pending: snap.pending_confirmation
+              ? {
+                  pendingId: snap.pending_confirmation.pending_id,
+                  tool: snap.pending_confirmation.tool,
+                  title: snap.pending_confirmation.title,
+                  detail: snap.pending_confirmation.detail,
+                  expiresInS: snap.pending_confirmation.expires_in_s,
+                }
+              : null,
+          };
+          const panelMeta: Partial<Record<PanelId, PanelMeta>> = {};
+          for (const p of snap.layout?.panels ?? []) {
+            if (isPanelId(p.panel_type)) {
+              panelMeta[p.panel_type as PanelId] = {
+                title: p.title ?? undefined,
+                contentReference: p.content_reference ?? undefined,
+              };
+            }
+          }
+          patch.panelMeta = panelMeta;
+          layoutApplied = true; // snapshot is authoritative server layout
+          // Template upgrade: the snapshot carries panels, not a template.
+          // The engine always anchors conversation (affinity: side/main) and
+          // hides panels that fit no offered slot — on a one-slot template a
+          // restored non-conversation panel would come back invisible. Step
+          // up to "split" (the canonical two-panel template) so the engine's
+          // deterministic fill places restored panels (conversation -> side,
+          // first restored panel -> main). No history push — a reconnect
+          // restore is not an undoable user action.
+          const restored = Object.keys(panelMeta) as PanelId[];
+          const nonConversation = restored.filter((p) => p !== DEFAULT_PRIMARY);
+          if (
+            nonConversation.length > 0 &&
+            (TEMPLATE_SLOTS[state.spec.template as LayoutTemplateId] ?? TEMPLATE_SLOTS.split)
+              .length < 2
+          ) {
+            patch.spec = { ...state.spec, template: "split" };
+          }
+          if (snap.media) {
+            patch.content = {
+              ...state.content,
+              media: {
+                state: snap.media.state,
+                source: snap.media.source,
+                kind: snap.media.kind,
+                title: snap.media.title,
+                videoId: snap.media.video_id,
+                url: snap.media.url,
+                positionS: snap.media.position_s,
+                durationS: snap.media.duration_s,
+                volume: snap.media.volume,
+              },
+            };
+          }
+          set(patch);
+          recompute();
+          return;
+        }
         case "youtube.search": {
           set({
             content: {
@@ -654,8 +757,20 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       adaptive: EMPTY_ADAPTIVE,
       surfaceState: {},
 
-      send,
-      setConnected: (connected) => set({ connected }),
+      send: transportSend,
+      setConnected: (connected) => {
+        if (connected) {
+          // Flush the reconnect outbox in FIFO order; the socket is OPEN
+          // by the time the transport reports status (ws.onopen), so the
+          // raw sends pass through. Never re-buffer: flush via rawSend.
+          hasConnected = true;
+          const pending = outbox.splice(0);
+          set({ connected: true });
+          for (const message of pending) rawSend(message);
+        } else {
+          set({ connected: false });
+        }
+      },
       setReducedMotion: (value) => {
         set({ reducedMotion: value });
         recompute();
@@ -840,5 +955,5 @@ export function registerCaptureAbort(fn: () => void): void {
 }
 
 export function bindTransport(send: SendFn): void {
-  appStore.setState({ send });
+  rebindRawSend(send);
 }

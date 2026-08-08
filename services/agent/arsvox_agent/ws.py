@@ -27,6 +27,7 @@ from arsvox_agent.actions import handle_ui_command
 from arsvox_agent.events import EventBus
 from arsvox_agent.local_intents import match_intent
 from arsvox_agent.runtime import AgentRuntime
+from arsvox_agent.snapshot import SnapshotTracker, build_state_snapshot
 from arsvox_agent.tools.scheduler import ReminderScheduler
 
 log = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ async def websocket_endpoint(
     runtime: AgentRuntime,
     scheduler: ReminderScheduler,
     config_snapshot: dict[str, Any],
+    tracker: SnapshotTracker | None = None,
 ) -> None:
     await ws.accept()
     queue = bus.subscribe()
@@ -57,6 +59,11 @@ async def websocket_endpoint(
         await ws.send_text(
             ConfigUpdateEvent(config=config_snapshot).model_dump_json()
         )
+        # H5: reconnect recovery — one canonical snapshot per connect,
+        # covering pending confirmation, open panels, media, notifications
+        # and content keys. Sent before any queued event so the client can
+        # treat it as authoritative and ignore stale pre-snapshot events.
+        await ws.send_text(build_state_snapshot(runtime, config_snapshot, tracker).model_dump_json())
         while True:
             await _pump_outgoing(ws, queue)
             try:

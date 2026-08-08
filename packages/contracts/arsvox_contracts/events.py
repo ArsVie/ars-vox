@@ -200,6 +200,40 @@ class ActionResultEvent(BaseModel):
     action: str
     status: Literal["accepted", "done", "failed", "unsupported"]
     detail: str | None = None
+
+# ---------------------------------------------------------------------- #
+# H5: reconnect recovery — canonical state snapshot.
+#
+# Emitted once per WS connect (never per event). The client treats it as
+# authoritative state: pending confirmation card, open panels, media,
+# notifications and content keys are replayed so a reconnect never leaves
+# the UI desynced from the service. ``sequence`` is the bus's current
+# session sequence; every bus event carries one, so the client can detect
+# gaps (QueueFull drops) and request a resync by reconnecting.
+
+class PendingConfirmationSnapshot(BaseModel):
+    pending_id: str
+    tool: str
+    title: str
+    detail: str
+    expires_in_s: int
+    expires_at: str
+
+
+class StateSnapshotEvent(BaseModel):
+    type: Literal[EventType.STATE_SNAPSHOT] = EventType.STATE_SNAPSHOT
+    sequence: int
+    voice_state: VoiceState
+    config: dict[str, Any]
+    # Service-side layout truth: open panels (panel_type, title,
+    # content_reference). Adaptive spec/assignments are client-side today
+    # (UI-103); the snapshot restores panels, later adaptive events carry
+    # the assignments.
+    layout: dict[str, Any]
+    pending_confirmation: PendingConfirmationSnapshot | None = None
+    media: MediaStateEvent | None = None
+    notifications: list[dict[str, Any]] = Field(default_factory=list)
+    content_keys: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -222,6 +256,7 @@ AgentEvent = Annotated[
         MediaStateEvent,
         PongEvent,
         ActionResultEvent,
+        StateSnapshotEvent,
     ],
     Field(discriminator="type"),
 ]

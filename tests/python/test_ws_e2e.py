@@ -128,11 +128,12 @@ def test_telegram_confirmation_flow(script_client):
         assert reqs[-1]["tool"] == "telegram.send_pending"
         assert "Hola, necesito ayuda" in reqs[-1]["detail"]
 
-        # confirm -> executes the stored snapshot
+        # confirm -> executes the stored snapshot; H5: the terminal event
+        # reports the execution outcome (executed), not the approval.
         ws.send_json({"type": "confirm", "pending_id": pending_id})
         events2 = ws_collect(
             client=c, ws=ws,
-            expected_break=lambda e: e["type"] == "confirmation_resolved" and e["status"] == "approved",
+            expected_break=lambda e: e["type"] == "confirmation_resolved" and e["status"] == "executed",
         )
         resolved = [e for e in events2 if e["type"] == "confirmation_resolved"][0]
         assert "enviado" in resolved["message"].lower()

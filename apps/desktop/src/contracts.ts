@@ -24,6 +24,9 @@ export type MediaState = "playing" | "paused" | "stopped";
 export type ConfirmationStatus =
   | "pending"
   | "approved"
+  | "executing"
+  | "executed"
+  | "failed"
   | "cancelled"
   | "expired"
   | "superseded";
@@ -316,6 +319,55 @@ export interface ActionResultEvent {
   action: string;
   status: "accepted" | "done" | "failed" | "unsupported";
   detail: string | null;
+}
+
+/* ------------------------------------------------------------------ */
+/* H5: reconnect recovery — canonical state snapshot.                  */
+/* Emitted once per WS connect (after state_update + config_update).   */
+/* The client treats it as authoritative: pending confirmation card,   */
+/* open panels, media, notifications and content keys are replayed so  */
+/* a reconnect never leaves the UI desynced from the service.          */
+/* ------------------------------------------------------------------ */
+
+export interface PendingConfirmationSnapshot {
+  pending_id: string;
+  tool: string;
+  title: string;
+  detail: string;
+  expires_in_s: number;
+  expires_at: string;
+}
+
+export interface SnapshotPanel {
+  panel_type: string;
+  title?: string | null;
+  content_reference?: string | null;
+}
+
+export interface SnapshotNotification {
+  notification_id: string;
+  kind: string;
+  title: string;
+  text: string;
+  due_at: string | null;
+}
+
+export interface StateSnapshotEvent {
+  type: "state_snapshot";
+  /** Current bus session sequence; every bus event carries one, so gaps
+   *  (QueueFull drops) are detectable. Snapshot-on-connect is the sync
+   *  mechanism for this gate (no resync message). */
+  sequence: number;
+  voice_state: VoiceState;
+  config: AppConfigWire;
+  /** Service-side layout truth: open panels. */
+  layout: {
+    panels: SnapshotPanel[];
+  };
+  pending_confirmation: PendingConfirmationSnapshot | null;
+  media: MediaStateEvent | null;
+  notifications: SnapshotNotification[];
+  content_keys: string[];
   created_at: string;
 }
 
@@ -336,4 +388,5 @@ export type ServerEvent =
   | TasksUpdateEvent
   | MediaStateEvent
   | PongEvent
-  | ActionResultEvent;
+  | ActionResultEvent
+  | StateSnapshotEvent;
