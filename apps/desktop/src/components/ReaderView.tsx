@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import type { SurfaceRole } from "../adaptive/contracts";
 import type { DocumentKind } from "../contracts";
 import type { Reader, ReaderLocation, ReaderTheme } from "../readers/reader";
 import { THEME_LABELS } from "../readers/reader";
@@ -14,8 +15,26 @@ const FONT_STEPS = [14, 16, 17, 19, 22, 26];
  * advisor's ReaderPanel): next/previous, location label, font size,
  * theme. The agent talks to the Reader interface; pdf.js/epub.js deal
  * with the formats.
+ *
+ * UI-203: role-adaptive. `role` drives the reader-view--{role} variant
+ * (primary = maximal reading experience, companion = reduced dominance
+ * so a sidecar conversation works); the epub measure (≈72ch book
+ * column) and pdf fit behavior are surface-level CSS. `onLocationChange`
+ * reports position up so the owning surface can persist it across
+ * role/template changes — the reader itself must NEVER be unmounted to
+ * change role (identity + position live in this instance).
  */
-export function ReaderView({ kind, url }: { kind: DocumentKind; url: string }) {
+export function ReaderView({
+  kind,
+  url,
+  role = "primary",
+  onLocationChange,
+}: {
+  kind: DocumentKind;
+  url: string;
+  role?: SurfaceRole;
+  onLocationChange?: (loc: ReaderLocation) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const readerRef = useRef<Reader | null>(null);
   const [location, setLocation] = useState<ReaderLocation | null>(null);
@@ -30,13 +49,17 @@ export function ReaderView({ kind, url }: { kind: DocumentKind; url: string }) {
       kind === "pdf" ? new PdfReader() : kind === "epub" ? new EpubReader() : null;
     if (!reader) return;
     readerRef.current = reader;
-    reader.onLocationChange = setLocation;
+    reader.onLocationChange = (loc) => {
+      setLocation(loc);
+      onLocationChange?.(loc);
+    };
     reader.open(url, container).catch(() => setFailed(true));
     return () => {
       reader.dispose();
       readerRef.current = null;
       container.replaceChildren();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, url]);
 
   const reader = readerRef.current;
@@ -59,7 +82,7 @@ export function ReaderView({ kind, url }: { kind: DocumentKind; url: string }) {
   };
 
   return (
-    <div className="reader-view">
+    <div className={`reader-view reader-view--${role} reader-view--${kind}`}>
       <div className="reader-toolbar">
         <button
           type="button"

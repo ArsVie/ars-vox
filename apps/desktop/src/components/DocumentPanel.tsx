@@ -1,12 +1,29 @@
 import { useStore } from "zustand";
 import { useMemo, useState } from "react";
 
+import type { SurfaceRole } from "../adaptive/contracts";
 import type { PanelId } from "../layout/engine";
 import type { PanelMeta } from "../store";
+import type { ReaderLocation } from "../readers/reader";
 import { appStore } from "../store";
+import { useSurfaceRole, type SurfaceRoleInfo } from "../roles/context";
 import { PanelHeader } from "./PanelHeader";
 import { ReaderView } from "./ReaderView";
 import { DocumentIcon, PenIcon } from "./icons";
+
+/**
+ * UI-203: the reading surface adapts to its semantic role. The role host
+ * (SurfaceHost) provides useSurfaceRole(); the legacy PanelHost path has
+ * no provider, so fall back to "primary" (the current full reading
+ * experience) — never crash outside the adaptive shell.
+ */
+function useSurfaceRoleSafe(): SurfaceRoleInfo | null {
+  try {
+    return useSurfaceRole();
+  } catch {
+    return null;
+  }
+}
 
 const KIND_LABEL: Record<string, string> = {
   txt: "Texto",
@@ -58,8 +75,22 @@ function renderText(text: string): React.ReactNode[] {
 export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: PanelId }) {
   const doc = useStore(appStore, (s) => s.content.document_editor);
   const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
+  const setSurfaceState = useStore(appStore, (s) => s.setSurfaceState);
+  // UI-203: authoritative reading position lives in the per-surface state
+  // bag (store.surfaceState[panelId]), so it survives role/template
+  // changes AND any remount — the host keyed by surfaceId preserves the
+  // instance, the store preserves the position.
+  const readingLocation = useStore(
+    appStore,
+    (s) =>
+      (s.surfaceState[panelId] as { readingLocation?: ReaderLocation } | undefined)
+        ?.readingLocation,
+  );
   const [mode, setMode] = useState<"read" | "edit">("read");
   const [draft, setDraft] = useState("");
+
+  const roleInfo = useSurfaceRoleSafe();
+  const role: SurfaceRole = roleInfo?.role ?? "primary";
 
   const content = doc?.content ?? "";
   const chapters = doc?.chapters ?? [];
@@ -87,7 +118,11 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
   };
 
   return (
-    <section className="panel document-panel" aria-label="Documento">
+    <section
+      className={`panel document-panel reading-surface reading-surface--${role}`}
+      data-surface-role={role}
+      aria-label="Documento"
+    >
       <PanelHeader panelId={panelId} icon={<DocumentIcon size={15} />}>
         {title}
       </PanelHeader>
@@ -115,7 +150,26 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
             ) : null}
           </div>
           {isBinary ? (
-            <ReaderView kind={doc!.kind} url={doc!.url!} />
+            <>
+              {role === "support" ? (
+                <div className="reading-position-strip" data-reading-position>
+                  <DocumentIcon size={13} />
+                  <span className="reading-position-title">{title}</span>
+                  <span className="reading-position-sep" aria-hidden="true" />
+                  <span className="reading-position-label">
+                    {readingLocation?.label ?? "Cargando…"}
+                  </span>
+                </div>
+              ) : null}
+              <ReaderView
+                kind={doc!.kind}
+                url={doc!.url!}
+                role={role}
+                onLocationChange={(loc) =>
+                  setSurfaceState(panelId, "readingLocation", loc)
+                }
+              />
+            </>
           ) : mode === "edit" ? (
             <div className="document-editor">
               <textarea
