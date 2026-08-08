@@ -278,10 +278,11 @@ class ReminderStore:
         self.db.commit()
         return cur.rowcount > 0
 
-    def dismiss(self, reminder_id: int) -> bool:
+    def dismiss(self, reminder_id: int, dismissed_at: str | None = None) -> bool:
         """Dismiss the current occurrence. One-shot: schedule exhausted
         (status fired, occurrence dismissed). Recurring: record the dismissed
-        occurrence and advance to the next LOCAL-clock occurrence.
+        occurrence and advance to the next LOCAL-clock occurrence after
+        ``dismissed_at`` (default: now).
 
         NOTE: reminder_occurrences.status predates the dismissed state (CHECK
         fired|snoozed|skipped), so history rows for dismissed occurrences
@@ -291,6 +292,7 @@ class ReminderStore:
         r = self.get(reminder_id)
         if not r or r["occ_status"] not in (OCC_ACTIVE, OCC_FIRED):
             return False
+        now_iso = dismissed_at or utcnow_iso()
         if r["repeat_rule"] == "none":
             self.db.execute(
                 "UPDATE reminders SET status = ?, occ_status = ?, updated_at = ? WHERE id = ?",
@@ -302,7 +304,7 @@ class ReminderStore:
                 r["repeat_rule"],
                 r["repeat_time"],
                 self.tz,
-                after_utc_iso=utcnow_iso(),
+                after_utc_iso=now_iso,
                 anchor_date=r.get("repeat_anchor_date"),
             )
             self.db.execute(

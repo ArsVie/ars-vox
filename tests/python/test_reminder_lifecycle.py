@@ -158,7 +158,7 @@ def test_dismiss_recurring_advances_schedule(tmp_path):
     db, reminders, notifications, bus, scheduler = _setup(tmp_path)
     rid = reminders.create("diaria", "2026-08-06T02:30:00+00:00", repeat_rule="daily")
     asyncio.run(scheduler.tick(now_iso="2026-08-06T02:30:01+00:00"))
-    assert reminders.dismiss(rid)
+    assert reminders.dismiss(rid, dismissed_at="2026-08-06T02:30:01+00:00")
     row = reminders.get(rid)
     assert row["status"] == "active"  # schedule stays live
     assert row["occ_status"] == "active"
