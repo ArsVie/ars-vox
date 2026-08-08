@@ -82,10 +82,13 @@ class ToolRegistry:
 
     # ------------------------------------------------------------------ #
     async def execute_gated(self, spec: ToolSpec, tctx: ToolContext, args: dict) -> str:
+        tc = tctx.deps.tool_calls
         decision = tctx.deps.policy.decide(spec.name, args)
         if not decision.allowed:
             await self._emit_tool(tctx, spec, args, "rejected", decision.reason)
             tctx.deps.audit.log("policy", "denied", {"tool": spec.name, "reason": decision.reason})
+            if tc:
+                tc.record(tctx.session_id, tctx.run_id, spec.name, args, "rejected")
             return f"Acción no permitida: {decision.reason}."
         await self._emit_tool(tctx, spec, args, "running")
         if decision.requires_approval or spec.approval:
@@ -93,6 +96,8 @@ class ToolRegistry:
             pending_id = await tctx.deps.confirmations.request(
                 tctx.run_id, spec.name, args, title, detail
             )
+            if tc:
+                tc.record(tctx.session_id, tctx.run_id, spec.name, args, "pending")
             return (
                 f"PENDING_APPROVAL:{pending_id} — {title}. "
                 "The user must confirm. End your turn and wait."
@@ -113,17 +118,25 @@ class ToolRegistry:
 
     # ------------------------------------------------------------------ #
     async def _run_handler(self, spec: ToolSpec, tctx: ToolContext, args: dict) -> str:
+        tc = tctx.deps.tool_calls
+        call_id = tc.record(tctx.session_id, tctx.run_id, spec.name, args, "running") if tc else 0
         try:
             result = await spec.handler(tctx, **args)
             await self._emit_tool(tctx, spec, args, "done", result)
+            if tc:
+                tc.finish(call_id, "done", result)
             return result
         except asyncio.CancelledError:
             await self._emit_tool(tctx, spec, args, "error", "cancelled")
+            if tc:
+                tc.finish(call_id, "cancelled", "cancelled")
             raise
         except Exception as exc:  # noqa: BLE001 — tools must never crash the run
             log.exception("tool %s failed", spec.name)
             tctx.deps.audit.log("tool", "error", {"tool": spec.name, "error": str(exc)})
             await self._emit_tool(tctx, spec, args, "error", str(exc))
+            if tc:
+                tc.finish(call_id, "error", str(exc))
             return f"Error ejecutando {spec.name}: {exc}"
 
     async def _emit_tool(

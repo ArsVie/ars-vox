@@ -21,6 +21,7 @@ from arsvox_memory.repos import (
     ReminderStore,
     SessionStore,
     TaskStore,
+    ToolCallStore,
 )
 from arsvox_memory.search import search_all
 
@@ -37,5 +38,6 @@ __all__ = [
     "ReminderStore",
     "SessionStore",
     "TaskStore",
+    "ToolCallStore",
     "search_all",
 ]

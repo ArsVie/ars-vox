@@ -20,6 +20,7 @@ from arsvox_memory import (
     ReminderStore,
     SessionStore,
     TaskStore,
+    ToolCallStore,
 )
 from arsvox_tts import TTSProvider
 
@@ -49,6 +50,8 @@ class Deps:
     confirmations: ConfirmationCoordinator
     tts: TTSProvider
     telegram: TelegramClient
+    # None in unit tests that never run tools through the registry.
+    tool_calls: ToolCallStore | None = None
     # per-run
     run_id: str = ""
     session_id: str = ""

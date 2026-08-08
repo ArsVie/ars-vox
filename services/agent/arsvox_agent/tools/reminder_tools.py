@@ -67,11 +67,10 @@ SPECS = [
     ToolSpec(
         "reminders.create",
         "Schedule a reminder. due_at must be ISO format (e.g. 2026-08-06T08:00:00)."
-        " repeat_rule: none, daily or weekly. Requires user confirmation.",
+        " repeat_rule: none, daily or weekly.",
         reminders_create,
-        PolicyKind.USER_VISIBLE,
-        approval=True,
+        PolicyKind.REVERSIBLE,
     ),
     ToolSpec("reminders.list", "List active reminders.", reminders_list, PolicyKind.READ_ONLY),
-    ToolSpec("reminders.cancel", "Cancel an active reminder by id.", reminders_cancel, PolicyKind.USER_VISIBLE),
+    ToolSpec("reminders.cancel", "Cancel an active reminder by id.", reminders_cancel, PolicyKind.REVERSIBLE),
 ]

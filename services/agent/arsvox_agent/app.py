@@ -32,6 +32,7 @@ from arsvox_memory import (
     ReminderStore,
     SessionStore,
     TaskStore,
+    ToolCallStore,
 )
 
 from arsvox_agent.config_loader import load_config, save_config
@@ -134,6 +135,7 @@ class AppServices:
         self.pending = PendingStore(self.db)
         self.documents = DocumentStore(self.db)
         self.audit = AuditStore(self.db)
+        self.tool_calls = ToolCallStore(self.db)
         self.bus = EventBus()
         # H5: reconnect snapshots need the latest media/voice state; the
         # tracker records it from the bus without a background task.
@@ -166,6 +168,7 @@ class AppServices:
             pending=self.pending,
             documents=self.documents,
             audit=self.audit,
+            tool_calls=self.tool_calls,
             bus=self.bus,
             policy=self.policy,
             confirmations=self.confirmations,

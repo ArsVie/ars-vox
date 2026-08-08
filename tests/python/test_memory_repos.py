@@ -128,3 +128,20 @@ def test_panels_clear_all_fresh_desk(tmp_path):
     assert len(store.list()) == 2
     store.clear_all()
     assert store.list() == []
+
+
+def test_tool_calls_audit_trail(tmp_path):
+    db = _make_db(tmp_path)
+    from arsvox_memory.repos import SessionStore, ToolCallStore
+    sid = SessionStore(db).create()
+    store = ToolCallStore(db)
+    call_id = store.record(sid, "run1", "media.play", {"result_id": "abc"}, "running")
+    assert call_id > 0
+    store.finish(call_id, "done", "Reproduciendo: X")
+    rows = store.for_run("run1")
+    assert len(rows) == 1
+    assert rows[0]["tool"] == "media.play"
+    assert rows[0]["status"] == "done"
+    assert "X" in rows[0]["result_json"]
+    store.record(sid, "run1", "media.stop", {}, "rejected")
+    assert len(store.for_run("run1")) == 2

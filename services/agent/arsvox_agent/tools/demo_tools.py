@@ -171,6 +171,6 @@ SPECS = [
         "Populate every panel surface with representative demo content "
         "(mock mode only).",
         demo_populate,
-        PolicyKind.USER_VISIBLE,
+        PolicyKind.REVERSIBLE,
     ),
 ]

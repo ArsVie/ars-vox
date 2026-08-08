@@ -11,6 +11,7 @@ from arsvox_memory.repos.progress import ProgressStore
 from arsvox_memory.repos.reminders import ReminderStore
 from arsvox_memory.repos.sessions import SessionStore
 from arsvox_memory.repos.tasks import TaskStore
+from arsvox_memory.repos.tool_calls import ToolCallStore
 
 __all__ = [
     "AuditStore",
@@ -24,4 +25,5 @@ __all__ = [
     "ReminderStore",
     "SessionStore",
     "TaskStore",
+    "ToolCallStore",
 ]

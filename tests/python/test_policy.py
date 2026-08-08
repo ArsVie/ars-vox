@@ -47,3 +47,19 @@ def test_approval_never_removable():
     engine = PolicyEngine()
     assert engine.decide("telegram.send_pending", {"text": "x"}).requires_approval
     assert engine.decide("telegram.send_pending", {}).requires_approval
+
+
+def test_frictionless_policy_no_gates_except_messages():
+    """User directive 2026-08-08: no confirmation gates except messages
+    (telegram.send). Every registered tool must be REVERSIBLE or READ_ONLY
+    — nothing may silently wait on a confirmation."""
+    from arsvox_agent.tools import ToolRegistry
+    from arsvox_agent.tools.register import register_all
+
+    registry = ToolRegistry()
+    register_all(registry)
+    gated = [
+        name for name, spec in registry._specs.items()
+        if spec.kind == PolicyKind.USER_VISIBLE
+    ]
+    assert sorted(gated) == ["telegram.prepare_message"], gated

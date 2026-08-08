@@ -138,13 +138,13 @@ SPECS = [
         "library.set_position",
         "Save the reading position of a book (section index and 0..1 progress).",
         library_set_position,
-        PolicyKind.USER_VISIBLE,
+        PolicyKind.REVERSIBLE,
     ),
-    ToolSpec("library.read_selection", "Return the current section text of a book.", library_read_selection, PolicyKind.USER_VISIBLE),
+    ToolSpec("library.read_selection", "Return the current section text of a book.", library_read_selection, PolicyKind.REVERSIBLE),
     ToolSpec(
         "library.read_next_section",
         "Advance to the next section and return its text.",
         library_read_next_section,
-        PolicyKind.USER_VISIBLE,
+        PolicyKind.REVERSIBLE,
     ),
 ]
