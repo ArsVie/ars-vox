@@ -14,7 +14,7 @@ export function ErrorPanel() {
         <WarningIcon size={16} />
       </span>
       <span className="error-text">{error.message}</span>
-      <button type="button" className="error-dismiss" onClick={dismiss} aria-label="Dismiss">
+      <button type="button" className="error-dismiss" onClick={dismiss} aria-label="Cerrar">
         <XIcon size={14} />
       </button>
     </div>

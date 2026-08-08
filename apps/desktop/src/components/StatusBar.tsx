@@ -1,8 +1,19 @@
+import type { ReactNode } from "react";
+
 import { useStore } from "zustand";
 
 import type { AdaptiveTemplate } from "../adaptive/contracts";
 import { ALL_TEMPLATES } from "../adaptive/fixtures";
 import { appStore } from "../store";
+import {
+  ChatIcon,
+  MicIcon,
+  ShieldIcon,
+  SparkleIcon,
+  StopIcon,
+  WarningIcon,
+  WaveformIcon,
+} from "./icons";
 import { StopButton } from "./StopButton";
 
 const VOICE_LABELS: Record<string, string> = {
@@ -13,6 +24,22 @@ const VOICE_LABELS: Record<string, string> = {
   waiting_for_confirmation: "Esperando confirmación",
   stopping: "Deteniendo",
   error: "Error",
+};
+
+/**
+ * UI-303 — assistant state is never communicated by color alone: every
+ * voice state renders a recognizable icon alongside the Spanish label so
+ * listening/thinking/speaking/waiting are semantically clear without
+ * color perception (aria-hidden: the label text is the accessible name).
+ */
+const STATE_ICONS: Record<string, ReactNode> = {
+  sleeping: <SparkleIcon size={13} />,
+  listening: <MicIcon size={13} />,
+  thinking: <ChatIcon size={13} />,
+  speaking: <WaveformIcon size={13} />,
+  waiting_for_confirmation: <ShieldIcon size={13} />,
+  stopping: <StopIcon size={13} />,
+  error: <WarningIcon size={13} />,
 };
 
 /** Spanish demo labels for the five frozen templates (shell demo toggle). */
@@ -59,6 +86,9 @@ export function StatusBar({
       </span>
       <span className={`status-pill ${connected ? "on" : "off"}`} data-state={stateKey}>
         <span className={`status-dot ${connected ? "connected" : "disconnected"}`} />
+        <span className="status-state-icon" aria-hidden="true">
+          {STATE_ICONS[stateKey] ?? <SparkleIcon size={13} />}
+        </span>
         <span className="status-voice">{label}</span>
       </span>
       {activity ? <span className="status-activity">{activity}</span> : null}
