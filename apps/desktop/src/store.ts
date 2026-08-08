@@ -31,6 +31,9 @@ import {
   type SlotName,
   type Viewport,
 } from "./layout/engine";
+import { surfaceRegistry } from "./roles/registry";
+import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
+import type { LayoutSpec as AdaptiveLayoutSpec } from "./adaptive/contracts";
 
 /** Default content viewport used until the renderer reports real size. */
 export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 800 };
@@ -45,6 +48,17 @@ export interface PanelMeta {
   title?: string;
   contentReference?: string;
 }
+
+/**
+ * UI-103 adaptive state: the last validated adaptive LayoutSpec plus its
+ * role-resolved assignments (empty until the agent sends one).
+ */
+export interface AdaptiveState {
+  spec: AdaptiveLayoutSpec | null;
+  assignments: ResolvedAssignment[];
+}
+
+export const EMPTY_ADAPTIVE: AdaptiveState = { spec: null, assignments: [] };
 
 export interface ConfirmationInfo {
   pendingId: string;
@@ -153,6 +167,11 @@ export interface AppState {
   speakTexts: string[];
   /** Panel content state, keyed by panel id (see PanelContent). */
   content: PanelContent;
+  /** UI-103: validated adaptive LayoutSpec + role-resolved assignments. */
+  adaptive: AdaptiveState;
+  /** Per-surface state bag keyed by surfaceId (UI-103). The role framework
+   *  never touches this on role/slot changes — surface state survives. */
+  surfaceState: Record<string, Record<string, unknown>>;
 
   send: SendFn;
   setConnected: (connected: boolean) => void;
@@ -172,6 +191,11 @@ export interface AppState {
   dispatchCommand: (command: UiCommand) => void;
 
   applyUiCommand: (command: UiCommand) => void;
+  /** UI-103: validate + apply an adaptive LayoutSpec (registry + fallback
+   *  ladder). Throws on invalid specs; state is never partially updated. */
+  applyAdaptiveSpec: (spec: AdaptiveLayoutSpec) => void;
+  /** UI-103: write a per-surface state value (keyed by surfaceId). */
+  setSurfaceState: (surfaceId: string, key: string, value: unknown) => void;
   recompute: () => void;
   enqueueTts: (text: string) => void;
   ttsDone: () => void;
@@ -280,6 +304,29 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       }
       set(patch);
       if (patch.spec) recompute();
+    };
+
+    /**
+     * UI-103: validate the adaptive LayoutSpec against the surface registry,
+     * resolve every role through the deterministic fallback ladder, and
+     * store the result. Invalid specs throw and never reach state.
+     */
+    const applyAdaptiveSpec = (spec: AdaptiveLayoutSpec): void => {
+      const assignments = resolveLayout(spec, surfaceRegistry);
+      set({ adaptive: { spec, assignments } });
+    };
+
+    /** UI-103: write one value into a surface's per-surfaceId state bag. */
+    const setSurfaceState = (
+      surfaceId: string,
+      key: string,
+      value: unknown,
+    ): void => {
+      const bags = get().surfaceState;
+      const bag = bags[surfaceId] ?? {};
+      set({
+        surfaceState: { ...bags, [surfaceId]: { ...bag, [key]: value } },
+      });
     };
 
     const applyUiCommand = (command: UiCommand): void => {
@@ -572,6 +619,8 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       viewport: DEFAULT_VIEWPORT,
       speakTexts: [],
       content: {},
+      adaptive: EMPTY_ADAPTIVE,
+      surfaceState: {},
 
       send,
       setConnected: (connected) => set({ connected }),
@@ -725,6 +774,8 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       dismissError: () => set({ error: null }),
 
       applyUiCommand,
+      applyAdaptiveSpec,
+      setSurfaceState,
       recompute,
       enqueueTts: pushSpeak,
       ttsDone: () => {
