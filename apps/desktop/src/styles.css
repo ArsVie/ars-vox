@@ -220,10 +220,13 @@ body,
 }
 
 /* ---------------------------------------------------- focus visibility */
+/* UI-303: token-colored focus ring on EVERY keyboard focus. The ring is
+   drawn with outline (which follows the element's own border-radius in
+   Chromium — no border-radius override here, so pill-shaped controls keep
+   their pill outline instead of morphing to a rounded square on focus). */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 8px;
 }
 
 .app {
@@ -433,7 +436,9 @@ body,
 }
 
 .message-role {
-  font-size: 11px;
+  /* UI-303: 12px = token-scale floor (--typography-caption-subordinate);
+     the old 11px was below the catalog minimum. */
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.9px;
   text-transform: uppercase;
@@ -460,13 +465,15 @@ body,
   align-self: flex-end;
   align-items: flex-end;
   background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent) 100%);
-  color: #fff;
+  /* UI-303 contrast: dark ink on the bright accent fill (white-on-accent
+     measured 2.5-3.7:1 — sub-AA; dark ink is 5.1-7.7:1). */
+  color: #0b1220;
   border-bottom-right-radius: 6px;
   box-shadow: 0 5px 18px rgba(59, 130, 246, 0.32);
 }
 
 .message.user .message-role {
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(11, 18, 32, 0.78);
 }
 
 .message.assistant {
@@ -548,7 +555,8 @@ body,
 
 .empty-action:hover {
   background: var(--accent);
-  color: #fff;
+  /* UI-303 contrast: dark ink on the bright accent fill (AA ≥ 4.5:1). */
+  color: #0b1220;
   transform: translateY(-1px);
 }
 
@@ -571,7 +579,7 @@ body,
   background:
     radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.22), transparent 55%),
     linear-gradient(135deg, var(--accent-strong), var(--accent));
-  color: #fff;
+  color: #0b1220;
   cursor: pointer;
   box-shadow: 0 12px 40px rgba(59, 130, 246, 0.45), 0 0 0 1px rgba(90, 167, 255, 0.4);
   transition: transform 0.15s var(--ease), box-shadow 0.2s ease;
@@ -595,7 +603,6 @@ body,
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.4px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .mic-hero-ring {
@@ -718,7 +725,8 @@ body,
   background: linear-gradient(135deg, var(--accent-strong), var(--accent));
   border: 0;
   border-radius: 999px;
-  color: #fff;
+  /* UI-303 contrast: dark ink on the bright accent fill (AA ≥ 4.5:1). */
+  color: #0b1220;
   padding: 0 24px;
   font-size: 15px;
   font-weight: 650;
@@ -761,7 +769,8 @@ body,
 .composer .mic-button.recording {
   background: linear-gradient(135deg, var(--danger-strong), var(--danger));
   border-color: var(--danger);
-  color: #fff;
+  /* UI-303 contrast: dark ink on the red recording fill (AA ≥ 4.5:1). */
+  color: #0b1220;
   animation: mic-pulse 1.2s ease-in-out infinite;
   box-shadow: 0 0 18px rgba(229, 72, 77, 0.5);
 }
@@ -900,6 +909,15 @@ body,
   font-size: 13.5px;
 }
 
+/* UI-303: per-state glyph inside the status pill — assistant state is
+   text + icon, never color alone. The icon is aria-hidden (the Spanish
+   label is the accessible name) and inherits the pill's text color. */
+.status-state-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-dim);
+}
+
 .status-pill[data-state="listening"] .status-dot {
   background: var(--ok);
   box-shadow: 0 0 10px var(--ok);
@@ -1005,7 +1023,10 @@ body,
 
 .stop-button.active {
   background: linear-gradient(135deg, var(--danger-strong), var(--danger));
-  color: #fff;
+  /* UI-303 contrast: white-on-red measured 2.8-3.9:1 (sub-AA); dark ink
+     on the red fill is 4.9-6.8:1. Same dark-on-bright convention as the
+     play button. */
+  color: #0b1220;
   border-color: transparent;
   box-shadow: 0 0 18px rgba(255, 107, 87, 0.55);
 }
@@ -1248,7 +1269,8 @@ body,
 .conversation--companion .conversation-subheader {
   flex: none;
   padding: 12px 18px 0;
-  font-size: 11px;
+  /* UI-303: 12px = token-scale floor (was 11px, below the catalog minimum). */
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -1586,14 +1608,21 @@ body,
 }
 
 .error-dismiss {
+  /* UI-303 hit target: the dismiss X was ~20px — below every floor. Now a
+     token-sized 32px target (--control-height-sm) so it is tappable. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  padding: 0 6px;
   background: none;
   border: 0;
   color: var(--text-dim);
   cursor: pointer;
   font-size: 15px;
   line-height: 1;
-  padding: 2px 4px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
 }
 
 .error-dismiss:hover {
@@ -1617,6 +1646,11 @@ body,
 }
 
 /* -------------------------------------------------------- reduced motion */
+/* UI-303: the gate covers EVERY animation and interactive transition —
+   including the mic recording pulse (.mic-button), the hero hover scale,
+   chip/action presses, the status pill color fades, and smooth scrolling.
+   Previously the mic pulse and several press/hover transforms kept
+   animating under prefers-reduced-motion. */
 @media (prefers-reduced-motion: reduce) {
   .panel-slot.fade,
   .panel-slot.slide,
@@ -1626,16 +1660,27 @@ body,
   .error-banner,
   .mic-hero,
   .mic-hero .mic-hero-ring,
-  .status-dot {
+  .status-dot,
+  .mic-button {
     animation: none !important;
   }
   .composer input,
   .composer button,
   .panel-action,
   .mic-button,
-  .stop-button {
+  .stop-button,
+  .empty-action,
+  .suggestion-chip,
+  .confirmation-actions button,
+  .mic-hero,
+  .status-pill,
+  .status-dot {
     transition: none;
     transform: none !important; /* tactile press collapse */
+  }
+  /* Instant scroll — no smooth scrolling under reduce. */
+  .message-list {
+    scroll-behavior: auto;
   }
   /* UI-206: the stage motion gate is killed at the CSS level too, so a
      stale data-motion state can never animate under reduced motion. */

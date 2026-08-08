@@ -19,8 +19,8 @@ export function MicHero() {
       className={`mic-hero ${recording ? "recording" : ""} ${busy ? "busy" : ""}`}
       onClick={() => micHub.toggle()}
       disabled={busy}
-      aria-label={recording ? "Stop recording" : "Record a message"}
-      title={recording ? "Stop recording" : "Record a message"}
+      aria-label={recording ? "Detener grabación" : "Grabar un mensaje"}
+      title={recording ? "Detener grabación" : "Grabar un mensaje"}
     >
       <span className="mic-hero-ring" aria-hidden="true" />
       <span className="mic-hero-ring mic-hero-ring-2" aria-hidden="true" />

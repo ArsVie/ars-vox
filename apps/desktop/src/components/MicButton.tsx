@@ -47,8 +47,8 @@ export function MicButton() {
       className={`mic-button ${phase === "recording" ? "recording" : ""} ${busy ? "busy" : ""}`}
       onClick={() => micHub.toggle()}
       disabled={busy}
-      aria-label={phase === "recording" ? "Stop recording" : "Record a message"}
-      title={phase === "recording" ? "Stop recording" : "Record a message"}
+      aria-label={phase === "recording" ? "Detener grabación" : "Grabar un mensaje"}
+      title={phase === "recording" ? "Detener grabación" : "Grabar un mensaje"}
     >
       <MicIcon size={15} />
       <span className="btn-label">{label}</span>
