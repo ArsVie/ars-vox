@@ -18,13 +18,54 @@ wins.
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, this commit)
+## Test gates (last full run, 2026-08-07 ~18:56, post GATE-1)
 
-- vitest: 96 passed (6 files) — apps/desktop
-- pytest: 67 passed — tests/python
+- vitest: 240 passed (13 files) — apps/desktop (baseline 111 + wave-1: 20 tokens,
+  38 geometry, 28 roles, 43 harness)
+- pytest: 84 passed — tests/python
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
 - OKF docs validator: 13 concepts validated
+
+## Adaptive UI redesign (waves)
+
+- WAVE 0 DONE — UI-000 frozen the adaptive UI contract (SurfaceRole /
+  AdaptiveTemplate / Proportion / LayoutSpec, registration interface, token
+  naming catalog, placeholder fixtures, deterministic validation). Gate
+  CONTRACT_FROZEN closed (merge a3e996d). Docs:
+  docs/adaptive-ui-contract.md, docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
+- WAVE 1 DONE — UI-101 shell, UI-102 geometry engine, UI-103 role framework,
+  UI-104 token values, UI-105 workflow harness all merged to main (GATE-1
+  FOUNDATION_INTEGRATION closed 2026-08-07). Note: 4/5 workers hit the
+  600s subagent cap; their landed work was gate-verified by the orchestrator
+  and committed (UI-104 was the only clean self-commit, d3dae0c).
+- WAVE 2 UNLOCKED — UI-201..207 (7 tasks; runs as 5+2 batches, Hermes caps
+  parallel children at 5).
+- Execution contract: docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
+
+## Documents
+
+- TXT/MD: text renderer with chapters; MD editable (Editar → Guardar →
+  document.save).
+- PDF: pdf.js v6 real renderer (lazy-loaded, worker via vite asset).
+- EPUB: epub.js 0.3.x real renderer (paginated, CFI locations, themes,
+  A−/A+).
+- ⚠️ READERS CURRENTLY BROKEN ON MAIN (root cause established 2026-08-07 by
+  hermes-epub investigation, evidence-backed, stable CDP browser):
+  - EPUB: theme styles are passed to epub.js as CSS STRINGS; epub.js
+    addStylesheetRules emits empty rules (`body { }`), body stays
+    transparent with black text → invisible page on the dark stage. Text
+    IS in the DOM; iframes mount after ~11s.
+  - PDF: pdf.js renders a 100%-black canvas; zero getContext/paint calls
+    observed — the page never paints even though open() resolves.
+  - BOTH fixes exist in parked branch `wip/advisor-round2-reader-polish`
+    (epubReader.ts THEME_STYLES as nested objects + re-apply after
+    display; pdfReader.ts fit-width scale; ReaderView/content.css mount
+    div). NOT merged — main kept clean for wave 1. Merge that branch +
+    visually verify before claiming readers work.
+- Local-file access in Electron (custom protocol): PLANNED.
+- Book position persistence: backend library.get_position/set_position
+  exists; UI resume wiring PLANNED.
 
 ## Voice
 
@@ -44,18 +85,6 @@ wins.
   shape; NOT yet implemented (iframe is web-demo-only).
 - Allowlist (`browser.allowlist`) and home URL: NOT enforced anywhere
   (zero readers) — PLANNED before enabling arbitrary remote browsing.
-
-## Documents
-
-- TXT/MD: text renderer with chapters; MD editable (Editar → Guardar →
-  document.save).
-- PDF: pdf.js v6 real renderer (lazy-loaded, worker via vite asset).
-- EPUB: epub.js 0.3.x real renderer (paginated, CFI locations, themes,
-  A−/A+). Verified visually: docs/screenshots/04-reading-epub.png,
-  05-reading-pdf.png.
-- Local-file access in Electron (custom protocol): PLANNED.
-- Book position persistence: backend library.get_position/set_position
-  exists; UI resume wiring PLANNED.
 
 ## Wire (contracts)
 

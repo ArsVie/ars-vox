@@ -1,105 +1,92 @@
 ---
 type: handoff
-title: EPUB reader debug handoff — open investigation
-description: "Factual state and observations for the EPUB reader not-rendering issue in Ars-Vox. Root cause NOT determined. References the adaptive UI redesign orchestrator plan. Assigned to a fresh investigation agent."
+title: EPUB reader debug — investigation RESOLVED (root cause + fix location)
+description: "Factual state and evidence for the EPUB reader not-rendering issue in Ars-Vox. Root cause ESTABLISHED 2026-08-07 (hermes-epub, stable CDP browser). Fix exists in parked branch wip/advisor-round2-reader-polish; merge + visual verify pending. Supersedes the earlier open handoff."
 date: 2026-08-07
-status: open
+status: resolved
 ---
 
-# EPUB reader debug handoff (2026-08-07)
+# EPUB reader debug — RESOLVED investigation (2026-08-07)
 
-## Task
+## Outcome
 
-The EPUB reader in Ars-Vox (`apps/desktop`) does not appear to work — the
-book page does not render visibly. Root cause is NOT determined. This
-handoff records only verifiable state and observations so a fresh agent can
-investigate without repeating the failed paths.
+Root cause established with evidence. The fix already exists in the parked
+branch `wip/advisor-round2-reader-polish` (the previous session's work that
+was parked so main stayed clean for Wave 1). Remaining work: merge that
+branch and visually verify.
 
-## References
+## Root cause — EPUB (evidence-backed, stable CDP browser on true main code)
 
-- Orchestrator plan (this work is a side investigation, not a wave task):
-  `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md`
-- Reader integration history + 12 known pitfalls (read FIRST):
-  ars-vox skill → `references/readers-2026-08.md` (mirrors the repo's reader
-  stack: `readers/reader.ts`, `readers/epubReader.ts`, `readers/pdfReader.ts`,
-  `components/ReaderView.tsx`, `components/DocumentPanel.tsx`)
-- Current-state authority: `docs/STATUS.md`
+- Reader machinery mounts correctly: `.reader-stage`, `.reader-mount`,
+  iframes appear ~11s after open (lazy import + fetch), location reports
+  "Página 1 de 2", and the book text IS present in the iframe DOM
+  ("Don Quijote de la Mancha / Capítulo I...").
+- The bug is the THEME: `THEME_STYLES` in `apps/desktop/src/readers/epubReader.ts`
+  defines values as CSS STRINGS:
+  `body: "background:#f7f4ee; color:#26221c;"`.
+  epub.js `themes.register` → `addStylesheetRules` iterates keys and emits
+  INVALID rules — observed live: `rules: ["body { }", "a { }"]` (empty).
+- Result: body background stays `rgba(0, 0, 0, 0)` (transparent), text
+  color stays `rgb(0, 0, 0)` (black) — on the dark stage
+  (`rgb(16, 21, 31)`) the page is INVISIBLE. DOM evidence: all 18 elements
+  in both iframes have zero painted backgrounds; computed body bg/color
+  transparent+black. Screenshots: /tmp/epub-maincode-invisible.png,
+  /tmp/epub-maincode-activated.png (investigator's machine).
+- Secondary contributor (from skill ref readers-2026-08.md pitfall #10):
+  theme must ALSO be re-applied after `await rendition.display()` — the
+  parked branch does both (nested objects + re-apply).
 
-## Environment state (verified 2026-08-07 ~17:50–18:10)
+## Root cause — PDF (same investigation, same browser)
 
-- Mock agent service RUNNING on `127.0.0.1:8765` (health: ok, mock:true,
-  model deepseek-v4-flash, uptime ~43min at check).
-- Vite dev server RUNNING on `127.0.0.1:5173` from
-  `/mnt/c/dev/ars-vox/apps/desktop` (pid 2961, started 17:12).
-- Fixtures served OK: `GET /demo-book.epub` → 200 (2047B),
-  `GET /demo-doc.pdf` → 200 (1798B).
-- `main` at `2524b36`. Previous session's uncommitted reader/statusbar/
-  local-intents work was parked on branch `wip/advisor-round2-reader-polish`
-  on 2026-08-07 so main stayed clean for the redesign waves. That branch
-  exists; it contains reader-related edits from the prior session. Whether
-  those edits are relevant to this bug is UNKNOWN — investigator should
-  diff and decide.
-- Wave-1 redesign worktrees exist under
-  `/mnt/c/dev/ars-vox-worktrees/ui-1{01..05}-*`; do not touch them.
+- pdf.js renders a 100%-BLACK canvas: `whitePct 0.0, blackPct 100.0`,
+  mean RGB [0,0,0]. Zero `getContext` / paint calls observed after
+  monkey-patching — pdfjs NEVER touches any canvas even though `open()`
+  resolves and location reads "Página 1 de 2". No console errors.
+- Fixture is good (21 proper `Tj` operators), identical across branches.
+- The parked branch's pdfReader.ts change (fit-width baseScale) is the
+  intended fix; NOT yet verified live.
 
-## Observations (empirical, as recorded)
+## The fix (parked, unmerged)
 
-1. App loads at 5173; WS connects ("agente conectado"); voice state
-   listening.
-2. Sending a request through the UI (typed text + Enter / Enviar click)
-   produced NO visible turn in the automated browser session: no user
-   message, no agent reply, no layout change. Not confirmed in the user's
-   own browser — may be an artifact of the automation environment.
-3. Driving the store directly (applyEvent `document.load` kind=epub
-   url=/demo-book.epub + `ui_command` layout.apply reading with
-   document_editor main) DID mount the reader machinery:
-   `.reader-stage` present, `.reader-mount` present, 2 iframes created,
-   template reading, slots main/side/dock. So the epub engine starts.
-4. A vision screenshot of that same session showed NO book content — the
-   screen still read as the home/empty conversation state. CAVEAT: heavy
-   browser-tooling contamination was observed — eval contexts landed on
-   `about:blank` and on different tabs between calls; page reloads were
-   observed (window/sessionStorage markers vanished within seconds).
-   Visual verification from that session is NOT trustworthy. The next
-   investigator must use a stable single-browser setup (e.g. agent-browser
-   + CDP on a dedicated Edge/Chromium instance) and verify DOM and pixels
-   in the SAME tab.
-5. Whether the reader renders invisible content (e.g. text present in the
-   iframe DOM but not visible), fails to render at all, or never finishes
-   loading was NOT established because of the tooling contamination above.
+`git.exe diff main..wip/advisor-round2-reader-polish --stat`:
+- apps/desktop/src/readers/epubReader.ts | 24 +-  (THEME_STYLES nested
+  objects + re-apply after display)
+- apps/desktop/src/readers/pdfReader.ts | 17 +-
+- apps/desktop/src/components/ReaderView.tsx | 10 +-
+- apps/desktop/src/content.css | 14 +  (reader-mount 72ch measure)
+- plus StatusBar (STOP 48px), local_intents, docs.
 
-## Open questions for the investigator
+NEXT STEP for whoever picks this up: merge wip/advisor-round2-reader-polish
+into main, run gates (vitest/typecheck/build/pytest), then visually verify
+EPUB + PDF render in a stable browser (see ars-vox skill → readers-2026-08.md
+for the verified CDP drive recipe). NOTE: main has since grown Wave-1 shell/
+token/role work (styles.css heavily edited by UI-101/UI-104) — expect merge
+conflicts in styles.css/content.css; resolve keeping catalog tokens
+(--control-height-lg, --radius-*) and the 72ch .reader-mount--book measure.
 
-- In a stable browser: does the EPUB iframe get created, and does its
-  contentDocument contain the book text?
-- Is the visible failure: no iframe / iframe but invisible text / iframe
-  with wrong colors / reader stuck on a loading state / reader never
-  opened at all from the user's actual flow?
-- Does the PDF reader work in the same stable browser (comparison case)?
-- Is the failure reproducible from the user's real interaction path
-  (voice/typed request through the mock), or only relevant to the
-  document.load-driven path?
+## Environment state at investigation time
 
-## How to work (boundaries)
+- Mock agent on 127.0.0.1:8765, vite on 5173 (main tree) + investigator's
+  own vite on 5174 (confirmed serving true main code: CSS strings present).
+- Fixtures OK: /demo-book.epub (2047B), /demo-doc.pdf (1798B), 200s.
+- Previous session's uncommitted reader work = parked branch (see above).
 
-- Work in an isolated worktree/branch (per the orchestrator plan's branch
-  strategy). Do not touch main, the parked branch, or the wave-1 worktrees.
-- You MAY touch: `apps/desktop/src/readers/*`,
-  `apps/desktop/src/components/ReaderView.tsx`,
-  `apps/desktop/src/components/DocumentPanel.tsx`, `apps/desktop/src/content.css`,
-  `apps/desktop/public/demo-book.epub` (fixture regeneration script:
-  `scripts/gen_reading_fixtures.py`).
-- Do NOT modify: `packages/contracts/**`, `apps/desktop/src/adaptive/**`
-  (frozen contract, UI-000), `apps/desktop/src/layout/engine.ts`,
-  services/agent logic.
-- Announce on `hey.md` before starting (agent entry), mark resolved when
-  done. Constant hey.md communication per owner instruction.
-- Verify: `cd apps/desktop && npx vitest run && npm run typecheck && npm run build`
-  before committing anything.
+## Original open questions — answers
 
-## Deliverable
+1. iframe created? YES (~11s).
+2. text in contentDocument? YES (Don Quijote text present).
+3. invisible vs absent? INVISIBLE (transparent body + black text on dark
+   stage) — CSS-string theme bug.
+4. PDF comparison? ALSO broken (blank black canvas, never paints).
+5. real-path vs store-driven? Store-driven path reproduces it; UI input
+   path in automation remained unreliable (browser-tooling artifact, not
+   investigated further — the reader bug is independent of it).
+6. screenshots? /tmp/epub-maincode-invisible.png (pre-activation),
+   /tmp/epub-maincode-activated.png, /tmp/pdf-maincode-works.png (stale
+   frame), /tmp/pdf-maincode-ok.png (black canvas evidence).
 
-Root-cause report (evidence: DOM facts + screenshots from a stable browser)
-with a fix proposal or a verified fix on your branch. If you cannot
-reproduce in a stable browser, say so explicitly and record what you did
-verify — do not guess.
+## Handoff history
+
+- 2026-08-07: open handoff written (facts only, no theories) + hermes-epub
+  dispatched. Investigation completed same day; this doc supersedes it.
+- hermes-epub did NOT modify any repo files (root-cause report only).

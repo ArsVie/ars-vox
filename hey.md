@@ -12,10 +12,8 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ### hermes-epub (EPUB reader investigation)
 - timestamp: 2026-08-07T18:15:00Z
-- task: Investigate why the EPUB reader does not render in Ars-Vox. Authoritative brief: `docs/handoff-epub-reader-debug-2026-08-07.md` (factual state + open questions + boundaries). Root cause NOT determined — do not assume prior theories. Stable single-browser verification required (agent-browser + CDP, DOM + vision in the SAME tab).
-- files/dirs: apps/desktop/src/readers/*, components/ReaderView.tsx, components/DocumentPanel.tsx, content.css (investigation scope per handoff)
-- boundaries: do NOT touch packages/contracts/**, src/adaptive/**, layout/engine.ts, services/agent, main, wip/advisor-round2-reader-polish, wave-1 worktrees. Work in own worktree/branch.
-- status: in_progress
+- task: Investigate why the EPUB reader does not render in Ars-Vox. Authoritative brief: `docs/handoff-epub-reader-debug-2026-08-07.md`.
+- status: RESOLVED 2026-08-07 — root cause established with evidence (stable CDP browser): EPUB theme styles passed to epub.js as CSS STRINGS → addStylesheetRules emits empty rules → transparent body + black text on dark stage = invisible page; PDF renders 100%-black canvas (pdfjs never paints). Fix exists in parked branch `wip/advisor-round2-reader-polish` (nested theme objects + re-apply after display; PDF fit-width). Merge + visual verify = next step. Full evidence: docs/handoff-epub-reader-debug-2026-08-07.md.
 
 ### hermes-ui-101 (Wave 1 — unified application shell)
 - timestamp: 2026-08-07T23:40:00Z
@@ -44,6 +42,7 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - task: Execution contract encoded + owner-reviewed: `docs/plans/adaptive-ui-redesign-execution-2026-08-07.md` (4 roles / 5 templates / 3 proportions, LayoutSpec, 4-wave DAG). ✅ WAVE 0 COMPLETE — UI-000 froze the adaptive UI contract: `packages/contracts/arsvox_contracts/adaptive.py` (SurfaceRole/AdaptiveTemplate/Proportion/LayoutSpec + TEMPLATE_SLOTS + validate_layout_spec), TS mirror `apps/desktop/src/adaptive/{contracts,fixtures,tokens}.ts`, placeholder fixtures for all 5 templates, token naming contract, 2 JSON schemas, docs/adaptive-ui-contract.md. Verified: 110 pytest (17 new), 111 vitest (15 new), typecheck+build clean, OKF OK. GATE CONTRACT_FROZEN CLOSED (merge a3e996d).
 - ⚠️ PARKED: previous session's uncommitted advisor-round2/reader work → branch `wip/advisor-round2-reader-polish` (main was dirty; Wave 1 needs styles.css/components clean). Revertible — merge that branch back when convenient.
 - WAVE 1 STARTING: UI-101..105 in worktrees /mnt/c/dev/ars-vox-worktrees/ui-1{01..05}-*. Workers announce on hey.md before touching files.
+- ✅ GATE-1 FOUNDATION_INTEGRATION CLOSED 2026-08-07 (~18:56): all five branches merged to main (UI-101 shell, UI-102 geometry, UI-103 roles, UI-104 tokens, UI-105 harness). 4/5 workers hit the 600s cap — their landed work was gate-verified by the orchestrator (vitest/typecheck/build per worktree) and committed. Conflicts resolved: hey.md (union), styles.css (UI-101 shell vs UI-104 tokens — kept catalog tokens: radius via --radius-*, STOP via --control-height-lg 48px). Merged main: 240 vitest, 84 pytest, typecheck+build clean, storyboard capture works (24 scenarios). WAVE 2 UNLOCKED: UI-201..207 (7 tasks → 5+2 batches, Hermes caps parallel children at 5).
 - files/dirs: (wave 0) packages/contracts/** , apps/desktop/src/adaptive/*, apps/desktop/tests/adaptive-contract.test.ts, tests/python/test_adaptive_contract.py, docs/adaptive-ui-contract.md
 - boundaries: contract types ONLY — additive, no rewrite of existing wire behavior; did NOT touch components/, readers/, layout/engine.ts, services/agent.
 - status: in_progress (wave 0 done; orchestrating wave 1)
