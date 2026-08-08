@@ -34,6 +34,7 @@ import {
 import { surfaceRegistry } from "./roles/registry";
 import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
 import type { LayoutSpec as AdaptiveLayoutSpec } from "./adaptive/contracts";
+import { scoreChange } from "./layout/inertia";
 
 /** Default content viewport used until the renderer reports real size. */
 export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 800 };
@@ -310,9 +311,21 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
      * UI-103: validate the adaptive LayoutSpec against the surface registry,
      * resolve every role through the deterministic fallback ladder, and
      * store the result. Invalid specs throw and never reach state.
+     *
+     * UI-207: spatial inertia guard — the ONLY wave-2 store.ts integration.
+     * After validation, the pure scorer (layout/inertia.ts) decides whether
+     * applying the requested spec is worth its movement cost. Agent chatter
+     * (equivalent layouts, sub-bar movement, unjustified template changes)
+     * is damped: the current composition is kept untouched (zero churn).
+     * User-initiated changes and primary re-focusing always apply — the
+     * policy never blocks a real signal. The legacy engine path
+     * (applyUiCommand / layout.apply) does not flow through this choke
+     * point and is untouched.
      */
     const applyAdaptiveSpec = (spec: AdaptiveLayoutSpec): void => {
       const assignments = resolveLayout(spec, surfaceRegistry);
+      const verdict = scoreChange(get().adaptive.spec, spec);
+      if (verdict.decision === "keep") return; // keep current — no churn
       set({ adaptive: { spec, assignments } });
     };
 
