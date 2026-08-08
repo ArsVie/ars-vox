@@ -74,7 +74,7 @@ services/tts/            TTS providers + queue (mock providers)
 configs/app.yaml         configuration (single file, validated)
 scripts/smoke_mock.py    boot mock service + one turn, assert events
 scripts/demo_live.py     boot LIVE service + assert typed ui_command
-tests/python/            pytest suite (45 tests)
+tests/python/            pytest suite (python + cross-language)
 docs/                    architecture, threat model, ADRs
 ```
 
@@ -127,8 +127,8 @@ export OPENCODE_GO_API_KEY=...        # see Required environment variables
 ## Test
 
 ```bash
-.venv/bin/python -m pytest tests/python -q      # 45 tests
-cd apps/desktop && npm test                     # 30 Vitest tests
+.venv/bin/python -m pytest tests/python -q      # python suite (count in docs/STATUS.md)
+cd apps/desktop && npm test                     # Vitest suite (count in docs/STATUS.md)
 cd apps/desktop && npm run typecheck && npm run build
 ```
 
@@ -207,8 +207,9 @@ panels, and the UI computes geometry.
 
 ## Implementation status
 
-- Python suite: 45/45 passing.
-- Desktop: 30/30 Vitest, typecheck clean, renderer + Electron build.
+- Python suite: green (count in docs/STATUS.md).
+- Desktop: Vitest green (see docs/STATUS.md), typecheck clean, renderer
+  + Electron build.
 - Live model: verified (`demo_live.py` LIVE_OK with two typed tool calls
   in one turn).
 - End-to-end UI: verified in a real Chromium against the mock service —

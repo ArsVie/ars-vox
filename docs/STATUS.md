@@ -2,11 +2,10 @@
 type: status
 title: Ars-Vox current state
 description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-08.
-timestamp: 2026-08-08T03:55:00Z
+timestamp: 2026-08-08T09:00:00Z
 ---
 
 # Ars-Vox — current state (2026-08-08)
-
 THIS FILE IS THE SINGLE AUTHORITY for current implementation state.
 HANDOFF.md is roadmap + session history; ADRs are historical decisions;
 audits are snapshots. If any other doc contradicts this file, this file
@@ -56,6 +55,21 @@ wins.
   readers pixel-verified (below). Screenshots: docs/screenshots/12..22-wave2-*.
 - WAVE 3 UNLOCKED — UI-301 agent layout planner, UI-302 user overrides,
   UI-303 a11y/usability (3 parallel; dispatch pending owner go-ahead).
+- GATE-2.5 HARDENING DONE (2026-08-08, 7 tracks merged): H1 bidirectional
+  client-action protocol (authoritative ui_command handlers + action_result
+  verdicts + cross-language fixtures), H2 reminder correctness (UTC
+  instants, occurrence lifecycle, correct snooze/recurrence + tz), H3 STOP
+  locally authoritative (renderer-first cancellation, canonical voice
+  state machine), H4 local service boundary (bearer auth HTTP+WS, CORS
+  lockdown, TTS POST, config validators — audit P0/P1s), H5 reconnect
+  recovery (state_snapshot on connect, global one-pending confirmations,
+  explicit execute lifecycle, stop invalidates pendings, migration
+  0003), H6 canonical config paths + uv.lock, H7 media wiring
+  (IFrame-player YouTube control, audio.play, adaptive stage role
+  resolution). Merge: 7 branches, 6 deliberate conflict resolutions on
+  shared seams (ws.py, mic.ts, contracts.ts, events.py, runtime.py,
+  config.py). Integration fix: migration version collision 0002/0002 →
+  0003 (reminder lifecycle was being skipped on fresh DBs).
 - Execution contract: docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
 
 ## Documents
@@ -112,35 +126,53 @@ wins.
 ## Wire (contracts)
 
 - Events: youtube.search, browser.navigate, document.load (carries url),
-  tasks.update, media.state + layout/panel/status/overlay events.
-- User commands: youtube.play, browser nav, document.save, tasks.toggle,
-  media.play_pause/seek, stop, confirm.
+  tasks.update, media.state + layout/panel/status/overlay events +
+  action_result (H1) + state_snapshot (H5).
+- User commands: the FULL UiCommand surface is authoritative — browser
+  nav (navigate/back/forward/refresh), document.save, tasks.toggle,
+  media.play_pause/seek, audio.play, youtube.search, layout.apply —
+  every action string has a Python ClientAction union entry and an
+  authoritative handler; the UI receives action_result verdicts
+  (accepted/done/failed/unsupported) instead of optimistic silence
+  (GATE-2.5 H1).
+- Cross-language conformance: every TS UiCommand action has a Python-
+  parseable fixture (packages/contracts/fixtures/); the bridge test
+  fails if one side drifts.
 - Python models + TS mirrors + JSON schemas; conformance tests green.
 
 ## Security posture
 
-- Local STOP path: implemented, LLM-independent (ADR 0004).
+- Local STOP path: implemented, LLM-independent (ADR 0004); now locally
+  authoritative in the renderer (mic/STT/TTS aborted first, generation
+  guards) + one canonical voice state machine (GATE-2.5 H3).
 - Confirmation snapshots: SQLite-stored frozen args, executed directly
   (ADR 0003); approval copy is deterministic (tool-specific formatter,
-  never model-generated).
+  never model-generated). Explicit lifecycle pending → approved →
+  executing → executed | failed (H5); global one-pending policy
+  (new confirmable supersedes the old, reported on the wire); stop
+  invalidates pendings.
 - Policy gate: deny-by-default; denied-always tools (shell.exec,
   file.write, file.delete, browser.generic_agent).
-- GAP: WebSocket on 127.0.0.1:8765 has NO client auth and NO Origin
-  check. Exposure today is limited (web demo, same-origin content
-  only). REQUIRED before the Electron browser ships: per-launch
-  session credential + Origin check, or main-process-only IPC
-  mediation. See threat-model T9.
+- Local service boundary (GATE-2.5 H4): per-launch bearer token on HTTP
+  + WS (query param for WS), CORS locked to configured origins (no
+  wildcard), /tts is POST-only, STT upload capped, config validation
+  constrains model base_url (https / localhost-http only) and
+  system_prompt_file (repo docs/configs only). Electron main generates
+  and injects the token via preload. Dev/mock mode can disable auth via
+  config (auth.enabled=false).
 
 ## Known gaps (next work, prioritized)
 
 1. Voice loop proof on the physical machine (wake/VAD/STT/TTS/barge-in/
    sleep/STOP) + latency + recovery measurements.
-2. WS auth + Origin (T9) and deterministic confirmation guards — before
-   the real browser.
-3. Browser as security boundary: WebContentsView, allowlist enforced,
+2. Browser as security boundary: WebContentsView, allowlist enforced,
    remote content sandboxed (no Node), page text treated as untrusted.
-4. Product loops: reminder cron context injection, message timestamps
+   (WS auth + Origin are DONE — GATE-2.5 H4.)
+3. Product loops: reminder cron context injection, message timestamps
    in agent context, memory-informed search, book progress resume,
    unified media pipeline (real YouTube/local playback).
-5. Real-user observation pass — design polish is deferred until
+4. Real-user observation pass — design polish is deferred until
    interaction problems are observed.
+5. Post-reconnect gap detection: state_snapshot carries the bus
+   sequence, but QueueFull-drop resync (requesting a replay on gap) is
+   not yet wired — reconnect is the sync mechanism today (H5).

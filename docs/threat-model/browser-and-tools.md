@@ -85,10 +85,14 @@ opens and the model's tool calls are NOT trusted inputs.
 - The stop message is handled at the protocol level (ClientMessage
   `stop`) and calls `AgentRuntime.cancel()` directly — it never waits
   for the LLM, a network request, tool completion, or TTS completion.
-- Cancel propagates: the active model run is cancelled, the TTS queue is
-  cleared, current assistant audio stops, cancelable tools are
-  cancelled, late results are ignored, and the app returns to SLEEPING
-  (ADR 0004).
+- Cancel propagates: the active model run is cancelled, pending
+  confirmations are invalidated (a stuck card is never left behind),
+  the TTS queue is cleared, current assistant audio stops, cancelable
+  tools are cancelled, late results are ignored, and the app returns to
+  SLEEPING (ADR 0004).
+- The renderer is locally authoritative for stop: mic/STT/TTS capture
+  is aborted first (generation guards drop post-STOP transcripts), and
+  the voice state machine is the single source of truth (GATE-2.5 H3).
 - Model timeouts and a hard step cap (`max_steps`) bound runaway turns.
 
 ### T7. Credential leakage
@@ -99,33 +103,31 @@ opens and the model's tool calls are NOT trusted inputs.
   `node_modules` are gitignored.
 - Audit events record tool usage; the UI shows source data, not
   credentials.
+- The per-launch service bearer token is generated at runtime and held
+  by the Electron main process (injected via preload) — it is never
+  written to disk or committed (GATE-2.5 H4).
 
 ### T8. Malformed input / event flooding
 
 - Client messages are validated against the contracts (unknown message
   types rejected); the WebSocket endpoint answers invalid input with a
-  recoverable error.
+  recoverable error — `ui_command` frames that fail parse get an
+  `action_result failed` verdict so the UI reconciles honestly (H1).
 - Event bus queues are capped; slow subscribers drop events instead of
   blocking the service.
 
 ### T9. Unauthenticated local WebSocket (127.0.0.1:8765)
 
-- GAP (accepted today, must close before the Electron browser ships):
-  the WebSocket endpoint has NO client authentication and NO Origin
-  check. Any process on the machine — including a malicious web page
-  in the future embedded browser — could connect and send `user_text`,
-  `confirm`, `cancel`, or browser commands.
-- Current exposure is limited: the service binds loopback only, the
-  web demo renders same-origin fixture content, and no remote
-  navigation exists yet.
-- PLANNED MITIGATION (before enabling arbitrary remote browsing):
-  per-launch unguessable session credential required in the WebSocket
-  handshake + strict Origin check; alternatively, the Electron main
-  process becomes the only WebSocket client and the trusted renderer
-  reaches the agent through a narrow IPC API. The embedded remote
-  browser must have zero path to the agent channel.
-- STATUS: docs/STATUS.md (Security posture) tracks this as the top
-  gap.
+- RESOLVED (GATE-2.5 H4, 2026-08-08): the local service now requires a
+  per-launch bearer token on every HTTP route AND in the WebSocket
+  handshake (query param); CORS is locked to the configured origins
+  (no wildcard); the Electron main process generates the token and the
+  trusted renderer receives it via preload IPC.
+- Remaining boundary work: the embedded browser (WebContentsView) must
+  have zero path to the agent channel — remote content is never
+  granted the token; allowlist + sandboxing ship before arbitrary
+  remote browsing (docs/STATUS.md Known gaps #2).
+- STATUS: docs/STATUS.md (Security posture) is authoritative.
 
 ## Residual risks (accepted)
 
