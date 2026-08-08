@@ -33,6 +33,7 @@ import type { SurfaceRole } from "../adaptive/contracts";
 import { surfaceComponent } from "../adaptive/surfaces";
 import { SurfaceRoleProvider } from "../roles/context";
 import { surfaceRegistry } from "../roles/registry";
+import type { ResolvedAssignment } from "../roles/fallback";
 
 /** Fraction → CSS percentage string with FP noise trimmed (3 decimals:
  * sub-pixel precision for any stage up to ~100k px). Geometry fractions
@@ -108,11 +109,24 @@ export function PlaceholderSurface({
  * a surface moving between slots keeps its key — React preserves the
  * instance and the CSS transition animates the same element's geometry.
  * Never key by slot name: that would remount on every move.
+ *
+ * H7 (GATE-2.5): when role-resolved assignments are supplied (the store's
+ * resolveLayout output), the surface is rendered with its RESOLVED role —
+ * data-role comes from the geometry (built on resolved roles) and the
+ * original request stays visible as data-requested-role / data-degraded
+ * for debugging. Without assignments (fixture/direct uses) the behavior
+ * is unchanged: requestedRole == role.
  */
-export function stageSlotElements(geometry: AdaptiveGeometry) {
+export function stageSlotElements(
+  geometry: AdaptiveGeometry,
+  assignments?: readonly ResolvedAssignment[],
+) {
   return geometry.slots.map((g) => {
     const Component = surfaceComponent(g.surfaceId);
     const role = g.role as SurfaceRole;
+    const resolved = assignments?.find((a) => a.surfaceId === g.surfaceId);
+    const requestedRole = resolved?.requestedRole ?? role;
+    const degraded = resolved?.degraded ?? false;
     return (
       <div
         key={g.surfaceId}
@@ -126,6 +140,8 @@ export function stageSlotElements(geometry: AdaptiveGeometry) {
         }}
         data-slot={g.slot}
         data-role={g.role}
+        data-requested-role={assignments ? requestedRole : undefined}
+        data-degraded={assignments ? degraded || undefined : undefined}
         data-surface-id={g.surfaceId}
       >
         {Component ? (
@@ -136,11 +152,9 @@ export function stageSlotElements(geometry: AdaptiveGeometry) {
             value={{
               surfaceId: g.surfaceId,
               role,
-              requestedRole: role,
+              requestedRole,
               capabilities: surfaceRegistry.capabilitiesOf(g.surfaceId),
-              degraded: !surfaceRegistry
-                .capabilitiesOf(g.surfaceId)
-                .includes(role),
+              degraded,
             }}
           >
             <Component panelId={g.surfaceId} />
@@ -161,10 +175,16 @@ export function stageSlotElements(geometry: AdaptiveGeometry) {
 export function AdaptiveStage({
   geometry,
   reducedMotion,
+  assignments,
 }: {
   geometry: AdaptiveGeometry;
   /** Explicit motion preference (tests / hosts). Defaults to matchMedia. */
   reducedMotion?: boolean;
+  /** H7: role-resolved assignments (resolveLayout output) — the stage
+   *  renders each surface with its RESOLVED role and exposes the requested
+   *  role for debugging. Optional: fixture/direct uses keep the old
+   *  requestedRole == role behavior. */
+  assignments?: readonly ResolvedAssignment[];
 }) {
   const motion = !usePrefersReducedMotion(reducedMotion);
   return (
@@ -175,7 +195,7 @@ export function AdaptiveStage({
       data-template={geometry.template}
       data-proportion={geometry.proportion}
     >
-      {stageSlotElements(geometry)}
+      {stageSlotElements(geometry, assignments)}
     </div>
   );
 }

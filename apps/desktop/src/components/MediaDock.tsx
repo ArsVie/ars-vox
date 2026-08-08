@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useStore } from "zustand";
 
+import type { MediaState } from "../contracts";
 import type { PanelId } from "../layout/engine";
 import type { PanelMeta } from "../store";
 import { appStore, EMPTY_MEDIA } from "../store";
@@ -12,6 +14,177 @@ function fmtTime(total: number): string {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* H7 (GATE-2.5) — real YouTube player control via the IFrame Player   */
+/* API postMessage protocol.                                           */
+/*                                                                     */
+/* The embed iframe is created ONCE per video (keyed by videoId) with  */
+/* a STABLE src (enablejsapi=1, autoplay fixed at mount time from the  */
+/* current state). After mount the src NEVER changes — play/pause/seek */
+/* are sent to the SAME iframe instance as postMessage commands, and   */
+/* player-originated state changes come back as infoDelivery messages  */
+/* and are merged into store.content.media (the same surface state the */
+/* backend media.state path feeds). No URL swap on play/pause.         */
+/*                                                                     */
+/* NETWORK-FALLBACK (stop condition, marked): the postMessage channel  */
+/* is only trusted after the player signals readiness (onReady). If no */
+/* readiness signal arrives within YT_PLAYER_READY_GRACE_MS (offline / */
+/* embed blocked), the control mode falls back to the legacy URL-swap  */
+/* behavior: the src reflects autoplay from the live state, so toggling */
+/* play/pause reloads the embed (old behavior, still functional). The  */
+/* active mode is visible on the iframe as data-youtube-control.       */
+/* ------------------------------------------------------------------ */
+
+const YOUTUBE_EMBED_BASE = "https://www.youtube.com/embed";
+/** Grace period before falling back to the legacy URL-swap behavior. */
+export const YT_PLAYER_READY_GRACE_MS = 5000;
+
+/** Stable embed URL for the player-API protocol (no URL swap on toggle). */
+export function youtubeEmbedSrc(videoId: string, autoplay: boolean): string {
+  const params = new URLSearchParams({ enablejsapi: "1" });
+  if (autoplay) params.set("autoplay", "1");
+  return `${YOUTUBE_EMBED_BASE}/${videoId}?${params.toString()}`;
+}
+
+/** Serialized IFrame Player API command for postMessage. */
+export function youtubeCommandMessage(func: string, args: unknown[] = []): string {
+  return JSON.stringify({ event: "command", func, args });
+}
+
+export type YoutubePlayerEvent =
+  | { kind: "ready" }
+  | { kind: "state"; state: MediaState }
+  | { kind: "unknown" };
+
+/** Parse an IFrame Player API postMessage payload (pure, unit-testable). */
+export function parseYoutubePlayerEvent(data: unknown): YoutubePlayerEvent {
+  if (!data || typeof data !== "object") return { kind: "unknown" };
+  const ev = data as Record<string, unknown>;
+  if (ev.event === "onReady" || ev.event === "initialDelivery") return { kind: "ready" };
+  if (ev.event === "infoDelivery" && ev.info && typeof ev.info === "object") {
+    const info = ev.info as Record<string, unknown>;
+    if (info.playerState === 1) return { kind: "state", state: "playing" };
+    if (info.playerState === 2) return { kind: "state", state: "paused" };
+    if (info.playerState === 0) return { kind: "state", state: "stopped" };
+  }
+  return { kind: "unknown" };
+}
+
+export type YoutubeControlMode = "postmessage" | "urlswap";
+
+function postCommand(iframe: HTMLIFrameElement, func: string, args: unknown[] = []): void {
+  iframe.contentWindow?.postMessage(youtubeCommandMessage(func, args), "*");
+}
+
+/**
+ * H7 — control the EXISTING YouTube embed (never remount, never swap src).
+ * Returns the iframe ref (attach to the <iframe>) and the active control
+ * mode. SSR-safe: without window / before mount the hook is inert.
+ */
+function useYoutubePlayer(
+  videoId: string | null,
+  state: MediaState,
+  positionS: number,
+): { iframeRef: RefObject<HTMLIFrameElement>; controlMode: YoutubeControlMode } {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [controlMode, setControlMode] = useState<YoutubeControlMode>("postmessage");
+  const readyRef = useRef(false);
+  const stateRef = useRef(state);
+  const positionRef = useRef(positionS);
+  const pendingRef = useRef<{ func: string; args: unknown[] } | null>(null);
+
+  useEffect(() => {
+    stateRef.current = state;
+  });
+  useEffect(() => {
+    positionRef.current = positionS;
+  });
+
+  // Wire the message channel once per video: onReady -> flush pending
+  // commands + sync the player to the store; infoDelivery playerState ->
+  // merge into the store (player's own controls stay authoritative).
+  useEffect(() => {
+    if (!videoId) return undefined;
+    readyRef.current = false;
+    setControlMode("postmessage");
+    const iframe = iframeRef.current;
+    if (!iframe || typeof window === "undefined") return undefined;
+
+    const markReady = (): void => {
+      if (readyRef.current) return;
+      readyRef.current = true;
+      setControlMode("postmessage");
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      if (pending) postCommand(iframe, pending.func, pending.args);
+      if (stateRef.current === "playing") postCommand(iframe, "playVideo");
+      else if (stateRef.current === "paused") postCommand(iframe, "pauseVideo");
+      if (positionRef.current > 0) postCommand(iframe, "seekTo", [positionRef.current]);
+    };
+
+    const onMessage = (event: MessageEvent): void => {
+      if (event.source !== iframe.contentWindow) return;
+      if (!event.origin.endsWith("youtube.com")) return;
+      let data: unknown;
+      try {
+        data = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      const parsed = parseYoutubePlayerEvent(data);
+      if (parsed.kind === "ready") {
+        markReady();
+        return;
+      }
+      if (parsed.kind === "state" && parsed.state !== stateRef.current) {
+        // The player's own controls changed playback — mirror it into the
+        // store so every surface (dock, persistent bar) stays in sync.
+        appStore.getState().applyUiCommand({ action: "media.state", state: parsed.state });
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    const timer = window.setTimeout(() => {
+      // NETWORK-FALLBACK: no readiness signal -> legacy URL-swap mode.
+      if (!readyRef.current) setControlMode("urlswap");
+    }, YT_PLAYER_READY_GRACE_MS);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+    };
+  }, [videoId]);
+
+  // Store state -> player command (postmessage mode only).
+  useEffect(() => {
+    if (state === "stopped" || !videoId) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    if (readyRef.current) {
+      postCommand(iframe, state === "playing" ? "playVideo" : "pauseVideo");
+      return;
+    }
+    // Not ready yet: keep the most recent intent; flushed on onReady.
+    pendingRef.current = {
+      func: state === "playing" ? "playVideo" : "pauseVideo",
+      args: [],
+    };
+  }, [state, videoId]);
+
+  // Store position -> player command (seek follows the slider/backend).
+  useEffect(() => {
+    if (positionS <= 0 || !videoId) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    if (readyRef.current) {
+      postCommand(iframe, "seekTo", [Math.floor(positionS)]);
+      return;
+    }
+    pendingRef.current = { func: "seekTo", args: [Math.floor(positionS)] };
+  }, [positionS, videoId]);
+
+  return { iframeRef, controlMode };
 }
 
 /**
@@ -48,6 +221,12 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
   const isVideo = m.kind === "video";
   const isPlaying = m.state === "playing";
   const progress = m.durationS > 0 ? Math.min(100, (m.positionS / m.durationS) * 100) : 0;
+
+  // H7 (GATE-2.5): real YouTube control. The hook drives the EXISTING
+  // iframe via the player-API postMessage protocol; autoplay is fixed at
+  // mount time only (keyed by videoId, so a NEW video remounts fresh).
+  const { iframeRef, controlMode } = useYoutubePlayer(m.videoId, m.state, m.positionS);
+  const [initialAutoplay] = useState(() => m.state === "playing");
 
   const title = meta?.title ?? m.title ?? "Medios";
 
@@ -135,10 +314,16 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
             <div className="media-player-video">
               <iframe
                 key={m.videoId}
-                src={`https://www.youtube.com/embed/${m.videoId}?autoplay=${isPlaying ? 1 : 0}`}
+                ref={iframeRef}
+                src={
+                  controlMode === "urlswap"
+                    ? youtubeEmbedSrc(m.videoId, isPlaying) // NETWORK-FALLBACK (legacy URL swap)
+                    : youtubeEmbedSrc(m.videoId, initialAutoplay) // stable — no swap on toggle
+                }
                 title={m.title}
                 allow="autoplay; encrypted-media; picture-in-picture"
                 allowFullScreen
+                data-youtube-control={controlMode}
               />
             </div>
           ) : (

@@ -1,40 +1,92 @@
 """Media tools. YouTube adapter is a fixture stub for iteration 1
 (real adapter lands with the browser service); the media panel plays
-the configured sample video."""
+the configured sample video.
+
+H7 (GATE-2.5): these tools emit the event path the media surface consumes:
+  - media.search_youtube -> YoutubeSearchEvent (populates the YouTube panel
+    surface, same wire the demo tool uses);
+  - media.play/pause/resume/stop/seek/set_volume -> UiCommandEvent with
+    MediaStateChange (media.state command). The desktop store merges those
+    commands into the SAME store.content.media state the MediaStateEvent
+    path populates, so both emitters stay consistent on one surface.
+  - media.play picks a real YouTube watch URL when the result id is a real
+    video id (the store derives videoId from the url and renders the embed);
+    otherwise it falls back to the configured sample video.
+"""
 
 import json
+import re
 
 from arsvox_contracts import MediaState, PanelType
 from arsvox_contracts.commands import MediaStateChange, PanelOpen
-from arsvox_contracts.events import UiCommandEvent
+from arsvox_contracts.events import UiCommandEvent, YoutubeSearchEvent, YoutubeVideoResult
 
 from arsvox_agent.tools.context import ToolContext
 
+# Real YouTube video ids are exactly 11 chars of [A-Za-z0-9_-]; fixture-only
+# ids ("yt-1") fall back to the sample video url.
+YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
 FIXTURE_RESULTS = [
-    {"id": "yt-1", "title": "Taller de carpintería para principiantes", "duration": "12:34"},
-    {"id": "yt-2", "title": "Cómo lijar madera sin errores", "duration": "8:12"},
-    {"id": "yt-3", "title": "Hacer una estantería en un día", "duration": "25:47"},
-    {"id": "yt-4", "title": "Herramientas básicas de banco", "duration": "15:03"},
+    YoutubeVideoResult(
+        id="dQw4w9WgXcQ",
+        title="Taller de carpintería para principiantes",
+        channel="El Taller de Marta",
+        duration_s=742,
+        published="hace 3 días",
+        thumbnail_url=None,
+    ),
+    YoutubeVideoResult(
+        id="9bZkp7q19f0",
+        title="Cómo lijar madera sin errores",
+        channel="Bricolaje Fácil",
+        duration_s=495,
+        published="hace 1 semana",
+        thumbnail_url=None,
+    ),
+    YoutubeVideoResult(
+        id="kJQP7kiw5Fk",
+        title="Hacer una estantería en un día",
+        channel="Hazlo Tú Mismo",
+        duration_s=1547,
+        published="hace 2 semanas",
+        thumbnail_url=None,
+    ),
+    YoutubeVideoResult(
+        id="fJ9rUzIMcZQ",
+        title="Herramientas básicas de banco",
+        channel="El Taller de Marta",
+        duration_s=903,
+        published="hace 1 mes",
+        thumbnail_url=None,
+    ),
 ]
 
 
 async def media_search_youtube(tctx: ToolContext, query: str) -> str:
     q = query.lower()
-    results = [r for r in FIXTURE_RESULTS if q in r["title"].lower()] or FIXTURE_RESULTS
-    return json.dumps(results, ensure_ascii=False)
+    results = [r for r in FIXTURE_RESULTS if q in r.title.lower()] or FIXTURE_RESULTS
+    # H7: emit the same YoutubeSearchEvent the demo path uses so the YouTube
+    # panel surface shows the agent's results.
+    await tctx.emit(YoutubeSearchEvent(query=query, results=results))
+    return json.dumps([r.model_dump() for r in results], ensure_ascii=False)
 
 
 async def media_play(tctx: ToolContext, result_id: str) -> str:
-    result = next((r for r in FIXTURE_RESULTS if r["id"] == result_id), FIXTURE_RESULTS[0])
-    url = tctx.deps.config.media.sample_video_url
-    tctx.deps.panels.upsert(PanelType.MEDIA.value, result["title"])
-    await tctx.emit(UiCommandEvent(command=PanelOpen(panel_type=PanelType.MEDIA, title=result["title"])))
+    result = next((r for r in FIXTURE_RESULTS if r.id == result_id), FIXTURE_RESULTS[0])
+    url = (
+        f"https://www.youtube.com/watch?v={result.id}"
+        if YOUTUBE_ID_RE.match(result.id)
+        else tctx.deps.config.media.sample_video_url
+    )
+    tctx.deps.panels.upsert(PanelType.MEDIA.value, result.title)
+    await tctx.emit(UiCommandEvent(command=PanelOpen(panel_type=PanelType.MEDIA, title=result.title)))
     await tctx.emit(
         UiCommandEvent(
-            command=MediaStateChange(state=MediaState.PLAYING, title=result["title"], url=url)
+            command=MediaStateChange(state=MediaState.PLAYING, title=result.title, url=url)
         )
     )
-    return f"Reproduciendo: {result['title']}"
+    return f"Reproduciendo: {result.title}"
 
 
 async def media_pause(tctx: ToolContext) -> str:
