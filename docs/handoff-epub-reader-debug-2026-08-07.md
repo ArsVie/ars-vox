@@ -36,33 +36,53 @@ branch and visually verify.
   theme must ALSO be re-applied after `await rendition.display()` — the
   parked branch does both (nested objects + re-apply).
 
-## Root cause — PDF (same investigation, same browser)
+## Root cause — PDF (same investigation, same browser) — CORRECTED
 
 - pdf.js renders a 100%-BLACK canvas: `whitePct 0.0, blackPct 100.0`,
   mean RGB [0,0,0]. Zero `getContext` / paint calls observed after
   monkey-patching — pdfjs NEVER touches any canvas even though `open()`
   resolves and location reads "Página 1 de 2". No console errors.
+- REAL CAUSE (source-level, pdfjs-dist@6.2.108): `PDFPageProxy.render({...})`
+  destructures `canvasContext, canvas = canvasContext.canvas` — the
+  app's pdfReader passes only `canvas`, so `canvasContext` is undefined
+  and the render silently no-ops. This is pdfjs v6 API drift (pitfall #2).
+- CORRECTION: the parked branch's pdfReader.ts change (fit-width baseScale)
+  does NOT address this. The PDF fix must pass `canvasContext` (or the
+  param shape v6 actually consumes) + wrap loadTask/showPage errors
+  (intermittent "No se pudo abrir el documento" failure state observed).
+  Marked implement-and-verify NEXT.
 - Fixture is good (21 proper `Tj` operators), identical across branches.
-- The parked branch's pdfReader.ts change (fit-width baseScale) is the
-  intended fix; NOT yet verified live.
 
 ## The fix (parked, unmerged)
 
 `git.exe diff main..wip/advisor-round2-reader-polish --stat`:
 - apps/desktop/src/readers/epubReader.ts | 24 +-  (THEME_STYLES nested
-  objects + re-apply after display)
-- apps/desktop/src/readers/pdfReader.ts | 17 +-
+  objects + re-apply after display — CORRECT fix, validated at epubjs
+  source level + live probe)
+- apps/desktop/src/readers/pdfReader.ts | 17 +-  (fit-width scale — does
+  NOT fix the v6 render-param bug; keep the scale change, ADD the
+  canvasContext fix)
 - apps/desktop/src/components/ReaderView.tsx | 10 +-
 - apps/desktop/src/content.css | 14 +  (reader-mount 72ch measure)
 - plus StatusBar (STOP 48px), local_intents, docs.
 
+⚠️ CONTAMINATION SOURCE FOUND (explains the earlier failed verification):
+the 5173 vite dev server (started 17:12, BEFORE the work was parked at
+17:24) was serving the CACHED TRANSFORM of the pre-parking working tree —
+i.e. the FIXED epubReader.ts (nested objects), not main's CSS strings.
+Any browser test against 5173 was testing the fix, not the bug. Main code
+must be served from a FRESH vite (e.g. 5174 from the worktree) or a
+restarted 5173 to reproduce the real bug.
+
 NEXT STEP for whoever picks this up: merge wip/advisor-round2-reader-polish
-into main, run gates (vitest/typecheck/build/pytest), then visually verify
-EPUB + PDF render in a stable browser (see ars-vox skill → readers-2026-08.md
-for the verified CDP drive recipe). NOTE: main has since grown Wave-1 shell/
-token/role work (styles.css heavily edited by UI-101/UI-104) — expect merge
-conflicts in styles.css/content.css; resolve keeping catalog tokens
-(--control-height-lg, --radius-*) and the 72ch .reader-mount--book measure.
+into main (EPUB fix + ReaderView + CSS are correct), then apply the PDF
+canvasContext fix (pdfjs v6 render param shape), run gates
+(vitest/typecheck/build/pytest), then visually verify EPUB + PDF render in
+a stable browser (see ars-vox skill → readers-2026-08.md for the verified
+CDP drive recipe). NOTE: main has since grown Wave-1 shell/token/role work
+(styles.css heavily edited by UI-101/UI-104) — expect merge conflicts in
+styles.css/content.css; resolve keeping catalog tokens (--control-height-lg,
+--radius-*) and the 72ch .reader-mount--book measure.
 
 ## Environment state at investigation time
 

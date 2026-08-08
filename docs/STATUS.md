@@ -51,18 +51,28 @@ wins.
 - EPUB: epub.js 0.3.x real renderer (paginated, CFI locations, themes,
   A−/A+).
 - ⚠️ READERS CURRENTLY BROKEN ON MAIN (root cause established 2026-08-07 by
-  hermes-epub investigation, evidence-backed, stable CDP browser):
+  hermes-epub investigation, evidence-backed, stable CDP browser on a FRESH
+  vite — the long-running 5173 vite was serving a STALE pre-parking
+  transform with the fixes baked in, so tests against it saw the fix, not
+  main; always verify against a fresh vite):
   - EPUB: theme styles are passed to epub.js as CSS STRINGS; epub.js
     addStylesheetRules emits empty rules (`body { }`), body stays
     transparent with black text → invisible page on the dark stage. Text
-    IS in the DOM; iframes mount after ~11s.
-  - PDF: pdf.js renders a 100%-black canvas; zero getContext/paint calls
-    observed — the page never paints even though open() resolves.
-  - BOTH fixes exist in parked branch `wip/advisor-round2-reader-polish`
-    (epubReader.ts THEME_STYLES as nested objects + re-apply after
-    display; pdfReader.ts fit-width scale; ReaderView/content.css mount
-    div). NOT merged — main kept clean for wave 1. Merge that branch +
-    visually verify before claiming readers work.
+    IS in the DOM; iframes mount after ~6–11s. Fix: parked branch
+    `wip/advisor-round2-reader-polish` (nested `{selector:{prop:value}}`
+    objects + re-apply after display) — validated correct at epubjs
+    source level.
+  - PDF: pdfjs-dist@6.2.108 API drift — `render({canvas})` without
+    `canvasContext` silently no-ops (v6 destructures
+    `canvasContext, canvas = canvasContext.canvas`); canvas stays 100%
+    black, zero paint calls. Fix NOT in parked branch (its pdfReader
+    change is only fit-width) — must pass `canvasContext` + wrap
+    loadTask/showPage errors (intermittent "No se pudo abrir el
+    documento" flash observed). Implement-and-verify NEXT.
+  - Parked branch `wip/advisor-round2-reader-polish` = previous session's
+    reader/statusbar/local-intents work; merge + add the PDF canvasContext
+    fix + visually verify before claiming readers work. Expect merge
+    conflicts in styles.css/content.css with wave-1 catalog tokens.
 - Local-file access in Electron (custom protocol): PLANNED.
 - Book position persistence: backend library.get_position/set_position
   exists; UI resume wiring PLANNED.
