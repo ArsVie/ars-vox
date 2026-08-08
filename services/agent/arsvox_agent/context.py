@@ -2,13 +2,41 @@
 small and current: open panels, pending confirmations, active reminders,
 and the most recent turns (full history stays in SQLite)."""
 
+from datetime import datetime, timezone
+
 from arsvox_contracts import AppConfig
 
 from arsvox_agent.deps import Deps
 
+WEEKDAYS_ES = [
+    "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo",
+]
+MONTHS_ES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+    "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
+
+
+def now_line() -> str:
+    """One-line current local time, Spanish + unambiguous ISO/UTC.
+
+    Injected at the TOP of every turn's context (user message AND reminder
+    injection) so the model never needs a clock tool — the time is simply
+    always there (user requirement; do NOT replace with a clock tool).
+    """
+    now = datetime.now().astimezone()
+    local = (
+        f"{WEEKDAYS_ES[now.weekday()]} {now.day} de {MONTHS_ES[now.month - 1]} "
+        f"de {now.year}, {now.strftime('%H:%M')} ({now.tzname()})"
+    )
+    return (
+        f"Hora actual: {local}. ISO local: {now.isoformat(timespec='seconds')}. "
+        f"UTC: {now.astimezone(timezone.utc).isoformat(timespec='seconds')}."
+    )
+
 
 def build_context(config: AppConfig, deps: Deps) -> str:
-    lines: list[str] = []
+    lines: list[str] = [now_line()]
     panels = deps.panels.list()
     lines.append(
         "Paneles abiertos: "

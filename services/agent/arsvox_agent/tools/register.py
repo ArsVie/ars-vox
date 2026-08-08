@@ -18,7 +18,6 @@ _MODULES = [
     "arsvox_agent.tools.telegram_tools",
     "arsvox_agent.tools.notes_tasks_tools",
     "arsvox_agent.tools.reminder_tools",
-    "arsvox_agent.tools.system_tools",
     "arsvox_agent.tools.demo_tools",
 ]
 
