@@ -9,6 +9,11 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
+### hermes (orchestrator — adaptive UI redesign, WAVE 2)
+- timestamp: 2026-08-08T02:00:00Z
+- task: WAVE 2 KICKOFF (owner go-ahead received) — UI-201..207 dispatched as 5+2 leaf batches in worktrees /mnt/c/dev/ars-vox-worktrees/ui-2{01..07}-* (branches wip/ui-2XX-*). Workers told: NO merges (gate = orchestrator), NO hey.md/docs edits (orchestrator owns the board), commit early (600s child cap), surface ownership per contract conflict-avoidance map. Main tree: previous session's EOL-noise dirty state RESTORED (git checkout -- ., content unchanged — diff was 100% line-ending flip, verified via --ignore-space-at-eol); parked wip/advisor-round2-reader-polish INTACT (reader engine fixes stay parked until GATE-2; UI-203 scope excludes engines). Mock 8765 + vite 5173 left running from last session.
+- files/dirs: 7 new worktrees under /mnt/c/dev/ars-vox-worktrees/ (ui-201-browser .. ui-207-inertia)
+- status: in_progress — batch 1 (UI-201..205) dispatched 2026-08-08; batch 2 (UI-206/207) after batch 1 returns; GATE-2 merge + docs + screenshots after all seven land.
 
 ### hermes-epub (EPUB reader investigation)
 - timestamp: 2026-08-07T18:15:00Z
