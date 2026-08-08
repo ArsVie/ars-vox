@@ -6,6 +6,15 @@ description: Roadmap and session history. CURRENT-STATE AUTHORITY is docs/STATUS
 
 # Ars-Vox handoff — 2026-08-07 (night session)
 
+> ⚠️ READERS BROKEN ON MAIN (investigation resolved 2026-08-07): the EPUB
+> and PDF readers do NOT render on current main — root causes established
+> (EPUB: theme styles as CSS strings → empty epub.js rules → invisible
+> page; PDF: pdfjs v6 render() silently no-ops without canvasContext).
+> The UPDATE 2 block below ("REAL PDF/EPUB readers shipped") is HISTORICAL —
+> those readers were verified in an earlier session whose dev server was
+> serving the parked fix. Full evidence + fix location:
+> docs/STATUS.md (Documents section) + docs/handoff-epub-reader-debug-2026-08-07.md.
+
 > UPDATE (late 2026-08-07): content channel shipped — panels are POPULATED
 > in mock mode (screenshots: docs/review-2026-08-07/05-dashboard-populated.png,
 > 06-reading-populated.png, 07-split-populated.png). Frozen panel vision:

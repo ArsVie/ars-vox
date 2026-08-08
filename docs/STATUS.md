@@ -25,7 +25,7 @@ wins.
 - pytest: 84 passed — tests/python
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
-- OKF docs validator: 13 concepts validated
+- OKF docs validator: 18 concepts validated
 
 ## Adaptive UI redesign (waves)
 

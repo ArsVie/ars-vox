@@ -45,7 +45,7 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - ✅ GATE-1 FOUNDATION_INTEGRATION CLOSED 2026-08-07 (~18:56): all five branches merged to main (UI-101 shell, UI-102 geometry, UI-103 roles, UI-104 tokens, UI-105 harness). 4/5 workers hit the 600s cap — their landed work was gate-verified by the orchestrator (vitest/typecheck/build per worktree) and committed. Conflicts resolved: hey.md (union), styles.css (UI-101 shell vs UI-104 tokens — kept catalog tokens: radius via --radius-*, STOP via --control-height-lg 48px). Merged main: 240 vitest, 84 pytest, typecheck+build clean, storyboard capture works (24 scenarios). WAVE 2 UNLOCKED: UI-201..207 (7 tasks → 5+2 batches, Hermes caps parallel children at 5).
 - files/dirs: (wave 0) packages/contracts/** , apps/desktop/src/adaptive/*, apps/desktop/tests/adaptive-contract.test.ts, tests/python/test_adaptive_contract.py, docs/adaptive-ui-contract.md
 - boundaries: contract types ONLY — additive, no rewrite of existing wire behavior; did NOT touch components/, readers/, layout/engine.ts, services/agent.
-- status: in_progress (wave 0 done; orchestrating wave 1)
+- status: ✅ WAVE 0 + WAVE 1 + GATE-1 COMPLETE (2026-08-07) — CONTRACT_FROZEN (a3e996d) and FOUNDATION_INTEGRATION closed; wave 2 (UI-201..207) UNLOCKED, dispatch pending owner go-ahead. Screenshots: docs/screenshots/06..11-wave1-*.png (widescreen).
 
 ### hermes (advisor round-2 fixes + reader polish)
 - timestamp: 2026-08-07T22:50:00Z
