@@ -6,7 +6,12 @@
 # a copy through GET /config and can persist changes through PATCH
 # /config (Settings panel). Unknown keys are rejected.
 #
-# Relative paths resolve against this file's directory (repo root).
+# Relative paths (memory.db_path / library_dir / documents_dir,
+# agent.system_prompt_file, voice.wake_sound / sleep_sound) resolve
+# against the repo root — the parent of this configs/ directory (e.g.
+# data/arsvox.db -> <repo>/data/arsvox.db) — canonicalized to absolute
+# ONCE at load (config.resolved_paths). The process CWD is never used,
+# so the service behaves identically from any working directory.
 
 app:
   name: Ars-Vox

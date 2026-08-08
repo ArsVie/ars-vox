@@ -11,7 +11,7 @@ from arsvox_agent.tools.context import ToolContext
 
 
 def _documents_dir(tctx: ToolContext) -> Path:
-    return Path(tctx.deps.config.memory.documents_dir)
+    return tctx.deps.config.resolved_paths.documents_dir
 
 
 def _safe_title(title: str) -> bool:

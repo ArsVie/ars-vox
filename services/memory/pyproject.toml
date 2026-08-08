@@ -11,3 +11,6 @@ dependencies = ["arsvox-contracts==0.1.0"]
 
 [tool.setuptools.packages.find]
 include = ["arsvox_memory*"]
+
+[tool.uv.sources]
+arsvox-contracts = { workspace = true }

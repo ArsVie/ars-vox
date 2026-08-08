@@ -34,7 +34,7 @@ from arsvox_memory import (
     TaskStore,
 )
 
-from arsvox_agent.config_loader import load_config, resolve_path, save_config
+from arsvox_agent.config_loader import load_config, save_config
 from arsvox_agent.confirmations import ConfirmationCoordinator
 from arsvox_agent.deps import Deps
 from arsvox_agent.events import EventBus
@@ -122,7 +122,7 @@ class AppServices:
         self.config = config
         self.config_path = config_path
         self.started_at = time.time()
-        self.db = Database(resolve_path(config_path, config.memory.db_path))
+        self.db = Database(config.resolved_paths.db_path)
         self.sessions = SessionStore(self.db)
         self.notes = NoteStore(self.db)
         self.tasks = TaskStore(self.db)
@@ -286,6 +286,7 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
             new_config = AppConfig.model_validate(payload)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"config inválida: {exc}") from exc
+        new_config.anchor(services.config_path.parent)
         save_config(services.config_path, new_config)
         services.reload_config(new_config)
         await services.bus.publish(
@@ -336,7 +337,7 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
         existing = services.documents.find_by_title(title)
         if existing:
             raise HTTPException(status_code=409, detail="ya existe")
-        path = resolve_path(services.config_path, services.config.memory.documents_dir) / f"{title}.md"
+        path = services.config.resolved_paths.documents_dir / f"{title}.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
         doc_id = services.documents.create(title, str(path))

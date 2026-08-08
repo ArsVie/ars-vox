@@ -1,3 +1,6 @@
+[tool.uv.workspace]
+members = ["packages/contracts", "services/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 asyncio_mode = "auto"

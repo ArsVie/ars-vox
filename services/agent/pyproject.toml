@@ -12,7 +12,7 @@ dependencies = [
     "arsvox-memory==0.1.0",
     "arsvox-voice==0.1.0",
     "arsvox-tts==0.1.0",
-    "pydantic-ai>=0.1.0",
+    "pydantic-ai==2.25.0",
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "pyyaml>=6.0",
@@ -21,3 +21,9 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 include = ["arsvox_agent*"]
+
+[tool.uv.sources]
+arsvox-contracts = { workspace = true }
+arsvox-memory = { workspace = true }
+arsvox-voice = { workspace = true }
+arsvox-tts = { workspace = true }

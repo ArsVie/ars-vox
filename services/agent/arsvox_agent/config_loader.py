@@ -1,5 +1,8 @@
-"""Configuration loading/saving. Paths resolve against the config file
-directory (repo root by default)."""
+"""Configuration loading/saving. Relative path fields are canonicalized to
+absolute paths exactly once at load — against the config's path anchor
+(the repo root for the standard ``configs/app.yaml`` layout). The process
+CWD is never used. Raw values stay in the model for display/persistence;
+canonical absolute values live in ``config.resolved_paths``."""
 
 from pathlib import Path
 
@@ -12,6 +15,7 @@ def load_config(path: Path | str) -> tuple[AppConfig, Path]:
     config_path = Path(path).resolve()
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     config = AppConfig.model_validate(raw)
+    config.anchor(config_path.parent)
     return config, config_path
 
 
@@ -20,8 +24,3 @@ def save_config(path: Path, config: AppConfig) -> None:
         config.model_dump(mode="json"), sort_keys=False, allow_unicode=True
     )
     path.write_text(dumped, encoding="utf-8")
-
-
-def resolve_path(config_path: Path, value: str) -> Path:
-    p = Path(value)
-    return p if p.is_absolute() else (config_path.parent / p)

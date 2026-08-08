@@ -69,8 +69,8 @@ class AgentRuntime:
         return self._agent
 
     def _load_system_prompt(self) -> str:
-        override = self.config.agent.system_prompt_file
-        path = Path(override) if override else PROMPT_FILE
+        override = self.config.resolved_paths.system_prompt_file
+        path = override if override else PROMPT_FILE
         return path.read_text(encoding="utf-8")
 
     # ------------------------------------------------------------------ #
