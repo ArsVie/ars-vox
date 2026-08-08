@@ -10,7 +10,6 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ## Active
 
-<<<<<<< HEAD
 ### hermes-epub (EPUB reader investigation)
 - timestamp: 2026-08-07T18:15:00Z
 - task: Investigate why the EPUB reader does not render in Ars-Vox. Authoritative brief: `docs/handoff-epub-reader-debug-2026-08-07.md` (factual state + open questions + boundaries). Root cause NOT determined — do not assume prior theories. Stable single-browser verification required (agent-browser + CDP, DOM + vision in the SAME tab).
@@ -31,6 +30,14 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - files/dirs: apps/desktop/src/layout/adaptiveEngine.ts (new), apps/desktop/src/layout/AdaptiveStage.tsx (new), apps/desktop/tests/adaptive-geometry.test.ts (new), apps/desktop/tests/adaptive-stage.test.tsx (new), hey.md
 - boundaries: will NOT touch src/adaptive/* (contract code), components/*, src/layout/engine.ts (legacy), store/App/ws/electron; engine+fixture-placeholder render only. No npm installs (node_modules is a junction to main).
 - status: resolved (GATE-1 merged, commit on main)
+
+### hermes (UI-104 — unified visual token system)
+- timestamp: 2026-08-07T23:40:00Z
+- task: Implement VALUES for the UI-000 frozen token catalog (40 names, 8 groups: typography/spacing/divider/surface/radius/control/icon/state) as CSS custom properties in styles.css :root; explicit strong/normal/subordinate typography hierarchy (font shorthand); control floors for the older-user target (lg 48px / md 44px / touch-target 48px); card-content surface distinct from region surfaces; legacy token bridge (--panel/--panel-2/--panel-3/--panel-border/--panel-border-soft/--bg/--radius route through catalog); high-contrast mode re-routed to catalog tokens; STOP wired to --control-height-lg; focus/hover/active/disabled routed to state tokens; divider/spacing tokens used by canonical rules; new conformance suite tests/token-values.test.ts (20 tests: catalog↔CSS set equality, hierarchy, sizing floors, surface separation, legacy bridge, wiring).
+- files/dirs: apps/desktop/src/styles.css (token catalog + legacy bridge + routed rules), apps/desktop/tests/token-values.test.ts (new)
+- boundaries: did NOT touch components/**, readers/**, layout/engine.ts, src/adaptive/* (contract code), content.css, packages/**, services/**; no new token names outside the frozen catalog; region/shell chrome left to UI-101; no stop-condition escalations.
+- verification: 131/131 vitest (111 baseline + 20 new), typecheck clean, build clean (both renderer + electron).
+- status: resolved
 
 ### hermes (orchestrator — adaptive UI redesign)
 - timestamp: 2026-08-07T23:30:00Z
