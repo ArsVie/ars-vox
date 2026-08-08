@@ -44,8 +44,15 @@ async def websocket_endpoint(
     await ws.accept()
     queue = bus.subscribe()
     try:
-        # initial state so the UI renders immediately
-        state = VoiceState.LISTENING
+        # initial state so the UI renders immediately — derived from the
+        # pipeline's actual state (which itself derives from
+        # config.voice.enabled), never hardcoded LISTENING: a fresh UI
+        # with voice disabled must not claim "Escuchando".
+        state = VoiceState.SLEEPING
+        if runtime.pipeline is not None:
+            state = runtime.pipeline.state
+        elif config_snapshot.get("voice", {}).get("enabled"):
+            state = VoiceState.LISTENING
         await ws.send_text(StateUpdateEvent(voice_state=state).model_dump_json())
         await ws.send_text(
             ConfigUpdateEvent(config=config_snapshot).model_dump_json()
@@ -140,7 +147,11 @@ async def _handle_local_intent(
 async def _sync_state_after_resolve(ws: WebSocket, runtime: AgentRuntime) -> None:
     pending = runtime.deps_base.pending.list_pending()
     state = VoiceState.WAITING_FOR_CONFIRMATION if pending else VoiceState.LISTENING
-    await ws.send_text(StateUpdateEvent(voice_state=state).model_dump_json())
+    if runtime.pipeline is not None:
+        # publish into the canonical state machine; the bus carries it back
+        runtime.pipeline.set_state(state)
+    else:
+        await ws.send_text(StateUpdateEvent(voice_state=state).model_dump_json())
 
 
 async def _reply_unparsable(

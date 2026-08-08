@@ -49,6 +49,21 @@ export class MicCapture {
   private chunks: Blob[] = [];
   private vad = new EnergyVad(DEFAULT_VAD);
   private stoppedByUser = false;
+  /**
+   * Abort flag: set by abort() BEFORE recorder.stop() so the trailing
+   * dataavailable/onstop pair cannot repopulate chunks or ship a final
+   * recording to STT.
+   */
+  private cancelled = false;
+  /**
+   * Capture generation: bumped on every start()/abort(). Async work
+   * (STT fetch, late finalize) captures the generation it belongs to and
+   * drops its result if it changed — a post-STOP transcript can never
+   * become a new user turn.
+   */
+  private generation = 0;
+  /** Abort controller for the in-flight STT fetch (aborted on abort()). */
+  private sttAbort: AbortController | null = null;
 
   constructor(private readonly callbacks: MicCallbacks) {}
 
@@ -62,6 +77,8 @@ export class MicCapture {
 
   /** Start capturing. Resolves once the mic is live and recording. */
   async start(): Promise<void> {
+    this.cancelled = false;
+    this.generation += 1;
     this.stoppedByUser = false;
     this.vad.reset();
     this.chunks = [];
@@ -81,9 +98,13 @@ export class MicCapture {
     const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     this.recorder = recorder;
     recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) this.chunks.push(e.data);
+      // Guarded: after abort() the trailing dataavailable (fired by
+      // recorder.stop()) must not repopulate the chunk list.
+      if (e.data && e.data.size > 0 && !this.cancelled) this.chunks.push(e.data);
     };
-    recorder.onstop = () => this.finalize();
+    recorder.onstop = () => {
+      if (!this.cancelled) void this.finalize();
+    };
 
     // Energy analysis loop.
     const ctx = new AudioContext();
@@ -125,7 +146,8 @@ export class MicCapture {
 
   /** Abort without transcribing (e.g. app stop). */
   async abort(): Promise<void> {
-    this.stoppedByUser = true;
+    this.cancelled = true;
+    this.generation += 1;
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.rafId = null;
     this.chunks = [];
@@ -136,11 +158,16 @@ export class MicCapture {
         // already stopped
       }
     }
+    // Drop any in-flight STT fetch; finalize()'s generation check turns
+    // the resulting AbortError into a silent no-op (never an error phase).
+    this.sttAbort?.abort();
+    this.sttAbort = null;
     this.teardown();
     this.callbacks.onPhase("idle");
   }
 
   private async finalize(): Promise<void> {
+    const gen = this.generation;
     const blob = new Blob(this.chunks, { type: this.recorder?.mimeType ?? "audio/webm" });
     const hadAudio = blob.size > 0;
     this.teardown();
@@ -149,17 +176,30 @@ export class MicCapture {
       return;
     }
     this.callbacks.onPhase("transcribing");
+    const controller = new AbortController();
+    this.sttAbort = controller;
     try {
       const form = new FormData();
       form.append("file", blob, "utterance.webm");
-      const res = await fetch(STT_URL, { method: "POST", body: form });
+      const res = await fetch(STT_URL, {
+        method: "POST",
+        body: form,
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error(`stt ${res.status}`);
       const data = (await res.json()) as { text?: string };
+      // Generation guard on the STT -> sendText path: if the capture was
+      // aborted/restarted since this utterance started, the transcript is
+      // stale — drop it so a post-STOP STT can never become a new turn.
+      if (gen !== this.generation) return;
       const text = (data.text ?? "").trim();
       if (text) this.callbacks.onTranscript(text);
       this.callbacks.onPhase("idle");
     } catch (err) {
+      if (gen !== this.generation) return; // aborted — already idle
       this.callbacks.onPhase("error", String(err));
+    } finally {
+      if (this.sttAbort === controller) this.sttAbort = null;
     }
   }
 

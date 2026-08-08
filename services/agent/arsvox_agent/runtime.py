@@ -74,8 +74,21 @@ class AgentRuntime:
         return path.read_text(encoding="utf-8")
 
     # ------------------------------------------------------------------ #
-    async def notify_voice_state(self, state: str) -> None:
-        await self.bus.publish(StateUpdateEvent(voice_state=VoiceState(state)))
+    async def notify_voice_state(self, state: VoiceState | str, activity: str | None = None) -> None:
+        """Bus publisher — the pipeline's on_state_change callback. The
+        pipeline owns the state value; this only ships it over the bus."""
+        await self.bus.publish(
+            StateUpdateEvent(voice_state=VoiceState(state), activity=activity)
+        )
+
+    def _set_voice(self, state: VoiceState, activity: str | None = None) -> None:
+        """Publish a transition into the canonical voice state machine
+        (the pipeline). Falls back to a direct bus publish only when no
+        pipeline is wired (unit tests)."""
+        if self.pipeline is not None:
+            self.pipeline.set_state(state, activity)
+        else:
+            asyncio.create_task(self.notify_voice_state(state, activity))
 
     async def handle_user_text(self, text: str) -> None:
         if self._busy or (self._active_task and not self._active_task.done()):
@@ -109,12 +122,10 @@ class AgentRuntime:
                 if pending
                 else VoiceState.LISTENING
             )
-            await self.bus.publish(StateUpdateEvent(voice_state=state))
+            self._set_voice(state)
 
     async def _turn(self, text: str) -> None:
-        await self.bus.publish(
-            StateUpdateEvent(voice_state=VoiceState.THINKING, activity=text[:80])
-        )
+        self._set_voice(VoiceState.THINKING, activity=text[:80])
         if self.session_id is None:
             self.session_id = self.deps_base.sessions.create()
         self.deps_base.sessions.append_turn(self.session_id, "user", text)
@@ -148,9 +159,7 @@ class AgentRuntime:
             if self.config.tts.auto_speak:
                 # The UI fetches the audio (GET /tts) and plays it; the
                 # stop path clears the UI queue and interrupts playback.
-                await self.bus.publish(
-                    StateUpdateEvent(voice_state=VoiceState.SPEAKING)
-                )
+                self._set_voice(VoiceState.SPEAKING)
                 await self.bus.publish(
                     UiCommandEvent(command=TtsSpeak(text=final, priority=False))
                 )
@@ -167,7 +176,7 @@ class AgentRuntime:
                 await task
             except (asyncio.CancelledError, Exception):
                 pass
-        await self.bus.publish(StateUpdateEvent(voice_state=VoiceState.STOPPING))
+        self._set_voice(VoiceState.STOPPING)
         self.deps_base.audit.log("control", "stop", {"scope": "run"})
         await asyncio.sleep(0.05)
-        await self.bus.publish(StateUpdateEvent(voice_state=VoiceState.SLEEPING))
+        self._set_voice(VoiceState.SLEEPING)
