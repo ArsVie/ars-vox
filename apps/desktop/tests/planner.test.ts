@@ -13,8 +13,6 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { LayoutSpec } from "../src/adaptive/contracts";
-import { TEMPLATE_FIXTURES } from "../src/adaptive/fixtures";
 import {
   LEGACY_TEMPLATE_MAP,
   planLayout,
@@ -23,10 +21,7 @@ import {
   type WireLayoutIntent,
 } from "../src/adaptive/planner";
 import { computeAdaptiveGeometry } from "../src/layout/adaptiveEngine";
-import {
-  createSurfaceRegistry,
-  surfaceRegistry,
-} from "../src/roles/registry";
+import { createSurfaceRegistry } from "../src/roles/registry";
 import { createAppStore } from "../src/store";
 import { registerProductSurfaces } from "../src/adaptive/surfaces";
 
