@@ -64,6 +64,31 @@ class PendingStore:
         self.db.commit()
         return cur.rowcount > 0
 
+    def set_status(
+        self,
+        pending_id: str,
+        status: str,
+        from_status: str | None = None,
+    ) -> bool:
+        """Explicit lifecycle transition (H5): pending -> approved ->
+        executing -> executed | failed. ``from_status`` guards the
+        transition (None = any current status)."""
+        if status not in STATUSES:
+            raise ValueError(f"bad status {status}")
+        if from_status is not None and from_status not in STATUSES:
+            raise ValueError(f"bad from_status {from_status}")
+        sql = (
+            "UPDATE pending_actions SET status = ?, resolved_at = ?"
+            " WHERE id = ?"
+        )
+        params: list = [status, utcnow_iso(), pending_id]
+        if from_status is not None:
+            sql += " AND status = ?"
+            params.append(from_status)
+        cur = self.db.execute(sql, tuple(params))
+        self.db.commit()
+        return cur.rowcount > 0
+
     def expire_stale(self, now: str) -> list[str]:
         rows = self.db.rows(
             "SELECT id FROM pending_actions WHERE status = ? AND expires_at <= ?",
@@ -106,4 +131,28 @@ class PendingStore:
             "SELECT * FROM pending_actions WHERE status = ? ORDER BY created_at",
             (ConfirmationStatus.PENDING.value,),
         )
+        return [dict(r, args=json.loads(r["args_json"])) for r in rows]
+
+    def invalidate_all(self, status: str) -> list[dict]:
+        """Move every pending row to a terminal status (H5). Used by the
+        global one-pending policy (superseded) and by stop/cancel
+        invalidation (cancelled). Returns the affected rows so callers can
+        report each one."""
+        if status not in STATUSES:
+            raise ValueError(f"bad status {status}")
+        rows = self.db.rows(
+            "SELECT * FROM pending_actions WHERE status = ?",
+            (ConfirmationStatus.PENDING.value,),
+        )
+        if not rows:
+            return []
+        self.db.executemany(
+            "UPDATE pending_actions SET status = ?, resolved_at = ?"
+            " WHERE id = ? AND status = ?",
+            [
+                (status, utcnow_iso(), r["id"], ConfirmationStatus.PENDING.value)
+                for r in rows
+            ],
+        )
+        self.db.commit()
         return [dict(r, args=json.loads(r["args_json"])) for r in rows]

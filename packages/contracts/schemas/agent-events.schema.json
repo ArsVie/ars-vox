@@ -260,6 +260,9 @@
       "enum": [
         "pending",
         "approved",
+        "executing",
+        "executed",
+        "failed",
         "cancelled",
         "expired",
         "superseded"
@@ -946,6 +949,44 @@
       "title": "PanelType",
       "type": "string"
     },
+    "PendingConfirmationSnapshot": {
+      "properties": {
+        "pending_id": {
+          "title": "Pending Id",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "expires_in_s": {
+          "title": "Expires In S",
+          "type": "integer"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pending_id",
+        "tool",
+        "title",
+        "detail",
+        "expires_in_s",
+        "expires_at"
+      ],
+      "title": "PendingConfirmationSnapshot",
+      "type": "object"
+    },
     "PongEvent": {
       "properties": {
         "type": {
@@ -989,6 +1030,83 @@
         "next_fire"
       ],
       "title": "ReminderItem",
+      "type": "object"
+    },
+    "StateSnapshotEvent": {
+      "properties": {
+        "type": {
+          "const": "state_snapshot",
+          "default": "state_snapshot",
+          "title": "Type",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "voice_state": {
+          "$ref": "#/$defs/VoiceState"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "layout": {
+          "additionalProperties": true,
+          "title": "Layout",
+          "type": "object"
+        },
+        "pending_confirmation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingConfirmationSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "media": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaStateEvent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "notifications": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Notifications",
+          "type": "array"
+        },
+        "content_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Content Keys",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sequence",
+        "voice_state",
+        "config",
+        "layout"
+      ],
+      "title": "StateSnapshotEvent",
       "type": "object"
     },
     "StateUpdateEvent": {
@@ -1488,6 +1606,7 @@
       "media.state": "#/$defs/MediaStateEvent",
       "notification": "#/$defs/NotificationEvent",
       "pong": "#/$defs/PongEvent",
+      "state_snapshot": "#/$defs/StateSnapshotEvent",
       "state_update": "#/$defs/StateUpdateEvent",
       "tasks.update": "#/$defs/TasksUpdateEvent",
       "tool_call": "#/$defs/ToolCallEvent",
@@ -1545,6 +1664,9 @@
     },
     {
       "$ref": "#/$defs/PongEvent"
+    },
+    {
+      "$ref": "#/$defs/StateSnapshotEvent"
     }
   ]
 }
