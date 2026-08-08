@@ -6,11 +6,21 @@ description: Roadmap and session history. CURRENT-STATE AUTHORITY is docs/STATUS
 
 # Ars-Vox handoff — 2026-08-07 (night session)
 
-> ⚠️ READERS BROKEN ON MAIN (investigation resolved 2026-08-07): the EPUB
-> and PDF readers do NOT render on current main — root causes established
-> (EPUB: theme styles as CSS strings → empty epub.js rules → invisible
-> page; PDF: pdfjs v6 render() silently no-ops without canvasContext).
-> The UPDATE 2 block below ("REAL PDF/EPUB readers shipped") is HISTORICAL —
+> UPDATE (2026-08-08, wave 2 / GATE-2 closed): UI-201..207 ALL merged —
+> browser, conversation, reading, tasks, media adaptive surfaces + motion
+> transitions + spatial inertia policy. Product surfaces now registered and
+> hosted by the adaptive stage through LayoutSpec (gate wiring:
+> src/adaptive/surfaces.ts). READERS FIXED AND VERIFIED ON MAIN: EPUB nested
+> theme objects + re-apply (light page renders), PDF canvasContext render fix
+> (canvas pixel-probed 100% white) — see STATUS.md Documents. 306 vitest /
+> 110 pytest green. Screenshots refreshed (12..22-wave2-*). Wave 3
+> (UI-301..303) unlocked, dispatch pending owner go-ahead.
+
+> ⚠️ HISTORICAL (resolved 2026-08-08): READERS BROKEN ON MAIN was true until
+> the 2026-08-08 merge — root causes established (EPUB: theme styles as CSS
+> strings → empty epub.js rules → invisible page; PDF: pdfjs v6 render()
+> silently no-ops without canvasContext). Both fixed + verified (above).
+ The UPDATE 2 block below ("REAL PDF/EPUB readers shipped") is HISTORICAL —
 > those readers were verified in an earlier session whose dev server was
 > serving the parked fix. Full evidence + fix location:
 > docs/STATUS.md (Documents section) + docs/handoff-epub-reader-debug-2026-08-07.md.

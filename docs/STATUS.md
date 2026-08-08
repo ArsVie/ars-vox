@@ -1,11 +1,11 @@
 ---
 type: status
 title: Ars-Vox current state
-description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-07.
-timestamp: 2026-08-07T20:34:25Z
+description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-08.
+timestamp: 2026-08-08T03:55:00Z
 ---
 
-# Ars-Vox — current state (2026-08-07)
+# Ars-Vox — current state (2026-08-08)
 
 THIS FILE IS THE SINGLE AUTHORITY for current implementation state.
 HANDOFF.md is roadmap + session history; ADRs are historical decisions;
@@ -18,14 +18,15 @@ wins.
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-07 ~18:56, post GATE-1)
+## Test gates (last full run, 2026-08-08 ~03:50Z, post GATE-2)
 
-- vitest: 240 passed (13 files) — apps/desktop (baseline 111 + wave-1: 20 tokens,
-  38 geometry, 28 roles, 43 harness)
-- pytest: 84 passed — tests/python
+- vitest: 306 passed (25 files) — apps/desktop (baseline 240 + wave-2: 6 browser,
+  8 conversation, 6 reading, 7 tasks, 6 media, 6 motion, 8 inertia + 6 gate wiring)
+- pytest: 110 passed — tests/python (84 + 26 utterance-level STOP matcher,
+  merged from parked branch 2026-08-08)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
-- OKF docs validator: 18 concepts validated
+- OKF docs validator: 18 concepts validated (2026-08-08)
 
 ## Adaptive UI redesign (waves)
 
@@ -39,8 +40,22 @@ wins.
   FOUNDATION_INTEGRATION closed 2026-08-07). Note: 4/5 workers hit the
   600s subagent cap; their landed work was gate-verified by the orchestrator
   and committed (UI-104 was the only clean self-commit, d3dae0c).
-- WAVE 2 UNLOCKED — UI-201..207 (7 tasks; runs as 5+2 batches, Hermes caps
-  parallel children at 5).
+- WAVE 2 DONE — UI-201 browser, UI-202 conversation, UI-203 reading,
+  UI-204 tasks, UI-205 media, UI-206 motion, UI-207 spatial inertia ALL
+  merged (GATE-2 ADAPTIVE_SURFACE_INTEGRATION closed 2026-08-08; 7/7 workers
+  self-completed in 5+2 batches — no timeouts this wave). Gate wiring:
+  product surfaces (browser/conversation/document_editor/tasks/media)
+  registered in the surface registry and hosted by the adaptive stage
+  through LayoutSpec with the UI-103 role host (src/adaptive/surfaces.ts +
+  AdaptiveStage; legacy PanelHost stays for the non-adaptive path). Motion:
+  240ms slot transitions keyed by surfaceId (no remount), reduced-motion
+  gated. Inertia: pure layout-change scorer + thin store guard in
+  applyAdaptiveSpec (equivalent layouts / chatter never churn; user signal
+  always applies). Verified live in CDP: split browser+conversation with
+  real surfaces, media primary→persistent bar without playback reset,
+  readers pixel-verified (below). Screenshots: docs/screenshots/12..22-wave2-*.
+- WAVE 3 UNLOCKED — UI-301 agent layout planner, UI-302 user overrides,
+  UI-303 a11y/usability (3 parallel; dispatch pending owner go-ahead).
 - Execution contract: docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
 
 ## Documents
@@ -50,29 +65,20 @@ wins.
 - PDF: pdf.js v6 real renderer (lazy-loaded, worker via vite asset).
 - EPUB: epub.js 0.3.x real renderer (paginated, CFI locations, themes,
   A−/A+).
-- ⚠️ READERS CURRENTLY BROKEN ON MAIN (root cause established 2026-08-07 by
-  hermes-epub investigation, evidence-backed, stable CDP browser on a FRESH
-  vite — the long-running 5173 vite was serving a STALE pre-parking
-  transform with the fixes baked in, so tests against it saw the fix, not
-  main; always verify against a fresh vite):
-  - EPUB: theme styles are passed to epub.js as CSS STRINGS; epub.js
-    addStylesheetRules emits empty rules (`body { }`), body stays
-    transparent with black text → invisible page on the dark stage. Text
-    IS in the DOM; iframes mount after ~6–11s. Fix: parked branch
-    `wip/advisor-round2-reader-polish` (nested `{selector:{prop:value}}`
-    objects + re-apply after display) — validated correct at epubjs
-    source level.
-  - PDF: pdfjs-dist@6.2.108 API drift — `render({canvas})` without
-    `canvasContext` silently no-ops (v6 destructures
-    `canvasContext, canvas = canvasContext.canvas`); canvas stays 100%
-    black, zero paint calls. Fix NOT in parked branch (its pdfReader
-    change is only fit-width) — must pass `canvasContext` + wrap
-    loadTask/showPage errors (intermittent "No se pudo abrir el
-    documento" flash observed). Implement-and-verify NEXT.
-  - Parked branch `wip/advisor-round2-reader-polish` = previous session's
-    reader/statusbar/local-intents work; merge + add the PDF canvasContext
-    fix + visually verify before claiming readers work. Expect merge
-    conflicts in styles.css/content.css with wave-1 catalog tokens.
+- ✅ READERS FIXED AND VERIFIED ON MAIN (2026-08-08, merge a48c8fe — parked
+  branch wip/advisor-round2-reader-polish + the PDF canvasContext fix):
+  - EPUB: theme styles are now NESTED OBJECTS ({selector:{prop:value}});
+    epub.js addStylesheetRules was emitting EMPTY rules for CSS strings,
+    leaving the body transparent with black text. Theme + font are also
+    re-applied after display() resolves. Verified live in CDP: body
+    computed style rgb(247,244,238) background + dark text, 840 chars of
+    Quijote visible, vision-confirmed on the light "Papel" page.
+  - PDF: render() now passes `canvasContext` (pdfjs-dist 6.2.108 silently
+    no-ops on bare `canvas`), device-pixel transform, fit-width base scale,
+    and deterministic error wrapping for open/page failures. Verified live:
+    canvas pixel-probe = 100% white (was 100% black).
+  - PITFALL (still live): epub display() stalls silently in backgrounded
+    CDP tabs (rAF-throttled queue) — activate the tab before driving.
 - Local-file access in Electron (custom protocol): PLANNED.
 - Book position persistence: backend library.get_position/set_position
   exists; UI resume wiring PLANNED.
