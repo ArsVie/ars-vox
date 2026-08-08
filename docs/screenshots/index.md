@@ -5,7 +5,30 @@ Current UI screenshots, captured 2026-08-07 from the live mock-mode app
 refresh this folder after EVERY redesign wave — new wave shots get the next
 free numbers, and the wave list below stays current.
 
-## Wave 1 — unified application shell (GATE-1, merged 2026-08-07)
+## Wave 2 — adaptive surfaces + motion (GATE-2, merged 2026-08-08)
+
+Post-GATE-2 state: UI-201..207 + gate wiring. The adaptive stage now hosts
+the REAL product surfaces through LayoutSpec (browser / conversation /
+document_editor / tasks / media registered + role host), with motion
+transitions (UI-206) and the spatial inertia policy (UI-207) wired. The
+readers were also fixed and verified on main: EPUB theme (nested objects +
+re-apply after display) paints the light "Papel" page with readable text;
+PDF renders via `canvasContext` (pdfjs v6 drift) — canvas pixel-probed
+100% white (was 100% black) and vision-verified.
+
+* [Split — browser + conversation](12-wave2-split-browser-conversation.png) - real surfaces, adaptive stage, LayoutSpec-driven (both primary in split)
+* [Reading — PDF primary](13-wave2-reading-pdf.png) - pdf.js canvasContext fix, fit-width (Quijote fixture, "Página 1 de 2")
+* [Reading — EPUB primary](14-wave2-reading-epub.png) - epub.js nested-theme fix, 72ch measure, readable light page
+* [Media primary](15-wave2-media-primary.png) - MediaDock full player (youtube title, position, controls)
+* [Media persistent bar](16-wave2-media-persistent-bar.png) - compact shell-level playback bar after media left the layout (primary→persistent, no playback reset)
+* [Home / default](17-wave2-home-default.png) - boot state (legacy PanelHost path, no adaptive spec)
+* [Template focus](18-wave2-template-focus.png) - plantilla demo: one primary region
+* [Template sidecar](19-wave2-template-sidecar.png) - primary + companion
+* [Template stack](20-wave2-template-stack.png) - vertical stack
+* [Template split](21-wave2-template-split.png) - side by side
+* [Template triple](22-wave2-template-triple.png) - primary + companion + support
+
+## Wave 1 — unified application shell (GATE-1, merged 2026-08-07 — historical)
 
 Post-GATE-1 state: UI-101 shell + UI-102 geometry engine placeholders +
 UI-103 role framework + UI-104 token values + UI-105 harness. One
