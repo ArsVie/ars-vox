@@ -1237,6 +1237,72 @@ body,
   font-size: 18px;
 }
 
+/* ------------------------------------- conversation surface variants (UI-202)
+   Driven by the semantic role from useSurfaceRole() (UI-103): primary = full
+   conversation, companion = compact recent conversation, support = latest
+   exchange. Variant CSS only adjusts surface chrome/type — the engine's
+   density classes (composer-collapsed / placeholder-hidden) keep working in
+   every variant because the composer DOM and geometry classes are untouched. */
+
+/* companion: subdued header — a quiet label, not a panel title bar */
+.conversation--companion .conversation-subheader {
+  flex: none;
+  padding: 12px 18px 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.conversation--companion .message-list {
+  padding: 10px 14px;
+  gap: var(--spacing-sm);
+}
+
+.conversation--companion .message {
+  font-size: 14px;
+  padding: 8px 12px;
+  max-width: 88%;
+}
+
+.conversation--companion .message.assistant {
+  min-width: 0;
+}
+
+.conversation--companion .empty-state {
+  gap: var(--spacing-xs);
+  padding: 14px;
+}
+
+.conversation--companion .empty-state .empty-title {
+  font-size: 15px;
+  margin: 0;
+}
+
+/* support: minimal — latest exchange, no header, message-like type */
+.conversation--support .message-list {
+  padding: 10px 12px;
+  gap: var(--spacing-sm);
+}
+
+.conversation--support .message {
+  font-size: 13px;
+  padding: 7px 11px;
+  max-width: 100%;
+}
+
+.conversation--support .message.assistant {
+  min-width: 0;
+}
+
+.conversation--support .empty-state .empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
 /* ---------------------------------------------------------- media dock */
 .media-dock-body {
   flex: 1;
