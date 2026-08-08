@@ -4,6 +4,7 @@ policy, cancel invalidation, explicit lifecycle, _turn context fix."""
 import json
 
 import pytest
+from pydantic import TypeAdapter
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
@@ -85,8 +86,9 @@ def test_state_snapshot_event_shape_parses():
     assert parsed.media is not None and parsed.media.video_id == "abc"
     assert parsed.layout["panels"][0]["content_reference"] == "doc-1"
     assert parsed.content_keys == ["doc-1"]
-    # discriminated union: parses as an AgentEvent
-    ev = AgentEvent.model_validate(dumped)
+    # discriminated union: parses as an AgentEvent (TypeAdapter — the
+    # union is a plain Annotated alias, no model_validate on it)
+    ev = TypeAdapter(AgentEvent).validate_python(dumped)
     assert ev.type == "state_snapshot"
     assert ev.sequence == 7
 
@@ -134,15 +136,21 @@ def test_reconnect_recovers_pending_confirmation(script_client):
         assert snap["pending_confirmation"]["tool"] == "telegram.send_pending"
         assert snap["voice_state"] == "waiting_for_confirmation"
         # sequence: the snapshot is the current bus sequence; the next bus
-        # event continues seamlessly at +1
+        # event continues seamlessly at +1. The stale pending (never
+        # resolved on connection 1) SURVIVES the reconnect: the turn still
+        # runs, but the app settles back to WAITING_FOR_CONFIRMATION —
+        # the card is never silently dropped.
         seq = snap["sequence"]
         ws2.send_json({"type": "user_text", "text": "cuéntame algo"})
         events2 = ws_collect(
             client=c, ws=ws2,
-            expected_break=lambda e: e["type"] == "state_update" and e["voice_state"] == "listening",
+            expected_break=lambda e: e["type"] == "state_update"
+            and e["voice_state"] == "waiting_for_confirmation",
         )
-        assert events2[0]["type"] == "state_update"
+        assert events2[0]["type"] == "user_message"
         assert events2[0]["sequence"] == seq + 1
+        settled = [e for e in events2 if e["type"] == "state_update"][-1]
+        assert settled["voice_state"] == "waiting_for_confirmation"
 
 
 def test_reconnect_snapshot_includes_layout_panels(script_client):
