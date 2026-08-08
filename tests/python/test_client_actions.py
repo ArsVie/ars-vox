@@ -298,6 +298,23 @@ def test_browser_local_actions_acknowledged(client):
             assert _result(events, action)["status"] == "done"
 
 
+def test_youtube_play_acknowledged_client_local(client):
+    # YoutubePanel plays the selected video locally (MediaDock iframe); the
+    # backend acknowledges receipt (done) — never a spurious error banner.
+    with client.websocket_connect("/ws") as ws:
+        _connect(ws)
+        ws.send_json({
+            "type": "ui_command",
+            "command": {"action": "youtube.play", "video_id": "dQw4w9WgXcQ", "title": "x"},
+        })
+        events = ws_collect(
+            client=client, ws=ws,
+            expected_break=lambda e: e["type"] == "action_result",
+        )
+        verdict = _result(events, "youtube.play")
+        assert verdict["status"] == "done"
+
+
 def test_audio_play_play_pause_seek_emit_media_state(client):
     from arsvox_agent.actions import reset_media_state
 

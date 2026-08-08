@@ -113,7 +113,7 @@ async def handle_ui_command(
             return await _search_youtube(deps, registry, command)
         if action == "browser.navigate":
             return await _navigate_browser(deps, command)
-        if action in ("browser.back", "browser.forward", "browser.refresh"):
+        if action in ("browser.back", "browser.forward", "browser.refresh", "youtube.play"):
             return _acknowledge_local(action)
         if action in ("media.play_pause", "media.seek", "audio.play"):
             return await _media_action(deps, action, command)

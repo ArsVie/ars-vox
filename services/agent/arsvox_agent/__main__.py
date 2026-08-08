@@ -26,7 +26,7 @@ def main() -> None:
         # a temp file and boot from that.
         args.config = dump_mock_config(args.config, mock=True)[0]
     app = create_app(args.config)
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(app, host=host, port=port, log_level="info", access_log=False)
 
 
 if __name__ == "__main__":
