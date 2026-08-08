@@ -581,20 +581,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         set({ adaptive: { ...state.adaptive, lastRejection: result.rejection } });
         return result.rejection;
       }
-      const assignments = resolveLayout(result.spec, surfaceRegistry);
-      const verdict = scoreChange(state.adaptive.spec, result.spec);
-      if (verdict.decision === "keep") {
-        set({ adaptive: { ...state.adaptive, lastRejection: null } });
-        return null; // keep current — zero churn
-      }
-      set({
-        adaptive: {
-          ...state.adaptive,
-          spec: result.spec,
-          assignments,
-          lastRejection: null,
-        },
-      });
+      // GATE-3.5 (review P1-2): agent-planner output goes through the SAME
+      // choke as every other layout mutation (applyAdaptiveSpec), so the
+      // persistent user constraint set applies ON TOP of the planned spec —
+      // an explicit user constraint ("close conversation") beats a later
+      // agent composition that would bring the surface back.
+      applyAdaptiveSpec(result.spec, { userInitiated: false });
+      set({ adaptive: { ...get().adaptive, lastRejection: null } });
       return null;
     };
 

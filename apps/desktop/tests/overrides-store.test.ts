@@ -154,3 +154,40 @@ describe("applyAdaptiveSpec — invalid user arrangements degrade to the nearest
     ).toEqual(["placeholder.primary"]);
   });
 });
+
+describe("GATE-3.5 — cross-feature: persistent override vs later agent composition", () => {
+  it("a user-closed surface stays closed after an agent layout intent proposes it", () => {
+    const store = createAppStore(() => {});
+    const baseline: LayoutSpec = {
+      template: "sidecar",
+      assignments: [
+        { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+        { surfaceId: "placeholder.companion", role: "companion", slot: "side" },
+      ],
+      proportion: "balanced",
+    };
+    store.getState().applyAdaptiveSpec(baseline);
+    // User closes the companion surface — the constraint persists.
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "close", surfaceId: "placeholder.companion" },
+    });
+    expect(
+      store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId),
+    ).not.toContain("placeholder.companion");
+
+    // Later the agent (planner path) proposes sidecar WITH the companion.
+    store.getState().applyLayoutIntent({
+      template: "sidecar",
+      assignments: [
+        { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+        { surfaceId: "placeholder.companion", role: "companion", slot: "side" },
+      ],
+      proportion: "balanced",
+    });
+    const ids =
+      store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId) ?? [];
+    // The explicit user constraint outranks the agent composition.
+    expect(ids).not.toContain("placeholder.companion");
+    expect(ids).toContain("placeholder.primary");
+  });
+});
