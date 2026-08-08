@@ -244,6 +244,11 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
 
         @app.middleware("http")
         async def _auth_gate(request: Request, call_next):
+            # CORS preflights carry no credentials by design — let them
+            # through so the (inner) CORSMiddleware can answer them; the
+            # real request behind the preflight is still gated below.
+            if request.method == "OPTIONS":
+                return await call_next(request)
             if _is_protected_path(request.url.path) and not _token_matches(
                 _bearer_token(request.headers.get("authorization")), auth_token
             ):
@@ -376,8 +381,9 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
         """Transcribe an uploaded audio file (wav/mp3/ogg) to text."""
         import tempfile
 
-        if file.content_length and file.content_length > STT_MAX_BYTES:
-            raise HTTPException(status_code=413, detail="upload too large")
+        # Starlette's UploadFile exposes no size/content_length on the
+        # installed stack — enforce the cap by reading at most cap+1
+        # bytes (a larger upload then trips the length check below).
         data = await file.read(STT_MAX_BYTES + 1)
         if len(data) > STT_MAX_BYTES:
             raise HTTPException(status_code=413, detail="upload too large")

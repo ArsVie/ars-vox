@@ -24,6 +24,21 @@ AUTH = {"Authorization": f"Bearer {TEST_TOKEN}"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+class _FakeTTS:
+    """Deterministic offline stand-in for the mock TTS provider.
+
+    The shared test config keeps ``tts.provider: mock``, whose documented
+    contract is "returns no audio" (the app then correctly 503s). This
+    test's job is the ENDPOINT boundary (auth, POST-only, content-type),
+    not provider synthesis — so swap in a provider that yields bytes.
+    """
+
+    media_type = "audio/wav"
+
+    async def synthesize(self, text: str, voice: str | None = None) -> bytes:
+        return b"RIFF\x00\x00\x00\x00WAVEfmt "
+
+
 @pytest.fixture
 def secure_config_path(tmp_path, monkeypatch):
     cfg = base_config(tmp_path)
@@ -41,6 +56,8 @@ def secure_config_path(tmp_path, monkeypatch):
 @pytest.fixture
 def auth_client(secure_config_path):
     app = create_app(str(secure_config_path))
+    # Deterministic audio for the TTS endpoint tests (see _FakeTTS).
+    app.state.services.tts = _FakeTTS()
     with TestClient(app) as c:
         yield c
 
