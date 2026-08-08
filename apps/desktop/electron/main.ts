@@ -118,7 +118,7 @@ app.whenReady().then(() => {
     callback(permission === "media" && isAppWebContents(wc));
   });
   session.defaultSession.setPermissionCheckHandler((wc, permission) => {
-    return permission === "media" && isAppWebContents(wc);
+    return permission === "media" && (wc ? isAppWebContents(wc) : false);
   });
 
   // Groundwork: create the hardened remote-content partition eagerly so

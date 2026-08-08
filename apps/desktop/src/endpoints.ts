@@ -35,8 +35,16 @@ export function getAuthToken(): string {
       : undefined;
   const fromBridge = bridge?.getAuthToken?.();
   if (fromBridge) return fromBridge;
-  return (import.meta as { env?: Record<string, string | undefined> }).env
-    ?.VITE_ARSVOX_TOKEN ?? "";
+  const fromEnv = (import.meta as { env?: Record<string, string | undefined> }).env
+    ?.VITE_ARSVOX_TOKEN;
+  if (fromEnv) return fromEnv;
+  // vitest 2.x vi.stubEnv() stubs process.env only (not import.meta.env) —
+  // read it as a final fallback so tests can drive the dev-token path.
+  // In the browser this guard short-circuits (no process global).
+  if (typeof process !== "undefined") {
+    return process.env?.VITE_ARSVOX_TOKEN ?? "";
+  }
+  return "";
 }
 
 /** Authorization header for REST calls (empty when auth is off in dev). */
