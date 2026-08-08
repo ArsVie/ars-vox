@@ -25,10 +25,12 @@ from arsvox_contracts.adaptive import (
 )
 from arsvox_contracts.client_messages import (
     CancelMessage,
+    ClientAction,
     ClientMessage,
     ConfirmMessage,
     PingMessage,
     StopMessage,
+    UiCommandMessage,
     UserText,
     parse_client_message,
 )
@@ -76,6 +78,7 @@ from arsvox_contracts.enums import (
     VoiceState,
 )
 from arsvox_contracts.events import (
+    ActionResultEvent,
     AgentEvent,
     AgentMessageEvent,
     ConfigUpdateEvent,
@@ -92,6 +95,7 @@ from arsvox_contracts.events import (
 
 __all__ = [
     "ASSIGNABLE_ROLES",
+    "ActionResultEvent",
     "AdaptiveTemplate",
     "AgentEvent",
     "AgentMessageEvent",
@@ -100,6 +104,7 @@ __all__ = [
     "AudioPlay",
     "BrowserSection",
     "CancelMessage",
+    "ClientAction",
     "ClientMessage",
     "ConfigUpdateEvent",
     "ConfirmationRequestedEvent",
@@ -149,6 +154,7 @@ __all__ = [
     "TtsSpeak",
     "UiCommand",
     "UiCommandEvent",
+    "UiCommandMessage",
     "UiSection",
     "UserMessageEvent",
     "UserText",

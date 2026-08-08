@@ -6,6 +6,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import type {
+  ActionResultEvent,
   AppConfigWire,
   BrowserNavigateEvent,
   DocumentKind,
@@ -604,6 +605,24 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
               },
             },
           });
+          return;
+        }
+        case "action_result": {
+          // H1: server verdict on a client-initiated action. The UI may
+          // have applied the action optimistically; failed/unsupported
+          // means that state is a lie — surface it so the user knows the
+          // action did not take effect.
+          const ev = event as ActionResultEvent;
+          if (ev.status === "failed" || ev.status === "unsupported") {
+            set({
+              error: {
+                message: `Acción ${ev.action} ${ev.status}${
+                  ev.detail ? `: ${ev.detail}` : ""
+                }`,
+                recoverable: true,
+              },
+            });
+          }
           return;
         }
         case "tool_call":

@@ -187,6 +187,22 @@ class MediaStateEvent(BaseModel):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class ActionResultEvent(BaseModel):
+    """Server verdict on a client-initiated ui_command action (H1).
+
+    The UI may optimistically render an action, but only this event says
+    what actually happened: done (effect applied), unsupported (no
+    backend capability — stop pretending it is live), failed (understood
+    but could not be applied), accepted (received; effect async).
+    """
+
+    type: Literal["action_result"] = "action_result"
+    action: str
+    status: Literal["accepted", "done", "failed", "unsupported"]
+    detail: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 AgentEvent = Annotated[
     Union[
         UserMessageEvent,
@@ -205,6 +221,7 @@ AgentEvent = Annotated[
         TasksUpdateEvent,
         MediaStateEvent,
         PongEvent,
+        ActionResultEvent,
     ],
     Field(discriminator="type"),
 ]
