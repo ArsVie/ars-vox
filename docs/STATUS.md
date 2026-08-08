@@ -17,15 +17,11 @@ wins.
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-08 ~09:10Z, post GATE-2.5)
+## Test gates (last full run, 2026-08-08 ~05:50Z, post GATE-2.5 + WAVE 3)
 
-- vitest: 352 passed (31 files) — apps/desktop (306 baseline + 46 GATE-2.5:
-  H1 conformance, H3 stop-races, H4 endpoints-auth, H5 reconnect,
-  H7 media/adaptive)
-- pytest: 193 passed — tests/python (110 baseline + 83 GATE-2.5:
-  H1 client-action conformance, H2 reminder lifecycle, H3 voice state,
-  H4 security (33), H5 reconnect snapshot + confirmations, H6 config
-  paths, H7 media tools)
+- vitest: 419 passed (34 files) — apps/desktop (306 baseline + 46 GATE-2.5
+  + 67 wave-3: 15 planner, 30 overrides, 22 a11y)
+- pytest: 193 passed — tests/python (110 baseline + 83 GATE-2.5)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
 - OKF docs validator: 18 concepts validated (2026-08-08)
@@ -56,8 +52,18 @@ wins.
   always applies). Verified live in CDP: split browser+conversation with
   real surfaces, media primary→persistent bar without playback reset,
   readers pixel-verified (below). Screenshots: docs/screenshots/12..22-wave2-*.
-- WAVE 3 UNLOCKED — UI-301 agent layout planner, UI-302 user overrides,
-  UI-303 a11y/usability (3 parallel; dispatch pending owner go-ahead).
+- WAVE 3 DONE (2026-08-08, 3 tracks merged): UI-301 agent layout planner
+  (semantic composition authority — agent says WHAT never HOW; invalid
+  model output rejected with structured reasons, never reaches state;
+  legacy wire layout.apply routed through the planner), UI-302 user
+  overrides (persistent constraint set pin/stick/position applied AFTER
+  planner output; user-initiated signal bypasses the inertia damping
+  wall, agent-initiated stays damped; invalid arrangements degrade
+  deterministically to nearest valid), UI-303 usability+a11y (hit-target
+  floor, focus-visible rings + tab order, reduced-motion coverage,
+  status icons + Spanish aria labels, STOP accessibility, 12px text
+  floor, contrast fixes — token catalog only, no redesign). +67 tests
+  (15 planner / 30 overrides / 22 a11y).
 - GATE-2.5 HARDENING DONE (2026-08-08, 7 tracks merged): H1 bidirectional
   client-action protocol (authoritative ui_command handlers + action_result
   verdicts + cross-language fixtures), H2 reminder correctness (UTC

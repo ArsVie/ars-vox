@@ -13,7 +13,17 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
 - worktrees: /mnt/c/dev/ars-vox-worktrees/h{1..7}-*, branches wip/h{1..7}-* (briefs /tmp/gate25-briefs/)
-- status: in_progress — dispatched 2026-08-08 ~04:40Z; gate: merge 7 branches, cross-track suite (306 vitest / 110 pytest baselines + new seam tests), docs pass (STATUS Wire/threat-model/README corrections per audit), screenshots NOT needed (no visual redesign), then GATE-2.5 close + Wave 3 go-decision
+- status: DONE 2026-08-08 ~05:50Z (CST) — UI-301/302/303 merged --no-ff
+  (store.ts applyAdaptiveSpec conflict resolved deliberately: planner
+  choke + override layer both survive, overrides preserved across
+  planner applies). GATE-3 green: vitest 419/419 (34 files), pytest
+  193/193, typecheck + build clean. Review wave (reuse/quality/
+  efficiency) returned positive verdicts — no blocking findings;
+  wave-4 candidates: service-side media controller extraction,
+  KNOWN_ACTIONS derivation from union, EventBus type-filtered
+  subscriptions (snapshot tracker starvation), client-side sequence
+  gap detection. Advisor (opus 4.8) doc review in flight.
+  Screenshots: docs/screenshots/w3-shell.png.
 ### hermes (orchestrator — adaptive UI redesign, WAVE 2)
 - timestamp: 2026-08-08T02:00:00Z
 - task: WAVE 2 KICKOFF (owner go-ahead received) — UI-201..207 dispatched as 5+2 leaf batches in worktrees /mnt/c/dev/ars-vox-worktrees/ui-2{01..07}-* (branches wip/ui-2XX-*). Workers told: NO merges (gate = orchestrator), NO hey.md/docs edits (orchestrator owns the board), commit early (600s child cap), surface ownership per contract conflict-avoidance map. Main tree: previous session's EOL-noise dirty state RESTORED (git checkout -- ., content unchanged — diff was 100% line-ending flip, verified via --ignore-space-at-eol); parked wip/advisor-round2-reader-polish INTACT (reader engine fixes stay parked until GATE-2; UI-203 scope excludes engines). Mock 8765 + vite 5173 left running from last session.
