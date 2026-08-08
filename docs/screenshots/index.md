@@ -1,10 +1,27 @@
 # UI Screenshots — current state
 
 Current UI screenshots, captured 2026-08-07 from the live mock-mode app
-(vite 5173 + mock agent on 8765, viewport 1700×1050, Edge CDP).
-Regenerate: boot `npx vite --port 5173` + `python -m arsvox_agent --mock`,
-send any message (demo_populate fills the panels), then apply the layout
-template per shot and screenshot.
+(vite 5173 + mock agent on 8765, Edge CDP). Standing rule (owner, 2026-08-08):
+refresh this folder after EVERY redesign wave — new wave shots get the next
+free numbers, and the wave list below stays current.
+
+## Wave 1 — unified application shell (GATE-1, merged 2026-08-07)
+
+Post-GATE-1 state: UI-101 shell + UI-102 geometry engine placeholders +
+UI-103 role framework + UI-104 token values + UI-105 harness. One
+continuous dark surface, top bar (ARS·VOX, assistant state, DETENER ≥48px,
+plantilla selector), persistent Multimedia/Notificaciones regions at the
+bottom, regions separated by subtle dividers (no card borders). Product
+surfaces land in Wave 2 — these show the placeholder fixtures.
+
+* [Home / default](06-wave1-home-default.png) - conversation panel, plantilla "Automática"
+* [Focus](07-wave1-focus.png) - template `focus`: one primary region (placeholder.primary)
+* [Sidecar](08-wave1-sidecar.png) - template `sidecar`: primary + companion
+* [Stack](09-wave1-stack.png) - template `stack`
+* [Split](10-wave1-split.png) - template `split`: primary + companion side by side
+* [Triple](11-wave1-triple.png) - template `triple`: primary + companion + support
+
+## Pre-wave-1 (2026-08-07, old panel UI — historical)
 
 ## Populated panels
 
