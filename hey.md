@@ -9,6 +9,11 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
+### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
+- trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
+- tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
+- worktrees: /mnt/c/dev/ars-vox-worktrees/h{1..7}-*, branches wip/h{1..7}-* (briefs /tmp/gate25-briefs/)
+- status: in_progress — dispatched 2026-08-08 ~04:40Z; gate: merge 7 branches, cross-track suite (306 vitest / 110 pytest baselines + new seam tests), docs pass (STATUS Wire/threat-model/README corrections per audit), screenshots NOT needed (no visual redesign), then GATE-2.5 close + Wave 3 go-decision
 ### hermes (orchestrator — adaptive UI redesign, WAVE 2)
 - timestamp: 2026-08-08T02:00:00Z
 - task: WAVE 2 KICKOFF (owner go-ahead received) — UI-201..207 dispatched as 5+2 leaf batches in worktrees /mnt/c/dev/ars-vox-worktrees/ui-2{01..07}-* (branches wip/ui-2XX-*). Workers told: NO merges (gate = orchestrator), NO hey.md/docs edits (orchestrator owns the board), commit early (600s child cap), surface ownership per contract conflict-avoidance map. Main tree: previous session's EOL-noise dirty state RESTORED (git checkout -- ., content unchanged — diff was 100% line-ending flip, verified via --ignore-space-at-eol); parked wip/advisor-round2-reader-polish INTACT (reader engine fixes stay parked until GATE-2; UI-203 scope excludes engines). Mock 8765 + vite 5173 left running from last session.
