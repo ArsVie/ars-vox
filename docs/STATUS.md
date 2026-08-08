@@ -17,12 +17,15 @@ wins.
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-08 ~03:50Z, post GATE-2)
+## Test gates (last full run, 2026-08-08 ~09:10Z, post GATE-2.5)
 
-- vitest: 306 passed (25 files) — apps/desktop (baseline 240 + wave-2: 6 browser,
-  8 conversation, 6 reading, 7 tasks, 6 media, 6 motion, 8 inertia + 6 gate wiring)
-- pytest: 110 passed — tests/python (84 + 26 utterance-level STOP matcher,
-  merged from parked branch 2026-08-08)
+- vitest: 352 passed (31 files) — apps/desktop (306 baseline + 46 GATE-2.5:
+  H1 conformance, H3 stop-races, H4 endpoints-auth, H5 reconnect,
+  H7 media/adaptive)
+- pytest: 193 passed — tests/python (110 baseline + 83 GATE-2.5:
+  H1 client-action conformance, H2 reminder lifecycle, H3 voice state,
+  H4 security (33), H5 reconnect snapshot + confirmations, H6 config
+  paths, H7 media tools)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
 - OKF docs validator: 18 concepts validated (2026-08-08)
