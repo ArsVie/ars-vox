@@ -10,6 +10,7 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 
 ## Active
 
+<<<<<<< HEAD
 ### hermes-epub (EPUB reader investigation)
 - timestamp: 2026-08-07T18:15:00Z
 - task: Investigate why the EPUB reader does not render in Ars-Vox. Authoritative brief: `docs/handoff-epub-reader-debug-2026-08-07.md` (factual state + open questions + boundaries). Root cause NOT determined — do not assume prior theories. Stable single-browser verification required (agent-browser + CDP, DOM + vision in the SAME tab).
@@ -22,6 +23,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - task: UI-101 Unified application shell — make Ars Vox read as ONE application: continuous activity stage (no per-panel card chrome, no dark moat), one divider/gutter language (frozen `divider-*` token names), global top bar (brand + assistant state + STOP ≥48px), shell-owned persistent regions (media/notifications host), placeholder children + demo toggle rendering all five TEMPLATE_FIXTURES. Surfaces stay as placeholders (Wave 2 owns real adaptive rendering).
 - files/dirs: `apps/desktop/src/App.tsx`, `apps/desktop/src/components/{PanelHost,StatusBar,PlaceholderSurface(new),PersistentRegions(new)}.tsx`, `apps/desktop/src/styles.css`, `hey.md`
 - boundaries: will NOT touch `src/layout/engine.ts`, `src/adaptive/**`, Browser/Conversation/Reader/Tasks/Media component internals (only shared shell chrome in styles.css: `.panel`, `.panel-header`, `.panel-slot`, `.status-bar`, `.stop-button`). DOM contract `.panel-slot` etc. preserved.
+- status: resolved (GATE-1 merged, commit on main)
+
+### hermes (UI-102 — adaptive template geometry engine)
+- timestamp: 2026-08-07T23:40:00Z
+- task: Deterministic geometry engine for the five frozen adaptive compositions (focus/sidecar/stack/split/triple) + proportion mapping (narrow/balanced/wide) + responsive slot geometry. Consumes LayoutSpec only; renders template+assignments+proportion → concrete slot rects; deterministic errors for invalid specs (reuses validateLayoutSpec + geometry-level fit/duplicate-slot checks); placeholder surfaces from TEMPLATE_FIXTURES; keeps .panel-slot DOM contract.
+- files/dirs: apps/desktop/src/layout/adaptiveEngine.ts (new), apps/desktop/src/layout/AdaptiveStage.tsx (new), apps/desktop/tests/adaptive-geometry.test.ts (new), apps/desktop/tests/adaptive-stage.test.tsx (new), hey.md
+- boundaries: will NOT touch src/adaptive/* (contract code), components/*, src/layout/engine.ts (legacy), store/App/ws/electron; engine+fixture-placeholder render only. No npm installs (node_modules is a junction to main).
 - status: resolved (GATE-1 merged, commit on main)
 
 ### hermes (orchestrator — adaptive UI redesign)
