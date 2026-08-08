@@ -38,6 +38,13 @@ import {
 import { surfaceRegistry } from "./roles/registry";
 import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
 import type { LayoutSpec as AdaptiveLayoutSpec } from "./adaptive/contracts";
+import {
+  applyOverrides,
+  EMPTY_OVERRIDES,
+  mergeOverrideIntent,
+  type OverrideIntent,
+  type OverrideSet,
+} from "./adaptive/overrides";
 import { scoreChange } from "./layout/inertia";
 
 /** Default content viewport used until the renderer reports real size. */
@@ -57,13 +64,37 @@ export interface PanelMeta {
 /**
  * UI-103 adaptive state: the last validated adaptive LayoutSpec plus its
  * role-resolved assignments (empty until the agent sends one).
+ * UI-302: plus the persistent user constraint set (pin/stick/position/...)
+ * that the override layer applies AFTER planner output.
  */
 export interface AdaptiveState {
   spec: AdaptiveLayoutSpec | null;
   assignments: ResolvedAssignment[];
+  /** UI-302: active user layout constraints, keyed by surfaceId. */
+  overrides: OverrideSet;
 }
 
-export const EMPTY_ADAPTIVE: AdaptiveState = { spec: null, assignments: [] };
+export const EMPTY_ADAPTIVE: AdaptiveState = {
+  spec: null,
+  assignments: [],
+  overrides: EMPTY_OVERRIDES,
+};
+
+/**
+ * UI-302: options for applyAdaptiveSpec.
+ */
+export interface ApplyAdaptiveSpecOptions {
+  /** UI-207: user-commanded change — the inertia scorer always applies it
+   *  (bypasses the damping wall). Agent-initiated (planner) changes omit
+   *  this and stay subject to inertia. An overrideIntent also counts as
+   *  user-commanded. */
+  userInitiated?: boolean;
+  /** UI-302: a user override intent ("bigger", "right", "close", ...) to
+   *  merge into the persistent constraint set. The constraint applies to
+   *  this spec AFTER the planner's output and to every future planner
+   *  spec until removed ("restore layout" / removeSurfaceOverrides). */
+  overrideIntent?: OverrideIntent;
+}
 
 export interface ConfirmationInfo {
   pendingId: string;
@@ -197,8 +228,14 @@ export interface AppState {
 
   applyUiCommand: (command: UiCommand) => void;
   /** UI-103: validate + apply an adaptive LayoutSpec (registry + fallback
-   *  ladder). Throws on invalid specs; state is never partially updated. */
-  applyAdaptiveSpec: (spec: AdaptiveLayoutSpec) => void;
+   *  ladder). Throws on invalid specs; state is never partially updated.
+   *  UI-302: options carry the user-initiated signal (bypasses UI-207's
+   *  damping wall) and user override intents (applied AFTER the planner
+   *  output — explicit user constraints beat planner preferences). */
+  applyAdaptiveSpec: (
+    spec: AdaptiveLayoutSpec,
+    options?: ApplyAdaptiveSpecOptions,
+  ) => void;
   /** UI-103: write a per-surface state value (keyed by surfaceId). */
   setSurfaceState: (surfaceId: string, key: string, value: unknown) => void;
   recompute: () => void;
@@ -448,12 +485,51 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
      * policy never blocks a real signal. The legacy engine path
      * (applyUiCommand / layout.apply) does not flow through this choke
      * point and is untouched.
+     *
+     * UI-302 (Wave 3): this function is the single choke point where the
+     * planner's output (UI-301's layer) meets the user's explicit layout
+     * constraints. Pipeline per call:
+     *   1. merge options.overrideIntent into the persistent constraint set
+     *      (constraints survive across planner rounds — pin/stick semantics);
+     *   2. apply the constraint set ON TOP of the incoming planner spec
+     *      (applyOverrides — explicit user constraints beat planner
+     *      preferences; invalid arrangements degrade deterministically to
+     *      the nearest valid template);
+     *   3. score the CONSTRAINED spec (never the raw planner spec) against
+     *      the current layout with the UI-207 scorer — a user-commanded
+     *      change (overrideIntent present or options.userInitiated) bypasses
+     *      the damping wall; agent-initiated planner changes stay damped;
+     *   4. the constrained spec becomes layout state, so the UI always
+     *      renders the user's composition.
      */
-    const applyAdaptiveSpec = (spec: AdaptiveLayoutSpec): void => {
-      const assignments = resolveLayout(spec, surfaceRegistry);
-      const verdict = scoreChange(get().adaptive.spec, spec);
-      if (verdict.decision === "keep") return; // keep current — no churn
-      set({ adaptive: { spec, assignments } });
+    const applyAdaptiveSpec = (
+      spec: AdaptiveLayoutSpec,
+      options: ApplyAdaptiveSpecOptions = {},
+    ): void => {
+      const state = get();
+      const overrides = options.overrideIntent
+        ? mergeOverrideIntent(state.adaptive.overrides, options.overrideIntent, spec)
+        : state.adaptive.overrides;
+      const constrained = applyOverrides(
+        spec,
+        overrides,
+        surfaceRegistry.registeredIds(),
+      );
+      const assignments = resolveLayout(constrained, surfaceRegistry);
+      const userInitiated =
+        options.userInitiated === true || options.overrideIntent !== undefined;
+      const verdict = scoreChange(state.adaptive.spec, constrained, {
+        userInitiated,
+      });
+      if (verdict.decision === "keep") {
+        // No layout churn — but a fresh constraint set must still persist
+        // (a no-op user command still pins for future planner rounds).
+        if (overrides !== state.adaptive.overrides) {
+          set({ adaptive: { ...state.adaptive, overrides } });
+        }
+        return;
+      }
+      set({ adaptive: { spec: constrained, assignments, overrides } });
     };
 
     /** UI-103: write one value into a surface's per-surfaceId state bag. */
