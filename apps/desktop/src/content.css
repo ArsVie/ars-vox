@@ -302,6 +302,63 @@
   display: block;
 }
 
+/* ------------------------------------------- browser adaptive roles (UI-201)
+   The browser surface renders per its semantic role (UI-103): primary =
+   full browsing experience (the app IS the browser); companion = reduced
+   chrome for side-by-side workflows; support = compact contextual
+   representation. Shared catalog tokens only — no new custom properties. */
+.browser-surface--companion .browser-toolbar {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  gap: var(--spacing-xs);
+  background: transparent;
+  border-bottom-color: var(--divider-subordinate);
+}
+
+.browser-surface--companion .browser-nav-btn {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+}
+
+.browser-surface--companion .browser-address {
+  height: var(--control-height-sm);
+  background: var(--surface-region);
+  border-color: var(--divider-subordinate);
+}
+
+.browser-surface--companion .browser-address input {
+  font-size: 12px;
+}
+
+.browser-surface--companion .browser-viewport {
+  opacity: 0.94;
+}
+
+.browser-surface--support .panel-header {
+  padding: var(--spacing-xs) var(--spacing-sm) 0;
+}
+
+.browser-surface--support .panel-header-title {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.browser-surface--support .browser-toolbar {
+  padding: 2px var(--spacing-xs);
+  gap: 2px;
+  background: transparent;
+  border-bottom-color: var(--divider-subordinate);
+}
+
+.browser-surface--support .browser-nav-btn {
+  width: 26px;
+  height: 26px;
+  color: var(--text-faint);
+}
+
+.browser-surface--support .browser-viewport {
+  opacity: 0.9;
+}
+
 /* --------------------------------------------------------------- tasks */
 .tasks-body {
   flex: 1;
