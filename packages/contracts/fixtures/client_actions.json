@@ -1,0 +1,150 @@
+{
+  "_comment": "H1 shared fixture: one real client frame per UiCommand action. Source of truth for the action strings is apps/desktop/src/contracts.ts (UiCommand union); shapes are what apps/desktop/src/store.ts dispatchCommand emits. Both sides must stay in sync: tests/python/test_client_actions.py parses every frame through parse_client_message; apps/desktop/tests/client-actions.test.ts asserts every TS action string has an entry here. Never regenerate by hand on one side only.",
+  "layout.apply": {
+    "type": "ui_command",
+    "command": {
+      "action": "layout.apply",
+      "template": "split",
+      "primary_panel": "document_editor",
+      "secondary_panel": "conversation"
+    }
+  },
+  "panel.open": {
+    "type": "ui_command",
+    "command": {
+      "action": "panel.open",
+      "panel_type": "document_editor",
+      "title": "Notas de carpintería",
+      "content_reference": "42"
+    }
+  },
+  "panel.close": {
+    "type": "ui_command",
+    "command": {
+      "action": "panel.close",
+      "panel_type": "document_editor"
+    }
+  },
+  "panel.set_primary": {
+    "type": "ui_command",
+    "command": {
+      "action": "panel.set_primary",
+      "panel_type": "browser"
+    }
+  },
+  "panel.fullscreen": {
+    "type": "ui_command",
+    "command": {
+      "action": "panel.fullscreen",
+      "panel_type": "media"
+    }
+  },
+  "layout.restore": {
+    "type": "ui_command",
+    "command": {
+      "action": "layout.restore"
+    }
+  },
+  "notification.show": {
+    "type": "ui_command",
+    "command": {
+      "action": "notification.show",
+      "notification_id": "n-1",
+      "kind": "info",
+      "title": "Recordatorio",
+      "text": "Es hora de regar las plantas"
+    }
+  },
+  "media.state": {
+    "type": "ui_command",
+    "command": {
+      "action": "media.state",
+      "state": "playing",
+      "title": "Sinfonía Nº 5",
+      "volume": 0.8
+    }
+  },
+  "media.play_pause": {
+    "type": "ui_command",
+    "command": {
+      "action": "media.play_pause"
+    }
+  },
+  "media.seek": {
+    "type": "ui_command",
+    "command": {
+      "action": "media.seek",
+      "position_s": 42
+    }
+  },
+  "youtube.search": {
+    "type": "ui_command",
+    "command": {
+      "action": "youtube.search",
+      "query": "carpintería"
+    }
+  },
+  "youtube.play": {
+    "type": "ui_command",
+    "command": {
+      "action": "youtube.play",
+      "video_id": "yt-1",
+      "title": "Taller de carpintería para principiantes"
+    }
+  },
+  "browser.navigate": {
+    "type": "ui_command",
+    "command": {
+      "action": "browser.navigate",
+      "url": "https://example.com/docs"
+    }
+  },
+  "browser.back": {
+    "type": "ui_command",
+    "command": {
+      "action": "browser.back"
+    }
+  },
+  "browser.forward": {
+    "type": "ui_command",
+    "command": {
+      "action": "browser.forward"
+    }
+  },
+  "browser.refresh": {
+    "type": "ui_command",
+    "command": {
+      "action": "browser.refresh"
+    }
+  },
+  "document.save": {
+    "type": "ui_command",
+    "command": {
+      "action": "document.save",
+      "panel_type": "document_editor",
+      "content": "## Notas\n\nTexto del documento que el usuario está editando."
+    }
+  },
+  "tasks.toggle": {
+    "type": "ui_command",
+    "command": {
+      "action": "tasks.toggle",
+      "task_id": "1"
+    }
+  },
+  "tts.speak": {
+    "type": "ui_command",
+    "command": {
+      "action": "tts.speak",
+      "text": "Hola, esto es una prueba",
+      "priority": false
+    }
+  },
+  "audio.play": {
+    "type": "ui_command",
+    "command": {
+      "action": "audio.play",
+      "asset": "chime.wav"
+    }
+  }
+}

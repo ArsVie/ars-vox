@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import WebSocket, WebSocketDisconnect
 
 from arsvox_contracts import (
+    ActionResultEvent,
     AgentMessageEvent,
     ConfigUpdateEvent,
     PongEvent,
@@ -22,6 +23,7 @@ from arsvox_contracts import (
     parse_client_message,
 )
 
+from arsvox_agent.actions import handle_ui_command
 from arsvox_agent.events import EventBus
 from arsvox_agent.local_intents import match_intent
 from arsvox_agent.runtime import AgentRuntime
@@ -85,15 +87,20 @@ async def _handle_client_message(
     try:
         message = parse_client_message(raw)
     except Exception as exc:
-        await ws.send_text(
-            AgentMessageEvent(text=f"Mensaje no válido: {exc}", delta=False).model_dump_json()
-        )
+        await _reply_unparsable(ws, runtime, raw, exc)
         return
     if message.type == "ping":
         await ws.send_text(PongEvent().model_dump_json())
         return
     if message.type == "stop":
         await runtime.cancel()
+        return
+    if message.type == "ui_command":
+        # H1: client-initiated action channel. The handler performs the
+        # authoritative effect (or marks it unsupported/failed) and the
+        # verdict is queued AFTER any events it emitted (FIFO on the bus).
+        verdict = await handle_ui_command(runtime.deps_base, runtime.registry, message.command)
+        await runtime.deps_base.bus.publish(verdict)
         return
     if message.type == "confirm":
         await runtime.deps_base.confirmations.resolve(message.pending_id, approve=True)
@@ -134,3 +141,35 @@ async def _sync_state_after_resolve(ws: WebSocket, runtime: AgentRuntime) -> Non
     pending = runtime.deps_base.pending.list_pending()
     state = VoiceState.WAITING_FOR_CONFIRMATION if pending else VoiceState.LISTENING
     await ws.send_text(StateUpdateEvent(voice_state=state).model_dump_json())
+
+
+async def _reply_unparsable(
+    ws: WebSocket, runtime: AgentRuntime, raw: str, exc: Exception
+) -> None:
+    """Reply to an unparsable frame.
+
+    Non-ui_command garbage keeps the legacy "Mensaje no válido" reply.
+    A ui_command frame that fails parse (e.g. unknown action string) gets
+    an action_result failed instead, so the UI reconciles honestly and
+    the receive loop never crashes on unknown actions.
+    """
+    import json
+
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        payload = None
+    if isinstance(payload, dict) and payload.get("type") == "ui_command":
+        command = payload.get("command") or {}
+        action = command.get("action") if isinstance(command, dict) else None
+        await runtime.deps_base.bus.publish(
+            ActionResultEvent(
+                action=action or "unknown",
+                status="failed",
+                detail=str(exc),
+            )
+        )
+        return
+    await ws.send_text(
+        AgentMessageEvent(text=f"Mensaje no válido: {exc}", delta=False).model_dump_json()
+    )

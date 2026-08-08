@@ -307,6 +307,18 @@ export interface PongEvent {
   ts: string;
 }
 
+/** Server verdict on a client-initiated ui_command action (H1).
+ *  done = effect applied; unsupported = no backend capability (stop
+ *  pretending the action is live); failed = understood but not applied;
+ *  accepted = received, effect is asynchronous. */
+export interface ActionResultEvent {
+  type: "action_result";
+  action: string;
+  status: "accepted" | "done" | "failed" | "unsupported";
+  detail: string | null;
+  created_at: string;
+}
+
 export type ServerEvent =
   | UserMessageEvent
   | AgentMessageEvent
@@ -323,4 +335,5 @@ export type ServerEvent =
   | DocumentLoadEvent
   | TasksUpdateEvent
   | MediaStateEvent
-  | PongEvent;
+  | PongEvent
+  | ActionResultEvent;
