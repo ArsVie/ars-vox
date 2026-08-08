@@ -45,6 +45,29 @@ async def document_create(tctx: ToolContext, title: str) -> str:
     return f"Documento '{title}' creado y abierto."
 
 
+async def document_list(tctx: ToolContext) -> str:
+    """List registered documents (progressive disclosure: the model asks
+    when it needs to know what exists — never ingested into context)."""
+    docs = tctx.deps.documents.list()
+    if not docs:
+        return "No hay documentos guardados todavía. Puedes crear uno con document.create."
+    return "Documentos disponibles:\n" + "\n".join(
+        f"- {d['title']}" for d in docs
+    )
+
+
+async def document_search(tctx: ToolContext, query: str) -> str:
+    """Search registered documents by title fragment."""
+    q = query.strip().lower()
+    docs = tctx.deps.documents.list()
+    hits = [d for d in docs if q in d["title"].lower()]
+    if not hits:
+        return f"No encontré documentos que coincidan con '{query}'."
+    return "Documentos encontrados:\n" + "\n".join(
+        f"- {d['title']}" for d in hits
+    )
+
+
 async def document_open(tctx: ToolContext, title: str) -> str:
     doc = tctx.deps.documents.find_by_title(title.strip())
     if not doc:
@@ -111,7 +134,9 @@ SPECS = [
         document_create,
         PolicyKind.REVERSIBLE,
     ),
-    ToolSpec("document.open", "Open an existing document by title.", document_open, PolicyKind.REVERSIBLE),
+    ToolSpec("document.open", "Open an existing document by title. Call document.list first to see what exists.", document_open, PolicyKind.REVERSIBLE),
+    ToolSpec("document.list", "List all saved documents.", document_list, PolicyKind.READ_ONLY),
+    ToolSpec("document.search", "Search documents by title fragment.", document_search, PolicyKind.READ_ONLY),
     ToolSpec(
         "document.save",
         "Save document content to disk (scoped to the documents directory).",

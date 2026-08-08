@@ -217,7 +217,7 @@ def test_mock_guard_blocks_when_mock_disabled():
 def test_demo_populate_registered_in_registry():
     registry = ToolRegistry()
     n = register_all(registry)
-    assert n == 42
+    assert n == 44
     spec = registry.get("demo_populate")
     assert spec is not None
     assert spec.handler is demo_populate
