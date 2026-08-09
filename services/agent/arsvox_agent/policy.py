@@ -69,9 +69,10 @@ TOOL_KINDS: dict[str, PolicyKind] = {
 }
 
 # Tools that need explicit user confirmation even though their class is
-# not EXTERNAL/DESTRUCTIVE (e.g. reminders must be confirmed by the user).
+# not EXTERNAL/DESTRUCTIVE. Frictionless policy (2026-08-08): only the
+# Telegram send step keeps a gate — the confirmation UI was designed for
+# messages ("muestra el mensaje, léelo, confirma").
 APPROVAL_OVERRIDES: set[str] = {
-    "reminders.create",
     "telegram.send_pending",
 }
 

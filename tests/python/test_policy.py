@@ -83,3 +83,6 @@ def test_policy_kinds_match_registry_specs():
     assert drift == [], f"policy TOOL_KINDS drifted from specs: {drift}"
     extra = set(TOOL_KINDS) - set(registry._specs)
     assert not extra, f"TOOL_KINDS references unregistered tools: {extra}"
+    # frictionless: nothing outside the Telegram send flow may require approval
+    from arsvox_agent.policy import APPROVAL_OVERRIDES
+    assert APPROVAL_OVERRIDES <= {"telegram.send_pending"}, APPROVAL_OVERRIDES
