@@ -2,6 +2,14 @@
 
 ## Active
 
+- `consolidation-program-2026-08-08.md` — two-stage consolidation + MVP
+  program (advisor program, Ars-approved direction): S0 contract freeze →
+  Wave 1 (10 agents: voice/STOP, secure launch, native layout contract,
+  single reducer, media authority, snapshot/reconnect, confirmations,
+  electron security, visual cleanup, adversarial) → GATE-3.5 → Wave 2 MVP
+  backlog → GATE-4 → Wave 3 user validation. Frozen contract:
+  `docs/consolidation-contract-2026-08-08.md`. Status: S0 DONE (pending Ars
+  gate approval), Wave 1 locked and ready to dispatch.
 - `adaptive-ui-redesign-execution-2026-08-07.md` — Ars-Vox adaptive UI redesign
   execution contract (owner-reviewed 2026-08-07): one continuous application
   surface, 4 roles / 5 templates / 3 proportions, LayoutSpec semantics, 4-wave
