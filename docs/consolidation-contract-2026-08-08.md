@@ -23,7 +23,7 @@ at snapshot time.
 ### VOICE
 One canonical session/voice state machine. Physical TTS start/end
 participates in that state.
-- Today: canonical machine exists (H3, renderer-first, generation guards),
+- Baseline: canonical machine exists (H3, renderer-first, generation guards),
   but there are NO `tts.started/finished/cancelled` acks — Python may return
   to LISTENING while the speaker still talks, and the silence timer has no
   physical-playback anchor.
@@ -33,7 +33,7 @@ participates in that state.
 
 ### STOP
 Every STOP path performs the same cancellation semantics.
-- Today: local STOP path is authoritative (H3); button + spoken share the
+- Baseline: local STOP path is authoritative (H3); button + spoken share the
   renderer-first primitive. Gap: STOP cannot cancel an already-EXECUTING
   approved action (coordinator awaits the executor directly; runtime.cancel
   only invalidates pending).
@@ -43,7 +43,7 @@ Every STOP path performs the same cancellation semantics.
 ### LAYOUT
 One adaptive layout contract. All layout mutations enter one reducer.
 User constraints > agent preference.
-- Today: frozen LayoutSpec exists (packages/contracts/arsvox_contracts/
+- Baseline: frozen LayoutSpec exists (packages/contracts/arsvox_contracts/
   adaptive.py; TS mirror; planner UI-301; overrides UI-302; applyAdaptiveSpec
   choke with userInitiated seam), but the MODEL still speaks the old
   vocabulary: `ui_apply_layout(template=focus/split/reading/dashboard,
@@ -58,7 +58,7 @@ User constraints > agent preference.
 
 ### MEDIA
 One MediaController. Agent + user + player events all use it.
-- Today: split-brain confirmed — H1's `_MediaController`
+- Baseline: split-brain confirmed — H1's `_MediaController`
   (services/agent/arsvox_agent/actions.py:57,83,89) vs the H7 media tool
   path emitting MediaStateChange directly; `media.seek(seconds)` reports
   "Posición cambiada" without emitting a position; player progress bar is
@@ -72,7 +72,7 @@ One MediaController. Agent + user + player events all use it.
 ### CONFIRMATION
 One global pending confirmation. Executing actions have explicit
 cancellation semantics.
-- Today: one-pending policy + lifecycle pending→approved→executing→
+- Baseline: one-pending policy + lifecycle pending→approved→executing→
   executed|failed (H5), SQLite frozen args, stop invalidates pendings.
   Gap: executing actions have no cancellation token / point-of-no-return
   table; spoken confirm/reject vocabulary exists but is not wired to the
@@ -84,7 +84,7 @@ cancellation semantics.
 ### SERVICE
 Electron owns secure service startup. One token per launch. Renderer does
 not coordinate service credentials manually.
-- Today: token rides ARSVOX_AUTH_TOKEN env, exported to both processes
+- Baseline: token rides ARSVOX_AUTH_TOKEN env, exported to both processes
   (electron/main.ts:28-32); renderer reads it via preload
   `getAuthToken` (P2: token exposed to renderer JS); Python and Electron
   can independently generate different tokens (reviewer P0); no spawn/
@@ -97,7 +97,7 @@ not coordinate service credentials manually.
 
 ### RECONNECT
 Snapshot represents current truth. Sequence gaps trigger resynchronization.
-- Today: state_snapshot on connect (H5) now carries history (248e69d,
+- Baseline: state_snapshot on connect (H5) now carries history (248e69d,
   `_recent_history`) + sequence + pending + media + notifications + panels.
   Gaps: voice fallback hardcodes LISTENING (snapshot.py:136); media=null
   does NOT clear a stale player (a test asserts preservation); notifications
@@ -114,7 +114,7 @@ Snapshot represents current truth. Sequence gaps trigger resynchronization.
 
 ### CLIENT ACTIONS
 ClientAction and ServerCommand are separate contracts.
-- Today: H1 mirrored the FULL UiCommand surface into ClientAction (incl.
+- Baseline: H1 mirrored the FULL UiCommand surface into ClientAction (incl.
   renderer-only things like tts.speak) — mirror, not a real separation.
 - Frozen: ClientAction = ONLY the actions the human client is allowed to
   initiate; ServerCommand keeps the full union. Every declared ClientAction

@@ -8,13 +8,15 @@ wave shots get the next free numbers, and the wave list below stays current.
 ## GATE-3.5 consolidation (closed 2026-08-09)
 
 Post-consolidation state: R43 status bar (brand + ONE status pill
-"En espera" + DETENER + dev-gated plantilla selector + connection dot),
-conversation restored from the snapshot (A6 history carry), real model
-connected (no mock).
+"En espera" + DETENER + plantilla selector + connection dot), real model
+connected (no mock). NOTE: the shot shows the current build, which
+restores the conversation on start — the fresh-start directive (mic hero
+only, history on explicit request) is pending.
 
 * [Home / default](28-gate35-home-default.png) — live capture, real model,
-  no mock: R43 status bar, restored conversation (real turns from the
-  session DB), composer with "Escribe una petición…".
+  no mock: R43 status bar, conversation (current build restores it on
+  start; fresh-start directive pending), composer with "Escribe una
+  petición…".
 
 NOTE (tooling finding, 2026-08-09): the template fixture shots
 (focus/sidecar/stack/split/triple via the demo combobox) could NOT be
@@ -42,12 +44,11 @@ reduced-motion coverage, STOP active while listening.
 
 ### Live real-model captures (2026-08-08, NO mock)
 
-Captured from the REAL deepseek-v4-flash model (harness boot, auth off)
-via the page's quick-action chips (headless typing is impossible; chips
-are the page-originated triggers that transmit over the page's WS).
+Captured from the REAL deepseek-v4-flash model, auth off, via the page's
+quick-action chips.
 
 * [Mic hero live](24-mic-hero-live.png) — fresh boot = central-mic hero
-  (snapshot no longer restores panels, 2026-08-08): Escuchando status,
+  (snapshot does not restore panels): Escuchando status,
   DETENER, plantilla selector, suggestion chips, input.
 * [Document + chat live](25-doc-chat-live.png) — after clicking "Abre un
   documento": REAL turn (audit: document.list → document.open →
@@ -55,9 +56,9 @@ are the page-originated triggers that transmit over the page's WS).
   main panel, conversation beside. NOTE: opened doc was an empty file, so
   the editor shows its empty-state; chat-bubble rendering in headless is
   under debug (deleg_5facf00a).
-* [Chat history restored](26-chat-history-live.png) — after the
-  snapshot-history fix (H5 gap): reload no longer blanks the chat; the
-  conversation shows the previous REAL turns (user + assistant).
+* [Chat history restored](26-chat-history-live.png) — shows the previous
+  REAL turns (user + assistant) after reload. HISTORICAL behavior:
+  the fresh-start directive (mic hero only) supersedes this.
 * [Video playing live](27-video-live.png) — user-captured: REAL Rick
   Astley video playing in the main surface after "pon un video" (real
   model, no mock). Note: the bottom dock (0:00/0:00, YOUTUBE) is the

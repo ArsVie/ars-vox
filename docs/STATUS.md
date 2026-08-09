@@ -7,9 +7,9 @@ timestamp: 2026-08-09T05:00:00Z
 
 # Ars-Vox — current state (2026-08-09)
 THIS FILE IS THE SINGLE AUTHORITY for current implementation state.
-HANDOFF.md is roadmap + session history; ADRs are historical decisions;
-audits are snapshots. If any other doc contradicts this file, this file
-wins.
+HANDOFF.md is the roadmap (guidance, not history); ADRs are historical
+decisions; audits are snapshots. If any other doc contradicts this file,
+this file wins.
 
 ## Target hardware
 
@@ -37,8 +37,7 @@ consolidation → MVP backlog). Frozen contract:
 docs/consolidation-contract-2026-08-08.md — 8 invariants
 (VOICE/STOP/LAYOUT/MEDIA/CONFIRMATION/SERVICE/RECONNECT/CLIENT-ACTIONS),
 C1–C8 semantic deltas, R01–R47 regression freeze. All 10 wave-1 branches
-merged to main in the frozen order A7→A1→A2→A6→A3→A4→A5→A8→A9→A10 (S0 doc
-df48da6; last merge 3d74afb; gate fixes 14e36e0/c0f0526/3006b13/dbb5e5d).
+are on main (S0 doc df48da6; gate fixes 14e36e0/c0f0526/3006b13/dbb5e5d).
 
 - VOICE (A1, R01–R08): tts.started/finished/cancelled acks; the renderer is
   physical-playback authority; the turn stays THINKING until tts.started and
@@ -56,7 +55,7 @@ df48da6; last merge 3d74afb; gate fixes 14e36e0/c0f0526/3006b13/dbb5e5d).
 - LAYOUT (A3+A4, R16–R23): the model speaks the native adaptive LayoutSpec
   (focus/sidecar/stack/split/triple + primary/companion/support/persistent +
   narrow/balanced/wide) through layout.compose; news is gone from every
-  model-visible surface incl. PanelType.NEWS (R18, gate-fixed); every layout
+  model-visible surface incl. PanelType.NEWS (R18); every layout
   mutation enters ONE applyAdaptiveSpec choke; user overrides (pin/stick/
   position/size/remove/fullscreen/showBoth) apply AFTER planner output and
   beat later agent preferences; spoken override intents are deterministic.
@@ -71,8 +70,12 @@ df48da6; last merge 3d74afb; gate fixes 14e36e0/c0f0526/3006b13/dbb5e5d).
   null/empty snapshot fields clear stale state; adaptive composition
   (template/assignments/proportion/overrides) rides the snapshot and is
   restored through the ONE choke; client-side sequence-gap detection fires
-  resyncHook → WsClient.forceReconnect (R29 — gap item 5 below is now DONE);
-  snapshot carries conversation history (reload no longer blanks the chat).
+  resyncHook → WsClient.forceReconnect (R29 — Known gaps 5).
+  START STATE (user directive): fresh start shows ONLY the central-mic
+  hero; snapshot history is stashed for explicit resume, never
+  auto-rendered; same-tab reconnect keeps the in-memory conversation.
+  NOTE: the code currently auto-restores history + composition on connect
+  — fix pending.
 - CONFIRMATION + CLIENT ACTIONS (A7, R35–R39, C1): spoken approve/reject
   vocabulary (confirmar/confirmo/sí/sí enviar/aprobar · cancelar/rechazar/
   no/no enviar) resolves the one global pending against its FROZEN SQLite
@@ -86,10 +89,11 @@ df48da6; last merge 3d74afb; gate fixes 14e36e0/c0f0526/3006b13/dbb5e5d).
   filter, window-open denial, custom local-doc protocol, IPC sender
   validation) — not wired to UI yet; Electron major upgrade lands BEFORE
   arbitrary real browsing (migration-note-electron-upgrade-2026-08-08.md).
-- VISUAL (A9, R43): PLANTILLA combobox dev-gated (DEMO_TOGGLE_ENABLED),
-  redundant "agente conectado" gone, one status pill (role="status" with
-  STATUS_VOCABULARY), "Lee mis correos" fake suggestion removed, English mic
-  aria labels fixed, STOP ≥48px, status vocabulary consistent.
+- VISUAL (A9, R43): one status pill (role="status", STATUS_VOCABULARY),
+  no redundant connection text, no fake suggestion chips, STOP ≥48px,
+  Spanish aria labels. TEMPLATE SELECTOR (user directive): none anywhere,
+  dev included — NOTE: dev builds still render a dev-gated combobox,
+  removal pending.
 - ADVERSARIAL (A10, R44–R47): cold secure startup, spoken STOP during TTS,
   spoken confirmation, persistent override vs later agent layout, agent
   media → human pause/seek → agent resume, restart with media=null,
@@ -101,60 +105,33 @@ Seam lessons + test-discipline pitfalls (flattened-vs-dotted tool names,
 singleton pollution, R11 buffering test channels, merge-marker hygiene):
 skill reference gate35-merge-lessons-2026-08.md.
 
-## Adaptive UI redesign (waves)
+## Adaptive UI (state)
 
-- WAVE 0 DONE — UI-000 frozen the adaptive UI contract (SurfaceRole /
-  AdaptiveTemplate / Proportion / LayoutSpec, registration interface, token
-  naming catalog, placeholder fixtures, deterministic validation). Gate
-  CONTRACT_FROZEN closed (merge a3e996d). Docs:
-  docs/adaptive-ui-contract.md, docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
-- WAVE 1 DONE — UI-101 shell, UI-102 geometry engine, UI-103 role framework,
-  UI-104 token values, UI-105 workflow harness all merged to main (GATE-1
-  FOUNDATION_INTEGRATION closed 2026-08-07). Note: 4/5 workers hit the
-  600s subagent cap; their landed work was gate-verified by the orchestrator
-  and committed (UI-104 was the only clean self-commit, d3dae0c).
-- WAVE 2 DONE — UI-201 browser, UI-202 conversation, UI-203 reading,
-  UI-204 tasks, UI-205 media, UI-206 motion, UI-207 spatial inertia ALL
-  merged (GATE-2 ADAPTIVE_SURFACE_INTEGRATION closed 2026-08-08; 7/7 workers
-  self-completed in 5+2 batches — no timeouts this wave). Gate wiring:
-  product surfaces (browser/conversation/document_editor/tasks/media)
-  registered in the surface registry and hosted by the adaptive stage
-  through LayoutSpec with the UI-103 role host (src/adaptive/surfaces.ts +
-  AdaptiveStage; legacy PanelHost stays for the non-adaptive path). Motion:
-  240ms slot transitions keyed by surfaceId (no remount), reduced-motion
-  gated. Inertia: pure layout-change scorer + thin store guard in
-  applyAdaptiveSpec (equivalent layouts / chatter never churn; user signal
-  always applies). Verified live in CDP: split browser+conversation with
-  real surfaces, media primary→persistent bar without playback reset,
-  readers pixel-verified (below). Screenshots: docs/screenshots/12..22-wave2-*.
-- WAVE 3 DONE (2026-08-08, 3 of 3 tracks merged): UI-301 agent layout planner
-  (semantic composition authority — agent says WHAT never HOW; invalid
-  model output rejected with structured reasons, never reaches state;
-  legacy wire layout.apply routed through the planner), UI-302 user
-  overrides (persistent constraint set pin/stick/position applied AFTER
-  planner output; user-initiated signal bypasses the inertia damping
-  wall, agent-initiated stays damped; invalid arrangements degrade
-  deterministically to nearest valid), UI-303 usability+a11y (hit-target
-  floor, focus-visible rings + tab order, reduced-motion coverage,
-  status icons + Spanish aria labels, STOP accessibility, 12px text
-  floor, contrast fixes — token catalog only, no redesign). +89 tests
-  (27 planner / 40 overrides / 22 a11y).
-- GATE-2.5 HARDENING DONE (2026-08-08, 7 tracks merged): H1 bidirectional
-  client-action protocol (authoritative ui_command handlers + action_result
-  verdicts + cross-language fixtures), H2 reminder correctness (UTC
-  instants, occurrence lifecycle, correct snooze/recurrence + tz), H3 STOP
-  locally authoritative (renderer-first cancellation, canonical voice
-  state machine), H4 local service boundary (bearer auth HTTP+WS, CORS
-  lockdown, TTS POST, config validators — audit P0/P1s), H5 reconnect
-  recovery (state_snapshot on connect, global one-pending confirmations,
-  explicit execute lifecycle, stop invalidates pendings, migration
-  0003), H6 canonical config paths + uv.lock, H7 media wiring
-  (IFrame-player YouTube control, audio.play, adaptive stage role
-  resolution). Merge: 7 branches, 6 deliberate conflict resolutions on
-  shared seams (ws.py, mic.ts, contracts.ts, events.py, runtime.py,
-  config.py). Integration fix: migration version collision 0002/0002 →
-  0003 (reminder lifecycle was being skipped on fresh DBs).
-- Execution contract: docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
+- Contract (UI-000): SurfaceRole / AdaptiveTemplate / Proportion /
+  LayoutSpec, registration interface, token catalog, placeholder fixtures,
+  deterministic validation. Docs: docs/adaptive-ui-contract.md,
+  docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
+- Shell + geometry + roles + tokens + harness (UI-101..105), product
+  surfaces (UI-201..207: browser, conversation, reading, tasks, media,
+  motion, spatial inertia), planner + overrides + a11y (UI-301..303):
+  all on main, green.
+- Product surfaces register in the surface registry and render through the
+  adaptive stage via LayoutSpec with the role host
+  (src/adaptive/surfaces.ts + AdaptiveStage; legacy PanelHost remains for
+  the non-adaptive path). Motion: 240ms slot transitions keyed by
+  surfaceId, reduced-motion gated. Inertia: pure layout-change scorer +
+  store guard in applyAdaptiveSpec (equivalent layouts never churn; user
+  signal always applies).
+- Planner (UI-301): semantic composition authority — the agent says WHAT,
+  never HOW; invalid model output is rejected with structured reasons;
+  legacy wire layout.apply routes through the planner.
+- Overrides (UI-302): persistent constraint set (pin/stick/position/size/
+  remove/fullscreen/showBoth) applied AFTER planner output; user-initiated
+  signal bypasses inertia damping, agent-initiated stays damped; invalid
+  arrangements degrade deterministically.
+- A11y (UI-303): hit-target floor, focus-visible rings + tab order,
+  reduced-motion coverage, status icons + Spanish aria labels, STOP
+  accessibility, 12px text floor, contrast fixes (token catalog only).
 
 ## Documents
 
@@ -163,20 +140,11 @@ skill reference gate35-merge-lessons-2026-08.md.
 - PDF: pdf.js v6 real renderer (lazy-loaded, worker via vite asset).
 - EPUB: epub.js 0.3.x real renderer (paginated, CFI locations, themes,
   A−/A+).
-- ✅ READERS FIXED AND VERIFIED ON MAIN (2026-08-08, merge a48c8fe — parked
-  branch wip/advisor-round2-reader-polish + the PDF canvasContext fix):
-  - EPUB: theme styles are now NESTED OBJECTS ({selector:{prop:value}});
-    epub.js addStylesheetRules was emitting EMPTY rules for CSS strings,
-    leaving the body transparent with black text. Theme + font are also
-    re-applied after display() resolves. Verified live in CDP: body
-    computed style rgb(247,244,238) background + dark text, 840 chars of
-    Quijote visible, vision-confirmed on the light "Papel" page.
-  - PDF: render() now passes `canvasContext` (pdfjs-dist 6.2.108 silently
-    no-ops on bare `canvas`), device-pixel transform, fit-width base scale,
-    and deterministic error wrapping for open/page failures. Verified live:
-    canvas pixel-probe = 100% white (was 100% black).
-  - PITFALL (still live): epub display() stalls silently in backgrounded
-    CDP tabs (rAF-throttled queue) — activate the tab before driving.
+- READERS: EPUB theme styles are nested objects ({selector:{prop:value}})
+  with theme + font re-applied after display() resolves; PDF render()
+  passes canvasContext with device-pixel transform, fit-width base scale,
+  deterministic error wrapping. PITFALL: epub display() stalls silently in
+  backgrounded CDP tabs (rAF-throttled queue) — activate the tab first.
 - Local-file access in Electron (custom protocol): PLANNED.
 - Book position persistence: backend library.get_position/set_position
   exists; UI resume wiring PLANNED.
@@ -194,8 +162,8 @@ skill reference gate35-merge-lessons-2026-08.md.
   (scripts/demo_voice.py VOICE_OK, CDP TTS playback). Wake-word/VAD
   providers remain unwired (above).
 - STOP vocabulary (utterance-level, accent-stripped): stop, detente,
-  deten, alto, basta. "para" was REMOVED (2026-08-07, Ars's decision)
-  because it is a common mid-sentence Spanish word.
+  deten, alto, basta. "para" is excluded — common mid-sentence Spanish
+  word (Ars's decision).
 - Physical microphone smoke test: NOT DONE (blocked on being at the
   physical machine). The wake → ask → interrupt → continue → sleep →
   wake loop is NOT yet proven on real hardware.
@@ -203,7 +171,7 @@ skill reference gate35-merge-lessons-2026-08.md.
 ## Browser
 
 - Web demo: BrowserPanel with address bar + iframe viewport, driven by
-  user and agent (local news page fixture).
+  user and agent (local demo page — not a news panel).
 - Electron: WebContentsView owned by main process is the DESIGNED
   shape; NOT yet implemented (iframe is web-demo-only).
 - Allowlist (`browser.allowlist`) and home URL: NOT enforced anywhere
@@ -287,5 +255,8 @@ skill reference gate35-merge-lessons-2026-08.md.
    unified media pipeline (real YouTube/local playback).
 4. Real-user observation pass — design polish is deferred until
    interaction problems are observed.
-5. DONE (GATE-3.5 A6/R29): client-side sequence-gap detection fires
-   resyncHook → WsClient.forceReconnect on sequence jumps.
+5. (implemented) client-side sequence-gap detection fires resyncHook →
+   WsClient.forceReconnect on sequence jumps.
+6. (pending, user directive) fresh start = central-mic hero ONLY; snapshot
+   history stashed for explicit resume, never auto-restored.
+7. (pending, user directive) no template selector anywhere, dev included.

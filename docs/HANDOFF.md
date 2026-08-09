@@ -1,207 +1,125 @@
 ---
 type: handoff
-title: "Ars-Vox handoff — 2026-08-07 (night): config-driven UI + live windows demo + modularity audit fixes"
-description: Roadmap and session history. CURRENT-STATE AUTHORITY is docs/STATUS.md — current-state claims in this file may be stale by design.
+title: "Ars-Vox roadmap and operating guidance"
+description: Roadmap + standing rules. NOT a history log. Current implementation state lives in docs/STATUS.md (single authority).
 ---
 
-# Ars-Vox handoff — 2026-08-07 (night session)
+# Ars-Vox — roadmap and operating guidance
 
-> UPDATE (2026-08-09, GATE-3.5 consolidation CLOSED): the two-stage
-> consolidation program (`docs/plans/consolidation-program-2026-08-08.md`)
-> passed its first gate. All 10 wave-1 branches merged to main in the frozen
-> order A7→A1→A2→A6→A3→A4→A5→A8→A9→A10: voice lifecycle + TTS acks
-> (tts.started/finished/cancelled, speech-anchored silence timer), secure
-> Electron-owned launch (one per-launch token, authenticated handshake,
-> buffered pre-connect input, child-tree kill), native adaptive layout
-> contract (model speaks LayoutSpec, news removed from the model-visible
-> surface incl. PanelType.NEWS), single frontend layout choke with spoken
-> overrides, one MediaController for agent+human+player (real seek with
-> position on the wire), continuous snapshot tracker + authoritative
-> null/empty snapshot fields + sequence-gap resync, spoken confirmations +
-> narrowed ClientAction union with handler completeness, hardened
-> remote-content Electron foundation, R43 visual cleanup, adversarial suite.
-> Frozen contract: `docs/consolidation-contract-2026-08-08.md` (8 invariants,
-> R01–R47). Gate counts: pytest 308 / vitest 601 (see STATUS.md Test gates),
-> typecheck + build clean. Screenshots refreshed post-gate (see
-> screenshots/index.md). Wave 2 (MVP backlog: wake word, real browser
-> WebContentsView, DOM bridge, real media, reminders, reader persistence,
-> context timestamps, memory search, telegram/notes/tasks polish) is the next
-> phase — locked behind the gate hard rule.
+This file tells you where the project is going and what the standing rules
+are. It is NOT a narrative of what happened. Current state: docs/STATUS.md.
+Frozen product direction: docs/panel-vision.md (Ars's spec, never edit).
 
-> UPDATE (2026-08-08, wave 2 / GATE-2 closed): UI-201..207 ALL merged —
-> browser, conversation, reading, tasks, media adaptive surfaces + motion
-> transitions + spatial inertia policy. Product surfaces now registered and
-> hosted by the adaptive stage through LayoutSpec (gate wiring:
-> src/adaptive/surfaces.ts). READERS FIXED AND VERIFIED ON MAIN: EPUB nested
-> theme objects + re-apply (light page renders), PDF canvasContext render fix
-> (canvas pixel-probed 100% white) — see STATUS.md Documents. 306 vitest /
-> 110 pytest green. Screenshots refreshed (12..22-wave2-*). Wave 3
-> (UI-301..303) unlocked, dispatch pending owner go-ahead.
+## Current phase
 
-> ⚠️ HISTORICAL (resolved 2026-08-08): READERS BROKEN ON MAIN was true until
-> the 2026-08-08 merge — root causes established (EPUB: theme styles as CSS
-> strings → empty epub.js rules → invisible page; PDF: pdfjs v6 render()
-> silently no-ops without canvasContext). Both fixed + verified (above).
- The UPDATE 2 block below ("REAL PDF/EPUB readers shipped") is HISTORICAL —
-> those readers were verified in an earlier session whose dev server was
-> serving the parked fix. Full evidence + fix location:
-> docs/STATUS.md (Documents section) + docs/handoff-epub-reader-debug-2026-08-07.md.
+GATE-3.5 consolidation is CLOSED (2026-08-09): 10 wave-1 branches merged,
+308 pytest / 601 vitest / typecheck / build green, 19/19 acceptance items
+checked. Contract: docs/consolidation-contract-2026-08-08.md.
+Program: docs/plans/consolidation-program-2026-08-08.md.
 
-> UPDATE (late 2026-08-07): content channel shipped — panels are POPULATED
-> in mock mode (screenshots: docs/review-2026-08-07/05-dashboard-populated.png,
-> 06-reading-populated.png, 07-split-populated.png). Frozen panel vision:
-> docs/panel-vision.md — Ars's spec, NOT agent-editable (mirrored in ars-vox
-> skill ref panel-vision-2026-08.md). New events: youtube.search,
-> browser.navigate, document.load, tasks.update, media.state (Python +
-> TS mirrors + schemas). New components: YoutubePanel, BrowserPanel,
-> TasksPanel, DocumentPanel (reader+editor), unified MediaDock.
-> Mock opens a populated dashboard via demo_populate (policy-classified).
-> Tests: 96 vitest (desktop), 67 pytest. Next: backend runtime wiring —
-> reminder cron context injection, message timestamps in agent context,
-> memory-driven search personalization, Electron webview for browser,
-> real media pipeline.
->
-> UPDATE 2 (late 2026-08-07): REAL PDF/EPUB readers shipped (pdf.js v6 +
-> epub.js 0.3.x behind one Reader interface; ReaderView with nav/location/
-> font/theme controls; single-page spreads). Verified: 08-reading-epub.png
-> (serif book page) + 09-reading-pdf.png (rendered Quijote canvas).
-> document.load now carries url. Details + pitfalls in ars-vox skill ref
-> document-reader-2026-08.md. Fixture generator:
-> apps/desktop/scripts/gen-demo-fixtures.py. Remaining: Electron custom
-> protocol for local files, book position persistence pass.
+Next phase: WAVE 2 (MVP backlog, below). Wave 2 work runs IN PARALLEL with
+any remaining plumbing — visible product value comes first.
 
-Supersedes the evening handoff (advisor round-2 state remains true; this
-session added the config-driven layer + demo hardening + cleanup).
+## What exists (state, one line per domain)
 
-> ⚠️ CURRENT STATE: docs/STATUS.md is the single authority for what is
-> implemented/verified RIGHT NOW. This file is roadmap + session history;
-> older verification blocks below are historical records, not truth.
+- VOICE: TTS started/finished/cancelled acks; renderer owns physical
+  playback; silence timer anchored to speech end; STOP cancels model + mic
+  + TTS; spoken STOP works; wake-word/VAD providers exist but are NOT
+  wired.
+- SERVICE: Electron spawns the Python service with one per-launch token,
+  authenticated handshake, pre-connect input buffered exactly once,
+  startup failures visible, renderer never holds the token.
+- LAYOUT: model speaks native LayoutSpec (5 templates, 4 roles, 3
+  proportions); news removed from every model-visible surface; all layout
+  mutations go through one choke; user overrides beat agent preferences.
+- MEDIA: one MediaController for agent + human + player; seek changes real
+  position; no fake success when nothing is loaded; media=null clears.
+- RECONNECT: continuous snapshot tracker; authoritative null clears;
+  sequence-gap resync; notifications restored.
+- CONFIRMATIONS: spoken approve/reject; one global pending; executing
+  actions carry cancellation tokens; ClientAction = narrowed human-initiated
+  union (16 members, all handled).
+- DOCS/TOOLS: adaptive surfaces (browser/conversation/reading/tasks/media),
+  real PDF/EPUB/TXT readers, planner + overrides + a11y pass.
+- BACKEND GAPS (unchanged, planned): reminder cron context injection,
+  message timestamps in context, memory-driven search, real media,
+  Electron WebContentsView browser + DOM bridge.
 
-## State summary
+## Standing rules (directives — do not violate)
 
-**A verified agent-service foundation with a multi-zone desktop UI, a
-verified live model path (deepseek-v4-flash via opencode-go), and a
-fully wired real voice path EXCEPT the physical microphone on the
-target machine.** This session's theme: make the config actually drive
-the UI, prove the LLM manages windows across turns, and kill
-duplicated/reinvented parts.
+- PANEL VISION: docs/panel-vision.md is frozen and authoritative. There is
+  NO news panel (browser covers news). Agent never sends coordinates.
+- WAKE WORD: phrase UNDECIDED. "Ars" is the family prefix, NOT the wake
+  word. "Lily" is a candidate. No wake-word training/benchmarking until
+  Ars selects it.
+- FRICTIONLESS POLICY: no confirmation gates except MAYBE messages and
+  email. Confirmation UX = popup in chat or voice-ask. No silent pending
+  gates where the model says "done" while the action waits.
+- START STATE: a fresh app start shows ONLY the central-mic hero.
+  Conversation history is stashed and loads ONLY on explicit request —
+  never auto-restored on load/reload. (Code currently auto-restores;
+  fix pending.)
+- TEMPLATE SELECTOR: no template selector in the UI, dev builds included.
+  (Dev builds still show a dev-gated one; removal pending.)
+- DETENER: stops what is happening (voice/activity), NEVER "go home".
+- EXIT AFFORDANCE: ARS·VOX logo/home in the header returns to the mic
+  hero, always the same place; every panel header has a close (X); the
+  agent prompt guides the agent to restore the hero when the user signals
+  leaving.
+- STATE PANEL: minimal, not a header; placed where the eyes land (in the
+  chat or beside the main panel).
+- MEDIA HONESTY: the agent must play real media or report honestly — no
+  claimed success on fixtures. Real YouTube search is mandatory (scrape
+  ytInitialData or a public API); progress bar must reflect the real
+  iframe position.
+- DOCS STYLE: docs are guidance, not narrative. No "was fixed / merged /
+  today X" prose. STATUS.md is the single authority for state.
+- ELECTRON ORDER: Electron major upgrade lands BEFORE arbitrary real
+  browsing.
 
-## Shipped this session (commit 28493cf)
+## Next work — Wave 2 (MVP, prioritized)
 
-1. **Config-driven UI (the "tuneable configs" deliverable)** — the UI
-   no longer hardcodes anything that app.yaml declares:
-   - NEW `apps/desktop/src/endpoints.ts` — single source for WS/TTS/STT
-     URLs, overridable at build time with `VITE_AGENT_URL`. Killed the
-     4x hardcoded `127.0.0.1:8765` (was ws/client.ts, main.tsx, mic.ts,
-     TtsPlayer.tsx).
-   - `store.applyConfig` on `config_update` now wires: `ui.reduced_motion`,
-     `ui.large_text`, `ui.high_contrast`, `ui.default_template`,
-     `ui.default_primary` (applied only BEFORE the first layout command,
-     so reconnects can't clobber user state), `tts.speed` (TtsPlayer
-     playbackRate), `tts.queue_max` (shared pushSpeak helper replaces
-     the 3x copy-pasted cap).
-   - `App.tsx` sets `data-large-text` / `data-high-contrast`; styles.css
-     has matching blocks. Both verified in-browser.
-   - VERIFIED: mock service booted with `ui.default_template: reading,
-     ui.default_primary: news` → UI booted to reading/news straight
-     from config (store spec showed reading/news, DOM showed Noticias
-     62% main + Conversación 31% side).
-2. **Typed wire contracts** — contracts.ts now has typed enum unions
-   (NotificationKind, MediaState, ConfirmationStatus, WirePanelId,
-   AppConfigWire) instead of `string`; conformance tests extended to
-   check ALL 4 schema enums + PanelType parity (layout 12 + overlay
-   2). Store narrows overlay panels (confirmation/notification) out of
-   the layout registry.
-3. **Live multi-turn window-management demo** — `scripts/demo_live.py`
-   gained `--scenario windows` (5 turns: open youtube, split document
-   + conversation, browser main + conversation, fullscreen, restore).
-   Result: **MULTI_OK turns=5, 0 errors** (ran twice, incl. after the
-   harness refactor; turn 1 emitted 2 typed commands). `--scenario
-   single` preserved byte-compatible.
-4. **Modularity audit fixes** (report: docs/audit-modularity-2026-08-07.md):
-   - `scripts/_harness.py` — shared temp-config/health/run_server used
-     by demo_live.py, smoke_mock.py, __main__.py (SMOKE_OK re-verified).
-   - `utcnow_iso` from arsvox_memory.db replaces 10 copy-pasted `_now()`.
-   - Memory repos import contracts enums instead of SQL literals /
-     STATUSES tuples.
-   - `tests/python/conftest.py` now loads the REAL configs/app.yaml and
-     overrides only test-specific keys (was a stale 4th copy of the tree).
-   - `runtime.py` enforces `agent.model.max_steps` via
-     `UsageLimits(tool_calls_limit=...)`.
-   - system.md panel list fixed (was missing settings/confirmation/
-     notification) + new drift-guard test
-     (`test_system_prompt_names_all_panel_types`).
-   - configs/app.example.yaml template list synced; export_schemas.py
-     docstring fixed; TTS default voice constant shared.
-5. **Design governance pass (taste-skill adoption, MIT)** — report:
-   docs/taste-skill-analysis-2026-08-07.md. styles.css now has a
-   governance header (VARIANCE 3 / MOTION 2 / DENSITY 5), documented
-   radius scale (--radius-xs/sm/lg/pill), machined panel inset
-   highlight, tabular-nums in status bar, tactile press on mic button,
-   hardened reduced-motion block, accessibility-mode blocks.
-
-## Verification (historical — night session; current counts in STATUS.md)
-
-- 58/58 pytest (was 57; +1 drift-guard), 74/74 vitest (was 64),
-  typecheck clean, build clean.
-- LIVE_OK single turn; MULTI_OK 5/5 twice (live dsv4-flash via
-  opencode-go, key from ~/.hermes/.env).
-- SMOKE_OK after _harness refactor.
-- Browser (CDP): config-driven default layout verified; full user turn
-  verified (sendText "Abre un documento" → split/document_editor +
-  user/assistant messages); vision review passed (reading layout,
-  empty states, status bar correct).
-
-## Still open (deliberately not started)
-
-1. ~~Real media playback controls~~ — DONE (unified MediaDock + media.state
-   reducer + controls, 2026-08-07 late session).
-2. Real-mic smoke test on the physical Windows machine (voice loop
-   proof — STATUS.md gap #1).
-3. ~~copilot-advisor review of the NEW screenshots~~ — DONE (full review
-   dossier evaluated 2026-08-07; findings feeding the next plan).
-4. Remaining taste-skill items (optional): Geist display font eval,
-   full skeleton-loader states, copy discipline sweep (one label per
-   intent, em-dash audit in chrome strings).
+A. Wake word / VAD physical voice loop (phrase-agnostic).
+B. Real browser WebContentsView (allowlist enforced, hardened partition).
+C. Browser DOM interaction bridge (snapshot/find/click/fill/submit/scroll;
+   page content = untrusted; consequential actions follow the policy).
+D. Real media discovery/playback (real YouTube search, no fixtures).
+E. Reminder/task notification integration (snooze/dismiss/restart
+   reliability).
+F. Reader persistence (book progress resume, PDF page/zoom restore).
+G. Context timestamps + durable user state.
+H. Memory-informed search with provenance.
+I. Telegram/notes/tasks polish (no tool names visible to the user).
+UI: confirmation popup-in-chat / voice-ask, minimal state panel near the
+gaze, media progress bar tied to the iframe, exit/home affordance + panel
+close X, mic-hero-only start, template selector removal.
 
 ## Commands
 
 ```bash
 # python suite (repo root, .venv)
-.venv/bin/python -m pytest tests/python -q          # 67 passed (see STATUS.md)
+.venv/bin/python -m pytest tests/python -q
 # desktop suite + typecheck + build
-cd apps/desktop && npm test && npm run typecheck && npm run build   # 96 passed (see STATUS.md)
-# live multi-turn window-management demo (needs OPENCODE_GO_API_KEY)
-source /tmp/arsvox-env.sh   # or export the key from ~/.hermes/.env
+cd apps/desktop && npm test && npm run typecheck && npm run build
+# live multi-turn demo (needs OPENCODE_GO_API_KEY)
+source /tmp/arsvox-env.sh
 .venv/bin/python scripts/demo_live.py --scenario windows --wait-s 90
-# mock service + vite dev for browser verification
+# mock service + vite dev (for browser verification only)
 .venv/bin/python -c "import yaml; cfg=yaml.safe_load(open('configs/app.yaml')); cfg['agent']['mock']=True; yaml.safe_dump(cfg, open('/tmp/arsvox-mock.yaml','w'), sort_keys=False, allow_unicode=True)"
 .venv/bin/python -c "import uvicorn; from arsvox_agent.app import create_app; uvicorn.run(create_app('/tmp/arsvox-mock.yaml'), host='127.0.0.1', port=8765, log_level='warning')"   # background
 cd apps/desktop && npx vite --port 5173 --strictPort   # background
 ```
 
-## Notes for the next agent
+## Operational notes (rules, not stories)
 
-- **Ports are FREE at session end** — both services were killed. The
-  previous sessions left stale squatters (old mock on 8765, old vite
-  on 5173) which caused: a false LIVE_OK (demo bound to the mock) and
-  stale-module serving. Kill any leftover listener before starting.
-- **demo_live.py MUST NOT find a service on 8765** — it boots its own
-  instance; verify with `ss -tlnp | grep 8765` first.
-- **Browser eval/screenshot target divergence persists** (documented in
-  wsl-webapp-development skill): evals hit the live tab, screenshots
-  may hit a stale tab. For UI checks use DOM-level assertions (computed
-  styles/classes/store state) over pixel screenshots; if you need
-  screenshots for the advisor, drive the SCREENSHOT target with real
-  type+click actions, not store evals.
-- **vite on /mnt/c serves stale modules** — restart vite after any
-  source change; verify freshness via fetch sentinel (code literals,
-  never comments).
-- **Config-driven default layout is intentionally one-shot**: it applies
-  only before the first layout command, so reconnects don't clobber the
-  user's layout. Tests cover this (store.test.ts config-driven block).
-- **API key**: OPENCODE_GO_API_KEY lives in ~/.hermes/.env (line 362).
-  `source /tmp/arsvox-env.sh` exports it (file created this session).
-- **Conftest now loads the real app.yaml** — changing configs/app.yaml
-  may change test behavior (that's the point).
-- hey.md: this session's entry is at the top, status resolved.
+- Before booting any service, verify the port is free
+  (`ss -tlnp | grep 8765` / `:5173`) and kill leftover listeners.
+- vite on /mnt/c serves stale modules — restart it after source changes
+  and verify freshness with a code literal, not a comment.
+- Browser checks: use DOM-level assertions (computed styles, classes,
+  store state) over pixel screenshots; the eval and screenshot targets can
+  diverge.
+- API key: OPENCODE_GO_API_KEY lives in ~/.hermes/.env (line 362);
+  /tmp/arsvox-env.sh exports it.
+- tests/python/conftest.py loads the real configs/app.yaml — changing it
+  changes test behavior by design.
