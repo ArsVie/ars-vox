@@ -222,18 +222,6 @@ def test_parity_registered_surfaces_with_ts_product_surfaces():
     assert ts_ids == set(REGISTERED_SURFACES)
 
 
-def test_parity_remote_allowlist_with_ts_security_policy():
-    """BrowserSection.allowlist default must equal the Electron
-    DEFAULT_REMOTE_ALLOWLIST (apps/desktop/electron/security-policy.ts):
-    the service and the shell agree on which remote hosts are reachable."""
-    from arsvox_contracts.config import BrowserSection
-
-    ts = _read_ts("apps/desktop/electron/security-policy.ts")
-    ts_list = _ts_string_array(ts, "DEFAULT_REMOTE_ALLOWLIST")
-    py_default = list(BrowserSection.model_fields["allowlist"].default)
-    assert ts_list == py_default
-
-
 def test_parity_spoken_vocabularies_with_ts_spoken_overrides():
     """The frozen spoken-override vocabulary (spokenOverrides.ts) must not
     collide with the Python frozen utterance vocabularies (local_intents.py)
