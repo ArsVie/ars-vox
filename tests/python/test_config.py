@@ -31,6 +31,10 @@ def test_config_rejects_unknown_keys(config_path):
 
 def test_patch_config_valid(client):
     cfg = client.get("/config").json()
+    # R15: the runtime PATCH path cannot persist auth.enabled=false (the
+    # shared mock fixture runs auth-off, so the round-trip must re-enable
+    # it in the payload — disabling is a config-FILE-only state).
+    cfg["auth"]["enabled"] = True
     cfg["tts"]["provider"] = "edge"
     resp = client.patch("/config", json=cfg)
     assert resp.status_code == 200

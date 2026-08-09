@@ -12,7 +12,7 @@
  * unchanged. VAD + silence detection run here, in the renderer.
  */
 
-import { authHeaders, STT_URL } from "../endpoints";
+import { authenticatedFetch, STT_URL } from "../endpoints";
 import { EnergyVad, type VadConfig } from "./vad";
 
 export type MicPhase = "idle" | "recording" | "transcribing" | "error";
@@ -181,9 +181,8 @@ export class MicCapture {
     try {
       const form = new FormData();
       form.append("file", blob, "utterance.webm");
-      const res = await fetch(STT_URL, {
+      const res = await authenticatedFetch(STT_URL, {
         method: "POST",
-        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });

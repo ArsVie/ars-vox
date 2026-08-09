@@ -278,6 +278,9 @@ describe("socket disconnected + STOP", () => {
       sent.push(message);
       throw new Error("socket down");
     });
+    // R11: mark connected so the send goes LIVE (a disconnected store
+    // buffers instead of throwing — which is itself the R11 guarantee).
+    store.getState().setConnected(true);
     store.getState().enqueueTts("hola");
     expect(store.getState().speakTexts).toEqual(["hola"]);
 

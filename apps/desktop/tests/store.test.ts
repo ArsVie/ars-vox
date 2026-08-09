@@ -30,6 +30,7 @@ describe("vertical slice: open a document", () => {
   it("user text -> ui_command -> split layout -> agent response", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
 
     store.getState().sendText("Open a document.");
     expect(sent).toEqual([{ type: "user_text", text: "Open a document." }]);
@@ -136,6 +137,7 @@ describe("confirmation flow", () => {
   it("shows a pending card and sends confirm/cancel over the transport", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().applyEvent({
       type: "confirmation_requested",
       pending_id: "p1",
@@ -267,6 +269,7 @@ describe("tts speak queue", () => {
   it("stop clears the speak queue before sending the stop message", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().enqueueTts("Hola");
     store.getState().enqueueTts("mundo");
     store.getState().stop();
@@ -746,6 +749,7 @@ describe("panel content events (content channel)", () => {
   it("dispatchCommand youtube.search marks loading and sends the ui_command", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().dispatchCommand({ action: "youtube.search", query: "gatos" });
     expect(store.getState().content.youtube).toEqual({
       query: "gatos",
@@ -764,6 +768,7 @@ describe("panel content events (content channel)", () => {
   it("dispatchCommand youtube.play optimistically plays the video and sends", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     // a prior media.state sets volume; play must preserve it
     store.getState().applyEvent({
       type: "media.state",
@@ -810,6 +815,7 @@ describe("panel content events (content channel)", () => {
   it("dispatchCommand tasks.toggle flips done on the matching todo and sends", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().applyEvent({
       type: "tasks.update",
       todos: [
@@ -843,6 +849,7 @@ describe("panel content events (content channel)", () => {
   it("dispatchCommand tasks.toggle without tasks content still forwards the command", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().dispatchCommand({ action: "tasks.toggle", task_id: "ghost" });
     expect(store.getState().content.tasks).toBeUndefined();
     expect(sent).toEqual([
@@ -857,6 +864,7 @@ describe("panel content events (content channel)", () => {
   it("dispatchCommand media.play_pause toggles playing<->paused and sends", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().applyEvent({
       type: "media.state",
       state: "playing",
@@ -891,6 +899,7 @@ describe("panel content events (content channel)", () => {
   it("dispatchCommand media.play_pause does not change a stopped player (still sends)", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().applyEvent({
       type: "media.state",
       state: "stopped",
@@ -918,6 +927,7 @@ describe("panel content events (content channel)", () => {
   it("dispatchCommand media.seek updates positionS and sends", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true); // R11: sends flow live only while connected
     store.getState().applyEvent({
       type: "media.state",
       state: "playing",

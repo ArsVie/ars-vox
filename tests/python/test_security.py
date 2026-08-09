@@ -258,6 +258,68 @@ def test_model_validation_unit():
         Model({"agent": {"model": {"api_key_env": "not valid"}}})
 
 
+# ------------------------------------------------------- auth config (R15) #
+
+
+def test_patch_config_rejects_auth_disabled(auth_client):
+    """R15: auth.enabled=false must not be persisted at runtime via PATCH
+    (dev/mock may only disable it in the config FILE)."""
+    cfg = full_config(auth_client)
+    cfg["auth"]["enabled"] = False
+    resp = auth_client.patch("/config", json=cfg, headers=AUTH)
+    assert resp.status_code == 422
+
+
+def test_patch_config_rejects_wildcard_origins(auth_client):
+    """R15: allowed_origins=["*"] must be rejected by the model validator
+    (would make CORS reflect any origin on the next boot)."""
+    cfg = full_config(auth_client)
+    cfg["auth"]["allowed_origins"] = ["*"]
+    resp = auth_client.patch("/config", json=cfg, headers=AUTH)
+    assert resp.status_code == 422
+
+
+def test_patch_config_rejects_empty_origins(auth_client):
+    cfg = full_config(auth_client)
+    cfg["auth"]["allowed_origins"] = []
+    resp = auth_client.patch("/config", json=cfg, headers=AUTH)
+    assert resp.status_code == 422
+
+
+def test_patch_config_accepts_auth_enabled_unchanged(auth_client):
+    """Round-tripping the config with auth enabled stays valid."""
+    cfg = full_config(auth_client)
+    resp = auth_client.patch("/config", json=cfg, headers=AUTH)
+    assert resp.status_code == 200
+    assert resp.json()["auth"]["enabled"] is True
+
+
+def test_auth_disabled_still_loads_from_file(tmp_path):
+    """R15 seam: the FILE may disable auth (mock/dev harness) — the guard
+    is scoped to the PATCH context, not to config loading."""
+    cfg = base_config(tmp_path)
+    cfg["auth"]["enabled"] = False
+    path = tmp_path / "app.yaml"
+    path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    app = create_app(str(path))
+    with TestClient(app):
+        assert app.state.services.config.auth.enabled is False
+
+
+def test_wildcard_origins_rejected_at_model_level():
+    with pytest.raises(Exception):
+        AppConfig.model_validate({"auth": {"allowed_origins": ["*"]}})
+    with pytest.raises(Exception):
+        AppConfig.model_validate({"auth": {"allowed_origins": ["https://*.example.com"]}})
+    # PATCH-context validation rejects a disabled boundary…
+    with pytest.raises(Exception):
+        AppConfig.model_validate(
+            {"auth": {"enabled": False}}, context={"source": "patch"}
+        )
+    # …while plain file-load validation accepts it (dev/mock).
+    AppConfig.model_validate({"auth": {"enabled": False}})
+
+
 # --------------------------------------------------------------------- ws #
 
 

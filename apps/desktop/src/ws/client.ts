@@ -1,11 +1,24 @@
 /**
  * WebSocket client for the agent service (/ws endpoint).
+ *
+ * Two transports behind the same interface:
+ *
+ *  - Electron mode (window.arsvox bridge present, GATE-3.5 A2/R14): the
+ *    socket lives in the MAIN process (the only place that may hold the
+ *    per-launch token — a renderer WebSocket cannot set headers and a
+ *    token-in-URL would be renderer-readable). Outbound frames sent
+ *    before the first connect are queued in main and delivered exactly
+ *    once (R11). Events/status arrive as push events over IPC.
+ *  - Plain-vite dev: direct browser WebSocket with the VITE token on the
+ *    URL query (or none when the mock has auth disabled). Auto-reconnects
+ *    with backoff.
+ *
  * Events are dispatched to the app store; outbound messages go through
- * the injected send function. Auto-reconnects with backoff.
+ * the injected send function.
  */
 
 import type { ServerEvent } from "../contracts";
-import { WS_URL } from "../endpoints";
+import { hasBridge, WS_URL, wsUrl } from "../endpoints";
 
 const DEFAULT_RECONNECT_MS = 2000;
 
@@ -25,9 +38,12 @@ export class WsClient {
   private ws: WebSocket | null = null;
   private timer: number | null = null;
   private closedByUser = false;
+  private readonly bridgeMode: boolean;
+  private unsubscribe: (() => void)[] = [];
 
   constructor(options: WsClientOptions) {
-    this.url = options.url ?? WS_URL;
+    this.bridgeMode = hasBridge();
+    this.url = options.url ?? (this.bridgeMode ? "" : wsUrl());
     this.reconnectMs = options.reconnectMs ?? DEFAULT_RECONNECT_MS;
     this.onEvent = options.onEvent;
     this.onStatus = options.onStatus;
@@ -35,10 +51,18 @@ export class WsClient {
 
   connect(): void {
     this.closedByUser = false;
+    if (this.bridgeMode) {
+      this.connectBridge();
+      return;
+    }
     this.open();
   }
 
   send(message: unknown): void {
+    if (this.bridgeMode) {
+      window.arsvox?.wsSend(JSON.stringify(message));
+      return;
+    }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     }
@@ -46,6 +70,12 @@ export class WsClient {
 
   close(): void {
     this.closedByUser = true;
+    if (this.bridgeMode) {
+      for (const unsubscribe of this.unsubscribe) unsubscribe();
+      this.unsubscribe = [];
+      window.arsvox?.wsClose();
+      return;
+    }
     if (this.timer !== null) {
       window.clearTimeout(this.timer);
       this.timer = null;
@@ -53,6 +83,28 @@ export class WsClient {
     this.ws?.close();
     this.ws = null;
   }
+
+  // ------------------------------------------------------- bridge mode #
+
+  private connectBridge(): void {
+    const bridge = window.arsvox;
+    if (!bridge) return;
+    this.unsubscribe = [
+      bridge.onWsMessage((event) => {
+        try {
+          this.onEvent(event as ServerEvent);
+        } catch {
+          // malformed frame: ignore, keep the socket alive
+        }
+      }),
+      bridge.onWsStatus((connected) => {
+        this.onStatus?.(connected);
+      }),
+    ];
+    bridge.wsConnect();
+  }
+
+  // ------------------------------------------------------- direct mode #
 
   private open(): void {
     if (this.closedByUser) return;
