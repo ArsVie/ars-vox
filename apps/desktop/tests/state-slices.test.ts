@@ -99,6 +99,23 @@ describe("content registry (ONE registration seam)", () => {
     expect(afterCommand).toBe(afterEvent);
   });
 
+  it("routes media.search_results to the youtube slice (GATE-5 wire member)", () => {
+    const registry = createContentRegistry();
+    registry.register(youtubeSlice);
+    const content: PanelContent = {};
+    const after = registry.applyEvent(content, {
+      type: "media.search_results",
+      query: "guitarra",
+      results: [],
+      created_at: ts(),
+    });
+    expect(after.youtube).toEqual({
+      query: "guitarra",
+      loading: false,
+      results: [],
+    });
+  });
+
   it("passes unowned events/commands through with the SAME content reference", () => {
     const registry = createContentRegistry();
     registry.register(youtubeSlice);
@@ -180,6 +197,83 @@ describe("surface slices", () => {
         created_at: ts(),
       }),
     ).toBe(bag);
+  });
+
+  it("youtube: media.search_results (GATE-5 wire) lands the unified cards as-is", () => {
+    const bag = youtubeSlice.applyEvent(undefined, {
+      type: "media.search_results",
+      query: "guitarra",
+      results: [
+        {
+          id: "v1",
+          title: "Clases de guitarra",
+          source: "youtube",
+          kind: "video",
+          channel: "Marta",
+          duration_s: 600,
+          published: "hace 2 días",
+          thumbnail_url: null,
+          local_path: null,
+        },
+      ],
+      created_at: ts(),
+    });
+    expect(bag).toEqual({
+      query: "guitarra",
+      loading: false,
+      results: [
+        {
+          id: "v1",
+          title: "Clases de guitarra",
+          source: "youtube",
+          kind: "video",
+          channel: "Marta",
+          duration_s: 600,
+          published: "hace 2 días",
+          thumbnail_url: null,
+          local_path: null,
+        },
+      ],
+    });
+  });
+
+  it("youtube: legacy youtube.search event converts to the unified card shape (expiring compat)", () => {
+    const bag = youtubeSlice.applyEvent(undefined, {
+      type: "youtube.search",
+      query: "clásica",
+      results: [
+        {
+          id: "v1",
+          title: "T",
+          channel: "C",
+          duration_s: 10,
+          published: "2026",
+          thumbnail_url: null,
+        },
+      ],
+      created_at: ts(),
+    });
+    expect(bag?.results[0]).toEqual({
+      id: "v1",
+      title: "T",
+      source: "youtube",
+      kind: "video",
+      channel: "C",
+      duration_s: 10,
+      published: "2026",
+      thumbnail_url: null,
+      local_path: null,
+    });
+  });
+
+  it("youtube: media.search_results with zero results is an honest empty bag", () => {
+    const bag = youtubeSlice.applyEvent(undefined, {
+      type: "media.search_results",
+      query: "xyz no existe",
+      results: [],
+      created_at: ts(),
+    });
+    expect(bag).toEqual({ query: "xyz no existe", loading: false, results: [] });
   });
 
   it("browser: server navigate lands full state; nav commands only flip loading", () => {
@@ -290,6 +384,34 @@ describe("store-level slice delegation (GATE-5 W0-SLICE)", () => {
         created_at: expect.any(String),
       },
     ]);
+  });
+
+  it("media.select_result is sent to the server (GATE-5 click path), no optimistic bag", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().dispatchCommand({
+      action: "media.select_result",
+      result_id: "dQw4w9WgXcQ",
+      source: "youtube",
+      kind: "video",
+      title: "Taller de carpintería",
+    });
+    expect(sent).toEqual([
+      {
+        type: "ui_command",
+        command: {
+          action: "media.select_result",
+          result_id: "dQw4w9WgXcQ",
+          source: "youtube",
+          kind: "video",
+          title: "Taller de carpintería",
+        },
+        created_at: expect.any(String),
+      },
+    ]);
+    // No optimistic content effect: the server's ONE media controller
+    // owns the outcome.
+    expect(store.getState().content.youtube).toBeUndefined();
   });
 
   it("GATE-5 directive: snapshot history is NEVER auto-restored", () => {
