@@ -48,6 +48,28 @@ export function youtubeEmbedSrc(videoId: string, autoplay: boolean): string {
   return `${YOUTUBE_EMBED_BASE}/${videoId}?${params.toString()}`;
 }
 
+/**
+ * GATE-3.5 (W3-MEDIA): capture the mount-time autoplay intent ONCE per
+ * video key (videoId/url). The embed iframe is keyed by videoId, so each
+ * new video remounts and needs ITS OWN autoplay decision from the state
+ * it first appeared in — a globally-captured autoplay (old behavior)
+ * let one paused video poison the next video's autoplay. Toggling
+ * play/pause on the SAME video never remounts the embed, so the captured
+ * intent stays stable for the video's lifetime.
+ */
+export function autoplayIntent(
+  key: string,
+  playing: boolean,
+  captured: Map<string, boolean>,
+): boolean {
+  let intent = captured.get(key);
+  if (intent === undefined) {
+    intent = playing;
+    captured.set(key, intent);
+  }
+  return intent;
+}
+
 /** Serialized IFrame Player API command for postMessage. */
 export function youtubeCommandMessage(func: string, args: unknown[] = []): string {
   return JSON.stringify({ event: "command", func, args });
@@ -112,9 +134,27 @@ function postCommand(iframe: HTMLIFrameElement, func: string, args: unknown[] = 
 }
 
 /**
+ * GATE-3.5 (W3-MEDIA): the live authoritative media state, read from the
+ * store (itself a single subscription on the MediaController) — never a
+ * component-side mirror. Used inside player callbacks, where React props
+ * would be stale.
+ */
+function currentMedia() {
+  return appStore.getState().content.media ?? EMPTY_MEDIA;
+}
+
+/**
  * H7 — control the EXISTING YouTube embed (never remount, never swap src).
  * Returns the iframe ref (attach to the <iframe>) and the active control
  * mode. SSR-safe: without window / before mount the hook is inert.
+ *
+ * GATE-3.5 (W3-MEDIA): NO hand mirrors of store state (stateRef /
+ * positionRef / readyRef are GONE) — every player callback reads the
+ * live store. `ready` is React state (iframe lifecycle, NOT media
+ * state): when it flips, the state/position effects re-run and sync the
+ * player to the current store state, so nothing needs to be remembered
+ * in refs between mount and onReady (the pending-command ref is gone
+ * too — the store IS the latest intent).
  */
 function useYoutubePlayer(
   videoId: string | null,
@@ -123,38 +163,25 @@ function useYoutubePlayer(
 ): { iframeRef: RefObject<HTMLIFrameElement>; controlMode: YoutubeControlMode } {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [controlMode, setControlMode] = useState<YoutubeControlMode>("postmessage");
-  const readyRef = useRef(false);
-  const stateRef = useRef(state);
-  const positionRef = useRef(positionS);
-  const pendingRef = useRef<{ func: string; args: unknown[] } | null>(null);
-
-  useEffect(() => {
-    stateRef.current = state;
-  });
-  useEffect(() => {
-    positionRef.current = positionS;
-  });
+  const [ready, setReady] = useState(false);
 
   // Wire the message channel once per video: onReady -> flush pending
-  // commands + sync the player to the store; infoDelivery playerState ->
-  // merge into the store (player's own controls stay authoritative).
+  // intent + sync the player to the store; infoDelivery playerState ->
+  // merge into the controller (player's own controls stay
+  // authoritative). All state reads go to the LIVE store.
   useEffect(() => {
     if (!videoId) return undefined;
-    readyRef.current = false;
+    let isReady = false;
+    setReady(false);
     setControlMode("postmessage");
     const iframe = iframeRef.current;
     if (!iframe || typeof window === "undefined") return undefined;
 
     const markReady = (): void => {
-      if (readyRef.current) return;
-      readyRef.current = true;
+      if (isReady) return;
+      isReady = true;
+      setReady(true);
       setControlMode("postmessage");
-      const pending = pendingRef.current;
-      pendingRef.current = null;
-      if (pending) postCommand(iframe, pending.func, pending.args);
-      if (stateRef.current === "playing") postCommand(iframe, "playVideo");
-      else if (stateRef.current === "paused") postCommand(iframe, "pauseVideo");
-      if (positionRef.current > 0) postCommand(iframe, "seekTo", [positionRef.current]);
     };
 
     const onMessage = (event: MessageEvent): void => {
@@ -182,9 +209,10 @@ function useYoutubePlayer(
         // MediaController — playback state (the player's own controls)
         // and currentTime/duration (progress bar) both come from the
         // iframe. No React-only simulated playback state anywhere.
+        const live = currentMedia();
         appStore.getState().applyPlayerMediaEvent({
           state:
-            parsed.kind === "state" && parsed.state !== stateRef.current
+            parsed.kind === "state" && parsed.state !== live.state
               ? parsed.state
               : undefined,
           currentTime: parsed.currentTime,
@@ -196,7 +224,7 @@ function useYoutubePlayer(
     window.addEventListener("message", onMessage);
     const timer = window.setTimeout(() => {
       // NETWORK-FALLBACK: no readiness signal -> legacy URL-swap mode.
-      if (!readyRef.current) setControlMode("urlswap");
+      if (!isReady) setControlMode("urlswap");
     }, YT_PLAYER_READY_GRACE_MS);
 
     // GATE-3.5 (R26): while the player is ready and playing, poll the
@@ -204,7 +232,7 @@ function useYoutubePlayer(
     // even without user interaction. Responses arrive as infoDelivery
     // messages parsed above.
     const poller = window.setInterval(() => {
-      if (!readyRef.current || stateRef.current !== "playing") return;
+      if (!isReady || currentMedia().state !== "playing") return;
       postCommand(iframe, "getCurrentTime");
       postCommand(iframe, "getDuration");
     }, 1000);
@@ -217,32 +245,22 @@ function useYoutubePlayer(
   }, [videoId]);
 
   // Store state -> player command (postmessage mode only).
+  // Runs on the ready flip too: the on-ready sync IS this effect
+  // re-running with the live store state — no pending-command ref.
   useEffect(() => {
-    if (state === "stopped" || !videoId) return;
+    if (!ready || state === "stopped" || !videoId) return;
     const iframe = iframeRef.current;
     if (!iframe) return;
-    if (readyRef.current) {
-      postCommand(iframe, state === "playing" ? "playVideo" : "pauseVideo");
-      return;
-    }
-    // Not ready yet: keep the most recent intent; flushed on onReady.
-    pendingRef.current = {
-      func: state === "playing" ? "playVideo" : "pauseVideo",
-      args: [],
-    };
-  }, [state, videoId]);
+    postCommand(iframe, state === "playing" ? "playVideo" : "pauseVideo");
+  }, [ready, state, videoId]);
 
   // Store position -> player command (seek follows the slider/backend).
   useEffect(() => {
-    if (positionS <= 0 || !videoId) return;
+    if (!ready || positionS <= 0 || !videoId) return;
     const iframe = iframeRef.current;
     if (!iframe) return;
-    if (readyRef.current) {
-      postCommand(iframe, "seekTo", [Math.floor(positionS)]);
-      return;
-    }
-    pendingRef.current = { func: "seekTo", args: [Math.floor(positionS)] };
-  }, [positionS, videoId]);
+    postCommand(iframe, "seekTo", [Math.floor(positionS)]);
+  }, [ready, positionS, videoId]);
 
   return { iframeRef, controlMode };
 }
@@ -279,11 +297,20 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
   const isPlaying = m.state === "playing";
   const progress = m.durationS > 0 ? Math.min(100, (m.positionS / m.durationS) * 100) : 0;
 
+  // GATE-3.5 (W3-MEDIA): autoplay intent is captured PER VIDEO — the
+  // iframe is keyed by videoId and remounts per video, so each new embed
+  // gets ITS OWN mount-time autoplay decision. A paused video can never
+  // poison the next video's autoplay, and toggling play/pause on the
+  // SAME video never remounts (the src stays stable).
+  const autoplayIntents = useRef(new Map<string, boolean>());
   // H7 (GATE-2.5): real YouTube control. The hook drives the EXISTING
-  // iframe via the player-API postMessage protocol; autoplay is fixed at
-  // mount time only (keyed by videoId, so a NEW video remounts fresh).
+  // iframe via the player-API postMessage protocol.
   const { iframeRef, controlMode } = useYoutubePlayer(m.videoId, m.state, m.positionS);
-  const [initialAutoplay] = useState(() => m.state === "playing");
+  const initialAutoplay = autoplayIntent(
+    m.videoId ?? m.url ?? "local",
+    m.state === "playing",
+    autoplayIntents.current,
+  );
 
   const title = meta?.title ?? m.title ?? "Medios";
 
