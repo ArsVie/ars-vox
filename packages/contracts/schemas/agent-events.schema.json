@@ -1,5 +1,48 @@
 {
   "$defs": {
+    "ActionResultEvent": {
+      "description": "Server verdict on a client-initiated ui_command action (H1).\n\nThe UI may optimistically render an action, but only this event says\nwhat actually happened: done (effect applied), unsupported (no\nbackend capability \u2014 stop pretending it is live), failed (understood\nbut could not be applied), accepted (received; effect async).",
+      "properties": {
+        "type": {
+          "const": "action_result",
+          "default": "action_result",
+          "title": "Type",
+          "type": "string"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "done",
+            "failed",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        }
+      },
+      "required": [
+        "action",
+        "status"
+      ],
+      "title": "ActionResultEvent",
+      "type": "object"
+    },
     "AgentMessageEvent": {
       "properties": {
         "type": {
@@ -1094,6 +1137,14 @@
           "title": "Content Keys",
           "type": "array"
         },
+        "history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "History",
+          "type": "array"
+        },
         "created_at": {
           "format": "date-time",
           "title": "Created At",
@@ -1596,6 +1647,7 @@
   },
   "discriminator": {
     "mapping": {
+      "action_result": "#/$defs/ActionResultEvent",
       "agent_message": "#/$defs/AgentMessageEvent",
       "browser.navigate": "#/$defs/BrowserNavigateEvent",
       "config_update": "#/$defs/ConfigUpdateEvent",
@@ -1664,6 +1716,9 @@
     },
     {
       "$ref": "#/$defs/PongEvent"
+    },
+    {
+      "$ref": "#/$defs/ActionResultEvent"
     },
     {
       "$ref": "#/$defs/StateSnapshotEvent"

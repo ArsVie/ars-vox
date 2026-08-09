@@ -60,6 +60,35 @@
       "title": "AppSection",
       "type": "object"
     },
+    "AuthSection": {
+      "additionalProperties": false,
+      "description": "Local service boundary: per-launch bearer token + origin allowlist.\n\nenabled: master switch (mock/dev tooling may disable explicitly).\ntoken_env: env var holding the per-launch token (set by the Electron\n    main process when spawning the service, or by the launcher).\nallowed_origins: CORS + WS handshake origin allowlist. The token is\n    the real gate; origins are a defense-in-depth layer.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "token_env": {
+          "default": "ARSVOX_AUTH_TOKEN",
+          "title": "Token Env",
+          "type": "string"
+        },
+        "allowed_origins": {
+          "default": [
+            "http://localhost:5173",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Origins",
+          "type": "array"
+        }
+      },
+      "title": "AuthSection",
+      "type": "object"
+    },
     "BrowserSection": {
       "additionalProperties": false,
       "properties": {
@@ -209,6 +238,11 @@
           "minimum": 10,
           "title": "Confirmation Timeout S",
           "type": "integer"
+        },
+        "timezone": {
+          "default": "",
+          "title": "Timezone",
+          "type": "string"
         }
       },
       "title": "RemindersSection",
@@ -476,6 +510,17 @@
         "port": 8765
       }
     },
+    "auth": {
+      "$ref": "#/$defs/AuthSection",
+      "default": {
+        "enabled": true,
+        "token_env": "ARSVOX_AUTH_TOKEN",
+        "allowed_origins": [
+          "http://localhost:5173",
+          "null"
+        ]
+      }
+    },
     "agent": {
       "$ref": "#/$defs/AgentSection",
       "default": {
@@ -560,7 +605,8 @@
       "default": {
         "scheduler_interval_s": 5,
         "snooze_seconds": 600,
-        "confirmation_timeout_s": 120
+        "confirmation_timeout_s": 120,
+        "timezone": ""
       }
     },
     "browser": {

@@ -1,5 +1,79 @@
 {
   "$defs": {
+    "AudioPlay": {
+      "properties": {
+        "action": {
+          "const": "audio.play",
+          "default": "audio.play",
+          "title": "Action",
+          "type": "string"
+        },
+        "asset": {
+          "title": "Asset",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset"
+      ],
+      "title": "AudioPlay",
+      "type": "object"
+    },
+    "BrowserBack": {
+      "properties": {
+        "action": {
+          "const": "browser.back",
+          "default": "browser.back",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserBack",
+      "type": "object"
+    },
+    "BrowserForward": {
+      "properties": {
+        "action": {
+          "const": "browser.forward",
+          "default": "browser.forward",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserForward",
+      "type": "object"
+    },
+    "BrowserNavigate": {
+      "properties": {
+        "action": {
+          "const": "browser.navigate",
+          "default": "browser.navigate",
+          "title": "Action",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "BrowserNavigate",
+      "type": "object"
+    },
+    "BrowserRefresh": {
+      "properties": {
+        "action": {
+          "const": "browser.refresh",
+          "default": "browser.refresh",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "BrowserRefresh",
+      "type": "object"
+    },
     "CancelMessage": {
       "properties": {
         "type": {
@@ -38,6 +112,429 @@
       "title": "ConfirmMessage",
       "type": "object"
     },
+    "DocumentSave": {
+      "properties": {
+        "action": {
+          "const": "document.save",
+          "default": "document.save",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "title": "Panel Type",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "panel_type",
+        "content"
+      ],
+      "title": "DocumentSave",
+      "type": "object"
+    },
+    "LayoutApply": {
+      "properties": {
+        "action": {
+          "const": "layout.apply",
+          "default": "layout.apply",
+          "title": "Action",
+          "type": "string"
+        },
+        "template": {
+          "$ref": "#/$defs/LayoutTemplate"
+        },
+        "primary_panel": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "secondary_panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "slots": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutSlots"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "preserve": {
+          "default": true,
+          "title": "Preserve",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "template",
+        "primary_panel"
+      ],
+      "title": "LayoutApply",
+      "type": "object"
+    },
+    "LayoutRestore": {
+      "properties": {
+        "action": {
+          "const": "layout.restore",
+          "default": "layout.restore",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "LayoutRestore",
+      "type": "object"
+    },
+    "LayoutSlots": {
+      "description": "Panel\u2192slot assignments for multi-zone layouts.\n\n``main`` is always populated (frozen invariant). ``side``/``rail``/\n``dock`` are optional. The model never sends coordinates \u2014 only\nassignments; the engine owns geometry.",
+      "properties": {
+        "main": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "main"
+      ],
+      "title": "LayoutSlots",
+      "type": "object"
+    },
+    "LayoutTemplate": {
+      "enum": [
+        "focus",
+        "split",
+        "reading",
+        "dashboard",
+        "reference",
+        "background_media"
+      ],
+      "title": "LayoutTemplate",
+      "type": "string"
+    },
+    "MediaPlayPause": {
+      "properties": {
+        "action": {
+          "const": "media.play_pause",
+          "default": "media.play_pause",
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "MediaPlayPause",
+      "type": "object"
+    },
+    "MediaSeek": {
+      "properties": {
+        "action": {
+          "const": "media.seek",
+          "default": "media.seek",
+          "title": "Action",
+          "type": "string"
+        },
+        "position_s": {
+          "title": "Position S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position_s"
+      ],
+      "title": "MediaSeek",
+      "type": "object"
+    },
+    "MediaState": {
+      "enum": [
+        "playing",
+        "paused",
+        "stopped"
+      ],
+      "title": "MediaState",
+      "type": "string"
+    },
+    "MediaStateChange": {
+      "properties": {
+        "action": {
+          "const": "media.state",
+          "default": "media.state",
+          "title": "Action",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/MediaState"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "MediaStateChange",
+      "type": "object"
+    },
+    "NotificationKind": {
+      "enum": [
+        "reminder",
+        "alarm",
+        "info",
+        "error"
+      ],
+      "title": "NotificationKind",
+      "type": "string"
+    },
+    "NotificationShow": {
+      "properties": {
+        "action": {
+          "const": "notification.show",
+          "default": "notification.show",
+          "title": "Action",
+          "type": "string"
+        },
+        "notification_id": {
+          "title": "Notification Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/NotificationKind"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "sound": {
+          "default": false,
+          "title": "Sound",
+          "type": "boolean"
+        },
+        "snoozable": {
+          "default": true,
+          "title": "Snoozable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "notification_id",
+        "kind",
+        "title",
+        "text"
+      ],
+      "title": "NotificationShow",
+      "type": "object"
+    },
+    "PanelClose": {
+      "properties": {
+        "action": {
+          "const": "panel.close",
+          "default": "panel.close",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "panel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Panel Id"
+        }
+      },
+      "title": "PanelClose",
+      "type": "object"
+    },
+    "PanelFullscreen": {
+      "properties": {
+        "action": {
+          "const": "panel.fullscreen",
+          "default": "panel.fullscreen",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        }
+      },
+      "required": [
+        "panel_type"
+      ],
+      "title": "PanelFullscreen",
+      "type": "object"
+    },
+    "PanelOpen": {
+      "properties": {
+        "action": {
+          "const": "panel.open",
+          "default": "panel.open",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "content_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Reference"
+        }
+      },
+      "required": [
+        "panel_type"
+      ],
+      "title": "PanelOpen",
+      "type": "object"
+    },
+    "PanelSetPrimary": {
+      "properties": {
+        "action": {
+          "const": "panel.set_primary",
+          "title": "Action",
+          "type": "string"
+        },
+        "panel_type": {
+          "$ref": "#/$defs/PanelType"
+        }
+      },
+      "required": [
+        "action",
+        "panel_type"
+      ],
+      "title": "PanelSetPrimary",
+      "type": "object"
+    },
+    "PanelType": {
+      "enum": [
+        "conversation",
+        "browser",
+        "youtube",
+        "media",
+        "book_reader",
+        "document_editor",
+        "news",
+        "notes",
+        "tasks",
+        "reminders",
+        "telegram_preview",
+        "confirmation",
+        "settings",
+        "notification"
+      ],
+      "title": "PanelType",
+      "type": "string"
+    },
     "PingMessage": {
       "properties": {
         "type": {
@@ -66,6 +563,199 @@
       "title": "StopMessage",
       "type": "object"
     },
+    "TasksToggle": {
+      "properties": {
+        "action": {
+          "const": "tasks.toggle",
+          "default": "tasks.toggle",
+          "title": "Action",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "TasksToggle",
+      "type": "object"
+    },
+    "TtsCancelled": {
+      "description": "Renderer ack: a phrase that had started was interrupted (STOP /\nqueue cleared). During the STOP path the pipeline is already\nSTOPPING/SLEEPING, so this ack is the observable confirmation that\nphysical playback stopped (R07); defensively it also settles a\nSPEAKING state whose speech vanished without a stop.",
+      "properties": {
+        "type": {
+          "const": "tts.cancelled",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "TtsCancelled",
+      "type": "object"
+    },
+    "TtsFinished": {
+      "description": "Renderer ack: a phrase ended without being cancelled (played to\ncompletion, or failed to play \u2014 in both cases no speech is coming\nfrom this item). The pipeline settles to the terminal state.",
+      "properties": {
+        "type": {
+          "const": "tts.finished",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "TtsFinished",
+      "type": "object"
+    },
+    "TtsSpeak": {
+      "properties": {
+        "action": {
+          "const": "tts.speak",
+          "default": "tts.speak",
+          "title": "Action",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "priority": {
+          "default": false,
+          "title": "Priority",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TtsSpeak",
+      "type": "object"
+    },
+    "TtsStarted": {
+      "description": "Renderer ack: physical playback of a queued phrase actually began.\n\nThe renderer is the physical-playback authority: it reports\nstarted/finished/cancelled so the canonical voice state machine\n(pipeline) only leaves THINKING for SPEAKING when audio is really\nplaying, and only returns to LISTENING after speech ends (R05/R08).",
+      "properties": {
+        "type": {
+          "const": "tts.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "TtsStarted",
+      "type": "object"
+    },
+    "UiCommandMessage": {
+      "properties": {
+        "type": {
+          "const": "ui_command",
+          "title": "Type",
+          "type": "string"
+        },
+        "command": {
+          "discriminator": {
+            "mapping": {
+              "audio.play": "#/$defs/AudioPlay",
+              "browser.back": "#/$defs/BrowserBack",
+              "browser.forward": "#/$defs/BrowserForward",
+              "browser.navigate": "#/$defs/BrowserNavigate",
+              "browser.refresh": "#/$defs/BrowserRefresh",
+              "document.save": "#/$defs/DocumentSave",
+              "layout.apply": "#/$defs/LayoutApply",
+              "layout.restore": "#/$defs/LayoutRestore",
+              "media.play_pause": "#/$defs/MediaPlayPause",
+              "media.seek": "#/$defs/MediaSeek",
+              "media.state": "#/$defs/MediaStateChange",
+              "notification.show": "#/$defs/NotificationShow",
+              "panel.close": "#/$defs/PanelClose",
+              "panel.fullscreen": "#/$defs/PanelFullscreen",
+              "panel.open": "#/$defs/PanelOpen",
+              "panel.set_primary": "#/$defs/PanelSetPrimary",
+              "tasks.toggle": "#/$defs/TasksToggle",
+              "tts.speak": "#/$defs/TtsSpeak",
+              "youtube.play": "#/$defs/YoutubePlay",
+              "youtube.search": "#/$defs/YoutubeSearch"
+            },
+            "propertyName": "action"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LayoutApply"
+            },
+            {
+              "$ref": "#/$defs/PanelOpen"
+            },
+            {
+              "$ref": "#/$defs/PanelClose"
+            },
+            {
+              "$ref": "#/$defs/PanelSetPrimary"
+            },
+            {
+              "$ref": "#/$defs/PanelFullscreen"
+            },
+            {
+              "$ref": "#/$defs/LayoutRestore"
+            },
+            {
+              "$ref": "#/$defs/NotificationShow"
+            },
+            {
+              "$ref": "#/$defs/MediaStateChange"
+            },
+            {
+              "$ref": "#/$defs/TtsSpeak"
+            },
+            {
+              "$ref": "#/$defs/AudioPlay"
+            },
+            {
+              "$ref": "#/$defs/MediaPlayPause"
+            },
+            {
+              "$ref": "#/$defs/MediaSeek"
+            },
+            {
+              "$ref": "#/$defs/YoutubeSearch"
+            },
+            {
+              "$ref": "#/$defs/YoutubePlay"
+            },
+            {
+              "$ref": "#/$defs/BrowserNavigate"
+            },
+            {
+              "$ref": "#/$defs/BrowserBack"
+            },
+            {
+              "$ref": "#/$defs/BrowserForward"
+            },
+            {
+              "$ref": "#/$defs/BrowserRefresh"
+            },
+            {
+              "$ref": "#/$defs/DocumentSave"
+            },
+            {
+              "$ref": "#/$defs/TasksToggle"
+            }
+          ],
+          "title": "Command"
+        }
+      },
+      "required": [
+        "type",
+        "command"
+      ],
+      "title": "UiCommandMessage",
+      "type": "object"
+    },
     "UserText": {
       "properties": {
         "type": {
@@ -84,6 +774,49 @@
       ],
       "title": "UserText",
       "type": "object"
+    },
+    "YoutubePlay": {
+      "properties": {
+        "action": {
+          "const": "youtube.play",
+          "default": "youtube.play",
+          "title": "Action",
+          "type": "string"
+        },
+        "video_id": {
+          "title": "Video Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "video_id",
+        "title"
+      ],
+      "title": "YoutubePlay",
+      "type": "object"
+    },
+    "YoutubeSearch": {
+      "properties": {
+        "action": {
+          "const": "youtube.search",
+          "default": "youtube.search",
+          "title": "Action",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "YoutubeSearch",
+      "type": "object"
     }
   },
   "discriminator": {
@@ -92,6 +825,10 @@
       "confirm": "#/$defs/ConfirmMessage",
       "ping": "#/$defs/PingMessage",
       "stop": "#/$defs/StopMessage",
+      "tts.cancelled": "#/$defs/TtsCancelled",
+      "tts.finished": "#/$defs/TtsFinished",
+      "tts.started": "#/$defs/TtsStarted",
+      "ui_command": "#/$defs/UiCommandMessage",
       "user_text": "#/$defs/UserText"
     },
     "propertyName": "type"
@@ -110,7 +847,19 @@
       "$ref": "#/$defs/StopMessage"
     },
     {
+      "$ref": "#/$defs/TtsStarted"
+    },
+    {
+      "$ref": "#/$defs/TtsFinished"
+    },
+    {
+      "$ref": "#/$defs/TtsCancelled"
+    },
+    {
       "$ref": "#/$defs/PingMessage"
+    },
+    {
+      "$ref": "#/$defs/UiCommandMessage"
     }
   ]
 }

@@ -51,6 +51,36 @@ class StopMessage(BaseModel):
     type: Literal["stop"]
 
 
+class TtsStarted(BaseModel):
+    """Renderer ack: physical playback of a queued phrase actually began.
+
+    The renderer is the physical-playback authority: it reports
+    started/finished/cancelled so the canonical voice state machine
+    (pipeline) only leaves THINKING for SPEAKING when audio is really
+    playing, and only returns to LISTENING after speech ends (R05/R08).
+    """
+
+    type: Literal["tts.started"]
+
+
+class TtsFinished(BaseModel):
+    """Renderer ack: a phrase ended without being cancelled (played to
+    completion, or failed to play — in both cases no speech is coming
+    from this item). The pipeline settles to the terminal state."""
+
+    type: Literal["tts.finished"]
+
+
+class TtsCancelled(BaseModel):
+    """Renderer ack: a phrase that had started was interrupted (STOP /
+    queue cleared). During the STOP path the pipeline is already
+    STOPPING/SLEEPING, so this ack is the observable confirmation that
+    physical playback stopped (R07); defensively it also settles a
+    SPEAKING state whose speech vanished without a stop."""
+
+    type: Literal["tts.cancelled"]
+
+
 class PingMessage(BaseModel):
     type: Literal["ping"]
 
@@ -103,6 +133,9 @@ ClientMessage = Annotated[
         ConfirmMessage,
         CancelMessage,
         StopMessage,
+        TtsStarted,
+        TtsFinished,
+        TtsCancelled,
         PingMessage,
         UiCommandMessage,
     ],

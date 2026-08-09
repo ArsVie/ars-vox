@@ -741,7 +741,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       const state = get();
       switch (event.type) {
         case "state_update":
-          set({ voiceState: event.voice_state, activity: event.activity ?? null });
+          set({
+            voiceState: event.voice_state,
+            activity: event.activity ?? null,
+            // GATE-3.5 (R01/R07): STOP — button or spoken — surfaces
+            // here as STOPPING. Clearing the TTS queue makes TtsPlayer
+            // interrupt physical playback (and ack tts.cancelled).
+            // Without this a spoken "detente" would cancel the turn
+            // server-side while the speaker keeps talking.
+            ...(event.voice_state === "stopping" ? { speakTexts: [] } : {}),
+          });
           return;
         case "user_message":
           set({

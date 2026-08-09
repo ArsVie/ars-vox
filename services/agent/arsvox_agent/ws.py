@@ -81,6 +81,13 @@ async def websocket_endpoint(
             pass
     finally:
         bus.unsubscribe(queue)
+        # GATE-3.5 (C4): if the renderer (the only playback authority)
+        # disconnects while a turn's speech is pending, no physical
+        # playback can ever ack it — settle so the machine never hangs
+        # in THINKING with the silence timer disarmed.
+        if runtime._speech_pending:  # noqa: SLF001 — same package, ws owns the wire lifecycle
+            runtime._speech_pending = False
+            runtime._settle()
 
 
 async def _pump_outgoing(ws: WebSocket, queue: asyncio.Queue) -> None:
@@ -108,6 +115,15 @@ async def _handle_client_message(
         return
     if message.type == "stop":
         await runtime.cancel()
+        return
+    if message.type == "tts.started":
+        runtime.on_tts_started()
+        return
+    if message.type == "tts.finished":
+        runtime.on_tts_finished()
+        return
+    if message.type == "tts.cancelled":
+        runtime.on_tts_cancelled()
         return
     if message.type == "ui_command":
         # H1: client-initiated action channel. The handler performs the

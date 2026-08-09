@@ -70,13 +70,14 @@ export function StatusBar({
   const voiceState = useStore(appStore, (s) => s.voiceState);
   const connected = useStore(appStore, (s) => s.connected);
   const activity = useStore(appStore, (s) => s.activity);
-  const speaking = useStore(appStore, (s) => s.speakTexts.length > 0);
 
-  // While audio is playing, show Speaking even if the server has already
-  // returned to listening (the turn finished before playback ended).
-  // data-state keeps the stable English key for CSS; the visible label is
-  // the Spanish user-facing string.
-  const stateKey = speaking ? "speaking" : voiceState;
+  // GATE-3.5 (R08): the canonical voice state IS physical playback —
+  // the service only reaches SPEAKING on a tts.started ack and only
+  // leaves it (to LISTENING) on tts.finished, so no local override is
+  // needed (and one would mask a regression where the server settles
+  // while the speaker still talks). data-state keeps the stable English
+  // key for CSS; the visible label is the Spanish user-facing string.
+  const stateKey = voiceState;
   const label = VOICE_LABELS[stateKey] ?? stateKey;
 
   return (
