@@ -191,3 +191,83 @@ describe("GATE-3.5 — cross-feature: persistent override vs later agent composi
     expect(ids).toContain("placeholder.primary");
   });
 });
+
+describe("GATE-3.5 R20 — every persistent override beats a later agent composition", () => {
+  // A10 adversarial extension: for each frozen intent the user can pin
+  // (close/pin/right/fullscreen/showBoth), the explicit constraint must
+  // still win when a LATER agent composition (applyLayoutIntent — the
+  // wire path) proposes a conflicting arrangement. UI-302 landed, so
+  // these pass on main; they are the seam guard for A4's choke.
+  const baseline: LayoutSpec = {
+    template: "sidecar",
+    assignments: [
+      { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+      { surfaceId: "placeholder.companion", role: "companion", slot: "side" },
+    ],
+    proportion: "balanced",
+  };
+
+  it("pin/keep survives an agent composition that drops the surface", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyAdaptiveSpec(baseline);
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "keep", surfaceId: "placeholder.companion" },
+    });
+    // later the agent proposes focus (drops the companion)
+    store.getState().applyLayoutIntent({ template: "focus", assignments: [baseline.assignments[0]] });
+    const ids =
+      store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId) ?? [];
+    expect(ids).toContain("placeholder.companion");
+  });
+
+  it("right survives a later agent composition that puts the surface on the left", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyAdaptiveSpec(baseline);
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "right", surfaceId: "placeholder.primary" },
+    });
+    // the constraint moved the primary to the side companion slot
+    expect(
+      store.getState().adaptive.spec?.assignments.find(
+        (a) => a.surfaceId === "placeholder.primary",
+      )?.slot,
+    ).toBe("side");
+    // the agent later proposes the plain sidecar again — the constraint wins
+    store.getState().applyLayoutIntent(baseline);
+    expect(
+      store.getState().adaptive.spec?.assignments.find(
+        (a) => a.surfaceId === "placeholder.primary",
+      )?.slot,
+    ).toBe("side");
+  });
+
+  it("fullscreen survives a later agent composition", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyAdaptiveSpec(baseline);
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "fullscreen", surfaceId: "placeholder.primary" },
+    });
+    expect(store.getState().adaptive.spec?.template).toBe("focus");
+    // later the agent proposes the full sidecar — the surface stays fullscreen
+    store.getState().applyLayoutIntent(baseline);
+    expect(store.getState().adaptive.spec?.template).toBe("focus");
+  });
+
+  it("showBoth survives a later agent composition that drops the partner", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyAdaptiveSpec(baseline);
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "showBoth", surfaceId: "placeholder.companion" },
+    });
+    // the companion now shares a split with the primary
+    expect(store.getState().adaptive.spec?.template).toBe("split");
+    // later the agent proposes focus — the partner must stay visible
+    store.getState().applyLayoutIntent({
+      template: "focus",
+      assignments: [baseline.assignments[0]],
+    });
+    const ids =
+      store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId) ?? [];
+    expect(ids).toContain("placeholder.companion");
+  });
+});
