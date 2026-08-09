@@ -32,6 +32,11 @@ export interface MediaState {
   title: string;
   videoId: string | null;
   url: string | null;
+  /** GATE-5 (W1-MEDIA-LOCAL): the wire's local-source member — the file
+   *  the unified player must play. Present for local tracks, null for
+   *  YouTube. The player resolves localPath ?? url, so local files reach
+   *  playback through the SAME controller as YouTube content. */
+  localPath: string | null;
   positionS: number;
   durationS: number;
   volume: number;
@@ -44,6 +49,7 @@ export const EMPTY_MEDIA: MediaState = {
   title: "",
   videoId: null,
   url: null,
+  localPath: null,
   positionS: 0,
   durationS: 0,
   volume: 1,
@@ -135,6 +141,9 @@ export class MediaController {
       title: ev.title,
       videoId: ev.video_id,
       url: ev.url,
+      // The wire's local-source member: the file the unified player must
+      // play. Absent for youtube sources (null).
+      localPath: ev.local_path ?? null,
       positionS: ev.position_s,
       durationS: ev.duration_s,
       volume: ev.volume,
@@ -162,6 +171,7 @@ export class MediaController {
         title: command.title ?? m.title,
         url,
         videoId,
+        localPath: command.url != null ? (isYoutube ? null : url) : m.localPath,
         source: command.url != null ? (isYoutube ? "youtube" : "local") : m.source,
         kind: command.url != null ? (isYoutube ? "video" : "audio") : m.kind,
         volume: command.volume ?? m.volume,
@@ -180,6 +190,7 @@ export class MediaController {
           title: asset.split(/[\\/]/).pop() || asset,
           url: asset,
           videoId: null,
+          localPath: asset,
           positionS: 0,
           durationS: m.durationS,
           volume: m.volume,
@@ -234,6 +245,7 @@ export class MediaController {
       title,
       videoId,
       url: `https://www.youtube.com/embed/${videoId}`,
+      localPath: null,
       positionS: 0,
       durationS: 0,
       volume: this._state.volume,

@@ -5,6 +5,7 @@ import type { MediaState } from "../contracts";
 import type { PanelId } from "../contracts";
 import type { PanelMeta } from "../store";
 import { appStore, EMPTY_MEDIA } from "../store";
+import { useLocalPlayer, localPlayableSrc } from "../media/localPlayer";
 import { useSurfaceRole } from "../roles/context";
 import { PanelHeader } from "./PanelHeader";
 import { PauseIcon, PlayIcon, WaveformIcon, YoutubeIcon } from "./icons";
@@ -297,6 +298,18 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
   const isPlaying = m.state === "playing";
   const progress = m.durationS > 0 ? Math.min(100, (m.positionS / m.durationS) * 100) : 0;
 
+  // GATE-5 (W1-MEDIA-LOCAL): the OTHER half of the unified player. The
+  // stage branches on track IDENTITY (videoId present = YouTube embed,
+  // otherwise = HTML5 media element), never on source — so a local file
+  // and a YouTube video render the SAME controls and the SAME UI, and
+  // local playback reaches the element through the SAME controller.
+  const playableSrc = localPlayableSrc(m.localPath ?? m.url);
+  const { mediaRef } = useLocalPlayer(playableSrc, m.state, m.positionS, m.volume);
+  // The hook returns a RefObject<HTMLMediaElement>; the JSX narrows it to
+  // the concrete element (audio/video) — one hook instance per track.
+  const audioRef = mediaRef as RefObject<HTMLAudioElement>;
+  const videoRef = mediaRef as RefObject<HTMLVideoElement>;
+
   // GATE-3.5 (W3-MEDIA): autoplay intent is captured PER VIDEO — the
   // iframe is keyed by videoId and remounts per video, so each new embed
   // gets ITS OWN mount-time autoplay decision. A paused video can never
@@ -394,7 +407,7 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
         </div>
       ) : (
         <div className="media-player">
-          {isVideo && m.videoId ? (
+          {m.videoId ? (
             <div className="media-player-video">
               <iframe
                 key={m.videoId}
@@ -409,6 +422,29 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
                 allowFullScreen
                 data-youtube-control={controlMode}
               />
+            </div>
+          ) : playableSrc ? (
+            // GATE-5 (W1-MEDIA-LOCAL): the local half of the unified
+            // player — an HTML5 media element driven by the SAME
+            // controller, with the SAME controls as the YouTube embed.
+            // The stage is chosen by track identity (videoId), never by
+            // source, so local and YouTube content share one UI.
+            <div className="media-player-art">
+              {isVideo ? (
+                <video
+                  className="media-player-local-video"
+                  ref={videoRef}
+                  src={playableSrc}
+                  preload="auto"
+                />
+              ) : (
+                <audio
+                  className="media-player-local-audio"
+                  ref={audioRef}
+                  src={playableSrc}
+                  preload="auto"
+                />
+              )}
             </div>
           ) : (
             <div className="media-player-art">
