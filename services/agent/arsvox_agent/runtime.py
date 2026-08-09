@@ -22,6 +22,7 @@ from arsvox_contracts.commands import TtsSpeak
 from arsvox_agent.context import build_context
 from arsvox_agent.deps import Deps
 from arsvox_agent.events import EventBus
+from arsvox_agent.local_intents import match_confirmation_utterance
 from arsvox_agent.model_provider import build_model
 from arsvox_agent.tools import ToolRegistry, build_pydantic_tools
 
@@ -91,6 +92,16 @@ class AgentRuntime:
             asyncio.create_task(self.notify_voice_state(state, activity))
 
     async def handle_user_text(self, text: str) -> None:
+        # R35/R36: spoken/typed confirmation vocabulary is resolved here —
+        # the single funnel for ALL user text (typed via ws, spoken via
+        # the voice pipeline's on_user_text). A confirmation utterance
+        # with a pending confirmation resolves it; without one it is
+        # IGNORED (conservative: never approve random things, never start
+        # a turn on a bare sí/no).
+        decision = match_confirmation_utterance(text)
+        if decision is not None:
+            await self._handle_confirmation_utterance(decision, text)
+            return
         if self._busy or (self._active_task and not self._active_task.done()):
             await self.bus.publish(
                 ErrorEvent(
@@ -101,6 +112,36 @@ class AgentRuntime:
             return
         self._busy = True
         self._active_task = asyncio.create_task(self._run_turn(text))
+
+    # ------------------------------------------------------------------ #
+    async def _handle_confirmation_utterance(self, decision: str, text: str) -> None:
+        """R35: approve/reject the single global pending confirmation.
+
+        Executes the FROZEN stored args (never model-supplied), exactly
+        like the UI confirm/cancel buttons. R36: no pending confirmation
+        -> the utterance is ignored entirely (audited, no turn).
+        """
+        pending = self.deps_base.confirmations.current_pending()
+        if pending is None:
+            self.deps_base.audit.log(
+                "confirmation", "ignored_utterance",
+                {"utterance": text[:120], "decision": decision},
+            )
+            return
+        self.deps_base.audit.log(
+            "confirmation", "spoken",
+            {"pending_id": pending["id"], "decision": decision, "utterance": text[:120]},
+        )
+        await self.deps_base.confirmations.resolve(
+            pending["id"], approve=(decision == "approve")
+        )
+        remaining = self.deps_base.pending.list_pending()
+        state = (
+            VoiceState.WAITING_FOR_CONFIRMATION
+            if remaining
+            else VoiceState.LISTENING
+        )
+        self._set_voice(state)
 
     # ------------------------------------------------------------------ #
     async def _run_turn(self, text: str) -> None:
@@ -186,6 +227,14 @@ class AgentRuntime:
         await self.deps_base.confirmations.invalidate_all(
             "Acción cancelada por stop."
         )
+        # R38: STOP also cancels an already-EXECUTING approved action
+        # (before its point of no return; after it, the result is
+        # surfaced by the execution task). A1's STOP primitive should
+        # route through this same hook.
+        if self.deps_base.confirmations.cancel_executing():
+            self.deps_base.audit.log(
+                "control", "stop_executing_action", {"scope": "confirmation"}
+            )
         # H3: publish into the canonical voice state machine (bus carries
         # it back to the UI).
         self._set_voice(VoiceState.STOPPING)

@@ -1,20 +1,26 @@
 /**
- * H1 fixture bridge (client side): every action string in the TS
- * UiCommand union must have exactly one frame in the shared fixture
+ * H1/C1 fixture bridge (client side): every action string in the TS
+ * ClientCommand union (the NARROWED client-sendable subset of UiCommand)
+ * must have exactly one frame in the shared fixture
  * packages/contracts/fixtures/client_actions.json, and no frame may
  * reference an action the union does not know.
  *
+ * Server-originated commands (notification.show, media.state,
+ * tts.speak, audio.play) are deliberately NOT client frames — the
+ * full UiCommand union keeps them for the server->client channel only.
+ *
  * The fixture is the cross-language contract: tests/python/test_client_actions.py
- * parses every frame through parse_client_message on the Python side, so
- * if an action string drifts here, this test (missing fixture) and the
- * Python test (unknown action) both fail. Never regenerate the fixture on
- * one side only.
+ * parses every frame through parse_client_message on the Python side
+ * and fails if any declared ClientAction lacks an authoritative handler
+ * (R39), so if an action string drifts here, this test (missing
+ * fixture) and the Python test (unknown action) both fail. Never
+ * regenerate the fixture on one side only.
  */
 import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import type { UiCommand } from "../src/contracts";
+import type { ClientCommand } from "../src/contracts";
 
 const FIXTURE_PATH = new URL(
   "../../../packages/contracts/fixtures/client_actions.json",
@@ -28,8 +34,8 @@ interface FixtureFrame {
 
 type FixtureFile = Record<string, FixtureFrame>;
 
-/** One typed value per UiCommand union member — compile-time coverage. */
-const ALL_ACTIONS: UiCommand[] = [
+/** One typed value per ClientCommand union member — compile-time coverage. */
+const ALL_ACTIONS: ClientCommand[] = [
   {
     action: "layout.apply",
     template: "split",
@@ -41,14 +47,6 @@ const ALL_ACTIONS: UiCommand[] = [
   { action: "panel.set_primary", panel_type: "browser" },
   { action: "panel.fullscreen", panel_type: "media" },
   { action: "layout.restore" },
-  {
-    action: "notification.show",
-    notification_id: "n-1",
-    kind: "info",
-    title: "Recordatorio",
-    text: "Es hora de regar las plantas",
-  },
-  { action: "media.state", state: "playing", title: "Sinfonía Nº 5", volume: 0.8 },
   { action: "media.play_pause" },
   { action: "media.seek", position_s: 42 },
   { action: "youtube.search", query: "carpintería" },
@@ -59,14 +57,12 @@ const ALL_ACTIONS: UiCommand[] = [
   { action: "browser.refresh" },
   { action: "document.save", panel_type: "document_editor", content: "## Notas" },
   { action: "tasks.toggle", task_id: "1" },
-  { action: "tts.speak", text: "Hola" },
-  { action: "audio.play", asset: "chime.wav" },
 ];
 
-describe("H1 client action fixture conformance", () => {
+describe("H1/C1 client action fixture conformance", () => {
   const fixtures = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as FixtureFile;
 
-  it("every UiCommand action string has a fixture frame", () => {
+  it("every ClientCommand action string has a fixture frame", () => {
     for (const cmd of ALL_ACTIONS) {
       const frame = fixtures[cmd.action];
       expect(frame, `missing fixture frame for ${cmd.action}`).toBeDefined();
@@ -75,7 +71,7 @@ describe("H1 client action fixture conformance", () => {
     }
   });
 
-  it("fixture set is exactly the UiCommand set (no orphan frames)", () => {
+  it("fixture set is exactly the ClientCommand set (no orphan frames)", () => {
     const unionActions = ALL_ACTIONS.map((c) => c.action).sort();
     const fixtureActions = Object.keys(fixtures)
       .filter((k) => !k.startsWith("_"))

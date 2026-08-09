@@ -1,10 +1,12 @@
-"""H1: client action protocol — fixture conformance + WS end-to-end.
+"""H1/C1: client action protocol — fixture conformance + WS end-to-end.
 
 The shared fixture (packages/contracts/fixtures/client_actions.json) is
-the cross-language bridge: every TS UiCommand action has one real frame
-here, this file proves every frame parses and round-trips through
-parse_client_message, and apps/desktop/tests/client-actions.test.ts
-proves the TS side enumerates exactly this set.
+the cross-language bridge: every TS ClientCommand action (the NARROWED
+human-initiated set, C1) has one real frame here, this file proves every
+frame parses and round-trips through parse_client_message, and
+apps/desktop/tests/client-actions.test.ts proves the TS side enumerates
+exactly this set. R39: any declared ClientAction that lacks an
+authoritative handler fails here.
 """
 
 import hashlib
@@ -14,12 +16,16 @@ from pathlib import Path
 import pytest
 
 from arsvox_contracts import parse_client_message
+from arsvox_contracts.client_messages import ClientAction
 
 from tests.python.conftest import ws_collect
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = REPO_ROOT / "packages" / "contracts" / "fixtures" / "client_actions.json"
 
+# C1: the NARROWED human-initiated set. Server-originated commands
+# (notification.show, media.state, tts.speak, audio.play) are NOT client
+# actions — they travel server->client through the full UiCommand union.
 KNOWN_ACTIONS = [
     "layout.apply",
     "panel.open",
@@ -27,8 +33,6 @@ KNOWN_ACTIONS = [
     "panel.set_primary",
     "panel.fullscreen",
     "layout.restore",
-    "notification.show",
-    "media.state",
     "media.play_pause",
     "media.seek",
     "youtube.search",
@@ -39,9 +43,9 @@ KNOWN_ACTIONS = [
     "browser.refresh",
     "document.save",
     "tasks.toggle",
-    "tts.speak",
-    "audio.play",
 ]
+
+SERVER_ONLY_ACTIONS = ["notification.show", "media.state", "tts.speak", "audio.play"]
 
 
 @pytest.fixture(scope="module")
@@ -77,14 +81,80 @@ def test_fixture_payloads_roundtrip_exactly(fixtures):
         "document.save": ("panel_type", "document_editor"),
         "media.seek": ("position_s", 42),
         "youtube.search": ("query", "carpintería"),
-        "audio.play": ("asset", "chime.wav"),
         "panel.open": ("panel_type", "document_editor"),
-        "notification.show": ("kind", "info"),
         "layout.apply": ("template", "split"),
     }
     for action, (field, expected) in checks.items():
         msg = parse_client_message(json.dumps(fixtures[action]))
         assert getattr(msg.command, field) == expected, action
+
+
+# --------------------------------------------------------------------- #
+# R39 / C1: the union is the NARROWED human-initiated set, and every
+# declared ClientAction has an authoritative handler.
+# --------------------------------------------------------------------- #
+
+
+def _client_action_names() -> set[str]:
+    """Introspect the ClientAction union (Annotated[Union[...], ...]).
+    Handles both `action: Literal["x"] = "x"` and bare
+    `action: Literal["x"]` variants."""
+    from typing import get_args
+
+    from pydantic_core import PydanticUndefined
+
+    union = get_args(ClientAction)[0]
+    names: set[str] = set()
+    for variant in get_args(union):
+        if not hasattr(variant, "model_fields"):
+            continue
+        field = variant.model_fields["action"]
+        if field.default is not PydanticUndefined:
+            names.add(field.default)
+        else:
+            literal_args = get_args(field.annotation)
+            if literal_args and isinstance(literal_args[0], str):
+                names.add(literal_args[0])
+    return names
+
+
+def test_client_action_union_is_narrowed_human_initiated_set():
+    """R39/C1: ClientAction == the frozen human-initiated set; the full
+    UiCommand surface keeps the server-originated commands."""
+    union_actions = _client_action_names()
+    assert union_actions == set(KNOWN_ACTIONS), (
+        f"ClientAction drift: {union_actions ^ set(KNOWN_ACTIONS)}"
+    )
+    for server_only in SERVER_ONLY_ACTIONS:
+        assert server_only not in union_actions, (
+            f"{server_only} is server-originated and must not be client-initiable (C1)"
+        )
+
+
+def test_every_declared_client_action_has_authoritative_handler(client):
+    """R39: the enumeration guard — each declared ClientAction frame is
+    dispatched through the real app and must NEVER come back
+    'unsupported' (no backend capability). 'done'/'accepted'/'failed'
+    all prove an authoritative handler ran."""
+    fixtures = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()  # state_update
+        ws.receive_json()  # config_update
+        ws.receive_json()  # state_snapshot
+        for action in KNOWN_ACTIONS:
+            ws.send_json(fixtures[action])
+            events = ws_collect(
+                client=client, ws=ws,
+                expected_break=lambda e, a=action: (
+                    e["type"] == "action_result" and e.get("action") == a
+                ),
+                max_events=25,
+            )
+            verdicts = [e for e in events if e["type"] == "action_result" and e["action"] == action]
+            assert verdicts, f"no action_result for {action}"
+            assert verdicts[-1]["status"] != "unsupported", (
+                f"ClientAction {action} lacks an authoritative handler (R39)"
+            )
 
 
 def test_unknown_action_raises():
@@ -144,7 +214,11 @@ def test_unknown_action_replies_failed_and_loop_survives(client):
         assert got["type"] == "pong"
 
 
-def test_unsupported_action_replies_unsupported(client):
+def test_layout_apply_has_authoritative_handler(client):
+    """C1: layout.apply is human-initiated — the service applies it
+    (panel registry) and re-emits the authoritative ui_command event.
+    (Was 'unsupported' before A7; R39 now requires a handler.)"""
+    services = client.app.state.services
     with client.websocket_connect("/ws") as ws:
         _connect(ws)
         ws.send_json(
@@ -162,7 +236,13 @@ def test_unsupported_action_replies_unsupported(client):
             client=client, ws=ws,
             expected_break=lambda e: e["type"] == "action_result",
         )
-        assert _result(events, "layout.apply")["status"] == "unsupported"
+        verdict = _result(events, "layout.apply")
+        assert verdict["status"] == "done"
+        # service-side registry updated + authoritative event re-emitted
+        assert any(p["id"] == "document_editor" for p in services.panels.list())
+        echoed = [e for e in events if e["type"] == "ui_command"]
+        assert echoed and echoed[-1]["command"]["action"] == "layout.apply"
+        assert echoed[-1]["command"]["template"] == "split"
 
 
 def test_tasks_toggle_persists_and_emits_tasks_update(client):
@@ -315,22 +395,23 @@ def test_youtube_play_acknowledged_client_local(client):
         assert verdict["status"] == "done"
 
 
-def test_audio_play_play_pause_seek_emit_media_state(client):
+def test_media_play_pause_seek_have_authoritative_handlers(client):
+    """C1: audio.play is server-originated — a client frame for it is
+    rejected honestly (action_result failed, strict union parse), while
+    the human media actions (play_pause/seek) keep authoritative
+    handlers."""
     from arsvox_agent.actions import reset_media_state
 
     reset_media_state()
     with client.websocket_connect("/ws") as ws:
         _connect(ws)
+        # server-originated action sent as a client frame -> parse fails
         ws.send_json({"type": "ui_command", "command": {"action": "audio.play", "asset": "chime.wav"}})
         events = ws_collect(
             client=client, ws=ws,
             expected_break=lambda e: e["type"] == "action_result",
         )
-        assert _result(events, "audio.play")["status"] == "done"
-        media = [e for e in events if e["type"] == "media.state"]
-        assert media and media[-1]["state"] == "playing"
-        assert media[-1]["kind"] == "audio"
-        assert media[-1]["title"] == "chime.wav"
+        assert _result(events, "audio.play")["status"] == "failed"
 
         ws.send_json({"type": "ui_command", "command": {"action": "media.play_pause"}})
         events = ws_collect(
@@ -338,8 +419,6 @@ def test_audio_play_play_pause_seek_emit_media_state(client):
             expected_break=lambda e: e["type"] == "action_result",
         )
         assert _result(events, "media.play_pause")["status"] == "done"
-        media = [e for e in events if e["type"] == "media.state"]
-        assert media and media[-1]["state"] == "paused"
 
         ws.send_json({"type": "ui_command", "command": {"action": "media.seek", "position_s": 30}})
         events = ws_collect(
@@ -347,8 +426,6 @@ def test_audio_play_play_pause_seek_emit_media_state(client):
             expected_break=lambda e: e["type"] == "action_result",
         )
         assert _result(events, "media.seek")["status"] == "done"
-        media = [e for e in events if e["type"] == "media.state"]
-        assert media and media[-1]["position_s"] == 30
     reset_media_state()
 
 

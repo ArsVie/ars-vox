@@ -42,6 +42,14 @@ async def telegram_send_pending(tctx: ToolContext, text: str) -> str:
     chat_id = tctx.deps.config.telegram.chat_id
     if not chat_id:
         return "No hay un destinatario aprobado configurado."
+    # R38 point of no return: the instant telegram.send() is invoked the
+    # message is handed to the provider and may be delivered even if STOP
+    # arrives right after. STOP before this line cancels the execution;
+    # after it, the result is surfaced. (POINT_OF_NO_RETURN table in
+    # confirmations.py documents this per tool.)
+    if tctx.cancel_token is not None:
+        tctx.cancel_token.raise_if_cancelled()
+        tctx.cancel_token.mark_point_of_no_return()
     result = await tctx.deps.telegram.send(chat_id, text)
     tctx.deps.audit.log(
         "telegram",

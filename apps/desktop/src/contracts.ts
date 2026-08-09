@@ -251,6 +251,37 @@ export type UiCommand =
   | { action: "tts.speak"; text: string; priority?: boolean }
   | { action: "audio.play"; asset: string };
 
+/**
+ * C1 (GATE-3.5): the NARROWED client-sendable union — ONLY the actions
+ * the human client is allowed to initiate (media play/pause/seek,
+ * browser nav, document.save, tasks.toggle, layout/panel overrides).
+ * Server-originated commands (notification.show, media.state,
+ * tts.speak, audio.play) are NOT client frames: they travel
+ * server->client through the full UiCommand union only. dispatchCommand
+ * accepts ClientCommand; the Python ClientAction union and the shared
+ * fixture (packages/contracts/fixtures/client_actions.json) mirror this
+ * exact set (R39 drift guard).
+ */
+export type ClientCommand = Extract<
+  UiCommand,
+  | { action: "layout.apply" }
+  | { action: "panel.open" }
+  | { action: "panel.close" }
+  | { action: "panel.set_primary" }
+  | { action: "panel.fullscreen" }
+  | { action: "layout.restore" }
+  | { action: "media.play_pause" }
+  | { action: "media.seek" }
+  | { action: "youtube.search" }
+  | { action: "youtube.play" }
+  | { action: "browser.navigate" }
+  | { action: "browser.back" }
+  | { action: "browser.forward" }
+  | { action: "browser.refresh" }
+  | { action: "document.save" }
+  | { action: "tasks.toggle" }
+>;
+
 export interface UiCommandEvent {
   type: "ui_command";
   command: UiCommand;
