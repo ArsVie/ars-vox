@@ -1,4 +1,10 @@
-"""Scheduler: fires due reminders once, snooze/dismiss intents."""
+"""Scheduler: fires due reminders once, snooze/dismiss intents.
+
+W2 (GATE-3.5): each fired reminder publishes ONE event (the canonical
+`notification` event — the old second publish, UiCommandEvent/
+NotificationShow, made the renderer append a second identical chat line),
+and snooze/dismiss emit the TasksUpdateEvent so content.tasks refreshes.
+"""
 
 import time
 from datetime import datetime, timedelta, timezone
@@ -6,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from arsvox_agent.tools.scheduler import ReminderScheduler
 from arsvox_agent.events import EventBus
 from arsvox_memory import Database
-from arsvox_memory.repos import NotificationStore, ReminderStore
+from arsvox_memory.repos import NotificationStore, ReminderStore, TaskStore
 
 
 def _setup(tmp_path, interval=1):
@@ -18,7 +24,17 @@ def _setup(tmp_path, interval=1):
     return db, reminders, notifications, bus, scheduler
 
 
-def test_fire_due_reminder(tmp_path):
+def _drain(q) -> list[dict]:
+    events = []
+    while not q.empty():
+        events.append(q.get_nowait())
+    return events
+
+
+def test_fire_due_reminder_single_publish(tmp_path):
+    """W2: one fired reminder -> exactly ONE notification event, and NO
+    ui_command (the old NotificationShow duplicate that produced a second
+    chat line in the renderer)."""
     db, reminders, notifications, bus, scheduler = _setup(tmp_path)
 
     async def run():
@@ -30,20 +46,18 @@ def test_fire_due_reminder(tmp_path):
         )
         q = bus.subscribe()
         await scheduler.tick()
-        events = []
-        while not q.empty():
-            events.append(q.get_nowait())
-        return rid, events
+        return rid, _drain(q)
 
     rid, events = asyncio_run(run())
     assert reminders.get(rid)["status"] == "fired"
     assert notifications.list_active()  # one active notification
-    kinds = {e["type"] for e in events}
-    assert "notification" in kinds
-    assert "ui_command" in kinds
-    cmd = [e for e in events if e["type"] == "ui_command"][0]["command"]
-    assert cmd["action"] == "notification.show"
-    assert "medicina" in cmd["text"]
+    notif_events = [e for e in events if e["type"] == "notification"]
+    assert len(notif_events) == 1, events
+    assert notif_events[0]["notification_id"] == str(notifications.list_active()[0]["id"])
+    assert notif_events[0]["text"] == "Tomar medicina"
+    # the duplicate command channel is gone
+    ui_commands = [e for e in events if e["type"] == "ui_command"]
+    assert ui_commands == [], events
 
 
 def test_fire_only_once(tmp_path):
@@ -90,6 +104,81 @@ def test_snooze_and_dismiss(tmp_path):
     assert row["status"] == "active"  # recurring schedule stays live
     assert row["occ_status"] == "active"
     assert row["due_at"] > datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def test_snooze_emits_tasks_update(tmp_path):
+    """W2: snooze_top refreshes both stores — the TasksUpdateEvent must be
+    published so the renderer's content.tasks does not go stale."""
+    db, reminders, notifications, bus, scheduler = _setup(tmp_path)
+    tasks = TaskStore(db)
+    scheduler.tasks = tasks
+    tasks.add("Comprar pan")
+
+    async def run():
+        now = datetime.now(timezone.utc)
+        rid = reminders.create(
+            "pastilla", (now - timedelta(seconds=1)).isoformat(timespec="seconds"), "none"
+        )
+        await scheduler.tick()
+        q = bus.subscribe()
+        await scheduler.snooze_top(600)
+        return rid, _drain(q)
+
+    rid, events = asyncio_run(run())
+    updates = [e for e in events if e["type"] == "tasks.update"]
+    assert len(updates) == 1, events
+    payload = updates[0]
+    # todos come from the wired tasks store (never wiped by a partial event)
+    assert [t["title"] for t in payload["todos"]] == ["Comprar pan"]
+    # the snoozed reminder is still a live schedule -> still listed
+    assert [r["title"] for r in payload["reminders"]] == ["pastilla"]
+    assert reminders.get(rid)["occ_status"] == "snoozed"
+
+
+def test_dismiss_emits_tasks_update(tmp_path):
+    """W2: dismiss_top publishes TasksUpdateEvent; the dismissed one-shot
+    leaves the active reminders list."""
+    db, reminders, notifications, bus, scheduler = _setup(tmp_path)
+    tasks = TaskStore(db)
+    scheduler.tasks = tasks
+    tasks.add("Comprar pan")
+
+    async def run():
+        now = datetime.now(timezone.utc)
+        rid = reminders.create(
+            "pastilla", (now - timedelta(seconds=1)).isoformat(timespec="seconds"), "none"
+        )
+        await scheduler.tick()
+        q = bus.subscribe()
+        await scheduler.dismiss_top()
+        return rid, _drain(q)
+
+    rid, events = asyncio_run(run())
+    updates = [e for e in events if e["type"] == "tasks.update"]
+    assert len(updates) == 1, events
+    payload = updates[0]
+    assert [t["title"] for t in payload["todos"]] == ["Comprar pan"]
+    # one-shot dismissed -> exhausted, no longer in the active list
+    assert payload["reminders"] == []
+    assert reminders.get(rid)["occ_status"] == "dismissed"
+
+
+def test_snooze_without_tasks_store_does_not_emit(tmp_path):
+    """Unwired scheduler (tasks=None) must NOT publish a todos=[] update —
+    the renderer replaces content.tasks wholesale, so a partial event would
+    wipe the user's todo list."""
+    db, reminders, notifications, bus, scheduler = _setup(tmp_path)
+
+    async def run():
+        now = datetime.now(timezone.utc)
+        reminders.create("x", (now - timedelta(seconds=1)).isoformat(timespec="seconds"))
+        await scheduler.tick()
+        q = bus.subscribe()
+        await scheduler.snooze_top(600)
+        return _drain(q)
+
+    events = asyncio_run(run())
+    assert all(e["type"] != "tasks.update" for e in events), events
 
 
 def test_list_active_text(tmp_path):
