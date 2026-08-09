@@ -11,44 +11,42 @@
  * (applyConfig), and the first layout command materializes it on demand
  * (bootDefaultSpec) when no composition exists yet — layout commands can
  * never touch a legacy mirror.
+ *
+ * GATE-5 (W0-SLICE): the per-surface content bags moved out of this file
+ * into state/*Slice.ts modules, registered through the ONE content
+ * registration seam (state/contentRegistry). The store keeps the choke
+ * points — applyAdaptiveSpec (layout authority), applyEvent,
+ * dispatchCommand, applyUiCommand — but no longer holds the five panels'
+ * payloads: youtube/browser/document/tasks reduce through the registry,
+ * media stays derived from the single MediaController (state/media.ts),
+ * conversation and notification list mechanics live in
+ * state/conversation.ts / state/notifications.ts. Snapshot history is
+ * NEVER auto-restored (fresh start = central-mic hero, directive
+ * 2026-08-08); it is stashed for an explicit resume.
  */
 
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import {
+  DEFAULT_PRIMARY,
+  isPanelId,
   normalizeUiCommand,
-  type ActionResultEvent,
   type AppConfigWire,
-  type BrowserNavigateEvent,
   type ClientCommand,
-  type DocumentKind,
-  type MediaStateEvent,
   type NormalizedUiCommand,
-  type ReminderItem,
+  type PanelId,
   type ServerEvent,
   type StateSnapshotEvent,
-  type TodoItem,
-  type VoiceState,
-  type YoutubeVideoResult,
 } from "./contracts";
-import { DEFAULT_PRIMARY, isPanelId, type PanelId } from "./contracts";
 import { computeAdaptiveGeometry, type Viewport } from "./layout/adaptiveEngine";
 import { surfaceRegistry } from "./roles/registry";
-import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
-import type {
-  AdaptiveTemplate,
-  LayoutSpec as AdaptiveLayoutSpec,
-  Proportion,
-  SurfaceRole,
-} from "./adaptive/contracts";
-import { TEMPLATE_SLOTS } from "./adaptive/contracts";
+import { resolveLayout } from "./roles/fallback";
+import type { LayoutSpec as AdaptiveLayoutSpec } from "./adaptive/contracts";
 import {
   applyOverrides,
-  EMPTY_OVERRIDES,
   mergeOverrideIntent,
   removeSurfaceOverrides,
   type OverrideIntent,
-  type OverrideSet,
 } from "./adaptive/overrides";
 import {
   matchSpokenOverride,
@@ -57,320 +55,91 @@ import {
 } from "./adaptive/spokenOverrides";
 import { scoreChange } from "./layout/inertia";
 import {
-  LEGACY_TEMPLATE_MAP,
   planLayout,
   type PlannerInput,
   type PlannerRejection,
   type PlannerRejectionCode,
 } from "./adaptive/planner";
+import { contentRegistry } from "./state";
+import { EMPTY_ADAPTIVE } from "./state/adaptiveTypes";
+import type {
+  AdaptiveState,
+  ApplyAdaptiveSpecOptions,
+} from "./state/adaptiveTypes";
+import { applyConfigToState } from "./state/config";
 import {
-  mediaController,
-  type MediaState,
-  type PlayerMediaUpdate,
-} from "./media/controller";
+  confirmationFromEvent,
+  confirmationResolvedMessage,
+  pendingConfirmationFromSnapshot,
+} from "./state/confirmation";
+import {
+  appendAgentMessage,
+  appendUserMessage,
+  systemMessage,
+} from "./state/conversation";
+import { actionResultError } from "./state/errors";
+import {
+  addSurfaceToSpec,
+  adaptiveTemplateFromConfig,
+  bootDefaultSpec,
+} from "./state/layoutBoot";
+import {
+  applyMediaPlayerUpdate,
+  applyMediaServerCommand,
+  applyMediaServerEvent,
+  applyMediaUserCommand,
+  resetMedia,
+  subscribeMediaToStore,
+} from "./state/media";
+import {
+  dismissNotification,
+  pushNotification,
+  restoreNotifications,
+} from "./state/notifications";
+import { restoreAdaptiveFromSnapshot } from "./state/snapshotRestore";
+import type { AppState, SendFn } from "./state/types";
 
 /** Re-exported for components that mirror the controller state. */
-export { EMPTY_MEDIA } from "./media/controller";
+export { EMPTY_MEDIA } from "./state/media";
+
+// TODO(w0-slice, delete-when: GATE-1 lanes import state types from
+// "./state" instead of "./store"): after GATE-0 the store is frozen and
+// these re-exports exist only for pre-slice import sites (components and
+// tests that named the store as their type home).
+/** GATE-5 (W0-SLICE): the state shapes moved to state/* — re-exported so
+ *  existing component/test import sites keep working. */
+export { EMPTY_ADAPTIVE } from "./state/adaptiveTypes";
+export type {
+  AdaptiveState,
+  ApplyAdaptiveSpecOptions,
+} from "./state/adaptiveTypes";
+export type {
+  AppState,
+  BrowserContent,
+  ChatMessage,
+  ConfirmationInfo,
+  DocumentContent,
+  ErrorInfo,
+  NotificationItem,
+  PanelContent,
+  PanelMeta,
+  SendFn,
+  TasksContent,
+  YoutubeContent,
+} from "./state/types";
 
 /** Default content viewport used until the renderer reports real size. */
 export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 800 };
 
-export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  text: string;
-}
-
-/** Panel metadata carried by the surface components' `meta` prop
- *  (title / content_reference). Not store state — the legacy
- *  state.panelMeta field was deleted with PanelHost (GATE-3.5 W2-STORE). */
-export interface PanelMeta {
-  title?: string;
-  contentReference?: string;
-}
-
 /**
- * UI-103 adaptive state: the last validated adaptive LayoutSpec plus its
- * role-resolved assignments. The config-driven default lands the first
- * composition at connect, so `spec` is null only before the server's
- * first config_update.
- *
- * UI-301: `lastRejection` records the planner's rejection reason for the
- * most recent agent layout intent that did NOT reach state (invalid model
- * output can never corrupt layout state — the rejection is the observable
- * trace). Null after a valid apply or a fresh store.
- *
- * UI-302: plus the persistent user constraint set (pin/stick/position/...)
- * that the override layer applies AFTER planner output.
- */
-export interface AdaptiveState {
-  spec: AdaptiveLayoutSpec | null;
-  assignments: ResolvedAssignment[];
-  lastRejection: PlannerRejection | null;
-  /** UI-302: active user layout constraints, keyed by surfaceId. */
-  overrides: OverrideSet;
-  /** R19 (GATE-3.5): the composition captured when a fullscreen constraint
-   *  ENGAGED — the fullscreen toggle's restore target. Null while no
-   *  fullscreen constraint is active (or when it arrived via a snapshot
-   *  restore, where it is not carried). Plain JSON — snapshot-safe. */
-  preFullscreen: AdaptiveLayoutSpec | null;
-  /** C5 (GATE-3.5, defect #2): the most recent UiCommand action that
-   *  applyUiCommand did NOT handle (unknown wire action — JSON.parse casts
-   *  bypass the exhaustive union). Latched diagnostic record: visible and
-   *  testable, never throws. Null until an unknown action arrives. */
-  lastUnhandledAction: string | null;
-}
-
-export const EMPTY_ADAPTIVE: AdaptiveState = {
-  spec: null,
-  assignments: [],
-  lastRejection: null,
-  overrides: EMPTY_OVERRIDES,
-  preFullscreen: null,
-  lastUnhandledAction: null,
-};
-
-/**
- * UI-302: options for applyAdaptiveSpec.
- */
-export interface ApplyAdaptiveSpecOptions {
-  /** UI-207: user-commanded change — the inertia scorer always applies it
-   *  (bypasses the damping wall). Agent-initiated (planner) changes omit
-   *  this and stay subject to inertia. An overrideIntent also counts as
-   *  user-commanded. */
-  userInitiated?: boolean;
-  /** UI-302: a user override intent ("bigger", "right", "close", ...) to
-   *  merge into the persistent constraint set. The constraint applies to
-   *  this spec AFTER the planner's output and to every future planner
-   *  spec until removed ("restore layout" / removeSurfaceOverrides). */
-  overrideIntent?: OverrideIntent;
-  /** R19 (GATE-3.5): full replacement constraint set, used WITHOUT
-   *  overrideIntent when a caller needs to apply a modified set directly
-   *  (e.g. removeSurfaceOverrides for the fullscreen toggle-off or a
-   *  reconnect restoring the snapshot's constraints). When both are
-   *  present, overrideIntent merges into this set. */
-  overrides?: OverrideSet;
-}
-
-export interface ConfirmationInfo {
-  pendingId: string;
-  tool: string;
-  title: string;
-  detail: string;
-  expiresInS: number;
-}
-
-export interface ErrorInfo {
-  message: string;
-  recoverable: boolean;
-}
-
-/* ------------------------------------------------------------ content */
-/* Panel content state — reduced from the panel content events. Keys are
-   the panel ids that own content surfaces (youtube, browser,
-   document_editor, tasks, media). Absent key = panel has no content yet. */
-
-export interface YoutubeContent {
-  query: string;
-  loading: boolean;
-  results: YoutubeVideoResult[];
-}
-
-export interface BrowserContent {
-  url: string;
-  title: string;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  loading: boolean;
-}
-
-export interface DocumentContent {
-  title: string;
-  kind: DocumentKind;
-  path: string;
-  /** Fetchable URL for pdf/epub real rendering. */
-  url?: string | null;
-  content: string;
-  chapters: { title: string; content: string }[];
-}
-
-export interface TasksContent {
-  todos: TodoItem[];
-  reminders: ReminderItem[];
-}
-
-export interface PanelContent {
-  youtube?: YoutubeContent;
-  browser?: BrowserContent;
-  document_editor?: DocumentContent;
-  tasks?: TasksContent;
-  media?: MediaState;
-}
-
-/**
- * GATE-3.5 (A6/R34): a rendered notification. Populated by live
- * `notification` events AND restored from the reconnect snapshot
- * (authoritative — an empty snapshot list clears it, R31).
- */
-export interface NotificationItem {
-  notificationId: string;
-  kind: string;
-  title: string;
-  text: string;
-  dueAt: string | null;
-}
-
-export type SendFn = (message: unknown) => void;
-
-export interface AppState {
-  connected: boolean;
-  voiceState: VoiceState;
-  activity: string | null;
-  messages: ChatMessage[];
-  pending: ConfirmationInfo | null;
-  error: ErrorInfo | null;
-  reducedMotion: boolean;
-  /** Accessibility modes driven by config ui.large_text / ui.high_contrast. */
-  largeText: boolean;
-  highContrast: boolean;
-  /** TTS knobs driven by config tts.speed / tts.queue_max. */
-  ttsSpeed: number;
-  ttsQueueMax: number;
-  /** Real content-viewport size in px (engine px floors + density). */
-  viewport: Viewport;
-  /** Pending TTS phrases (text), played in order by TtsPlayer. */
-  speakTexts: string[];
-  /** Panel content state, keyed by panel id (see PanelContent). */
-  content: PanelContent;
-  /** GATE-3.5 (A6/R34): notifications to render (live events + snapshot
-   *  restore; the snapshot list is authoritative). */
-  notifications: NotificationItem[];
-  /** UI-103: validated adaptive LayoutSpec + role-resolved assignments. */
-  adaptive: AdaptiveState;
-  /** Per-surface state bag keyed by surfaceId (UI-103). The role framework
-   *  never touches this on role/slot changes — surface state survives. */
-  surfaceState: Record<string, Record<string, unknown>>;
-
-  send: SendFn;
-  setConnected: (connected: boolean) => void;
-  /** GATE-3.5 A2/R12: surface service-lifecycle failures (main-proxied
-   *  service events) through the same error banner as wire errors. */
-  setError: (error: ErrorInfo | null) => void;
-  setReducedMotion: (value: boolean) => void;
-  setViewport: (viewport: Viewport) => void;
-
-  applyEvent: (event: ServerEvent) => void;
-  sendText: (text: string) => void;
-  stop: () => void;
-  confirm: (approve: boolean) => void;
-  dismissError: () => void;
-
-  /** Local UI action: toggle a panel's fullscreen state (never sent to the
-   *  server). The fullscreen constraint lives in adaptive.overrides — the
-   *  components derive their fullscreen icon state from it (no mirror). */
-  toggleFullscreen: (panel: PanelId) => void;
-
-  /** User-initiated command: optimistic local effect + send to the server. */
-  dispatchCommand: (command: ClientCommand) => void;
-
-  /** Server command application. C5/A3 (GATE-3.5): accepts the NORMALIZED
-   *  command — callers coming from the wire MUST pass through
-   *  normalizeUiCommand first (applyEvent's ui_command case is the single
-   *  boundary site; surface_id → surfaceId happens exactly there). */
-  applyUiCommand: (command: NormalizedUiCommand) => void;
-
-  /**
-   * GATE-3.5 (R26): the REAL player's callbacks (YouTube iframe
-   * infoDelivery — playerState / currentTime / duration) feed the single
-   * MediaController; there is no React-only simulated playback state.
-   */
-  applyPlayerMediaEvent: (update: PlayerMediaUpdate) => void;
-  /** UI-103: validate + apply an adaptive LayoutSpec (registry + fallback
-   *  ladder). Throws on invalid specs; state is never partially updated.
-   *  UI-302: options carry the user-initiated signal (bypasses UI-207's
-   *  damping wall) and user override intents (applied AFTER the planner
-   *  output — explicit user constraints beat planner preferences). */
-  applyAdaptiveSpec: (
-    spec: AdaptiveLayoutSpec,
-    options?: ApplyAdaptiveSpecOptions,
-  ) => void;
-  /** UI-301: route an agent layout intent (adaptive-native or legacy wire
-   *  layout.apply) through the planner. Invalid intents are rejected with
-   *  a structured reason and NEVER reach state; valid intents apply through
-   *  the same choke as applyAdaptiveSpec (registry + inertia guard).
-   *  Returns the rejection reason when the intent was rejected, else null. */
-  applyLayoutIntent: (intent: PlannerInput) => PlannerRejection | null;
-  /** R21 (GATE-3.5): the spoken-override route. Deterministic phrase
-   *  matching on an STT transcript BEFORE any user_text reaches the model:
-   *  a matched layout phrase becomes an OverrideIntent through the ONE
-   *  choke and the utterance is consumed (never a vague model suggestion).
-   *  Returns true when the utterance was consumed as a layout override. */
-  handleSpokenText: (text: string) => boolean;
-  /** UI-103: write a per-surface state value (keyed by surfaceId). */
-  setSurfaceState: (surfaceId: string, key: string, value: unknown) => void;
-  enqueueTts: (text: string) => void;
-  ttsDone: () => void;
-  /** GATE-3.5 (W2-REMINDERS seam): client-side removal of one rendered
-   *  notification (dismiss affordance). Never sent to the server. */
-  dismissNotification: (notificationId: string) => void;
-}
-
-let messageSeq = 0;
-function nextMessageId(prefix: string): string {
-  messageSeq += 1;
-  return `${prefix}${messageSeq.toString(36)}`;
-}
-
-/**
- * GATE-3.5 (R24-R27 + W3-MEDIA): the H7 media-command merge helpers moved
- * into src/media/controller.ts — ALL media mutations (server events,
- * server commands, user commands, player callbacks, snapshot restore)
- * route through the one MediaController, and this file derives
- * content.media from it through ONE subscription (see createAppStore).
+ * GATE-3.5 (R24-R27 + W3-MEDIA): the H7 media-command merge helpers live
+ * in src/state/media.ts — ALL media mutations (server events, server
+ * commands, user commands, player callbacks, snapshot restore) route
+ * through the one MediaController, and this file derives content.media
+ * from it through ONE subscription (see subscribeMediaToStore below).
  * The store is never a write-target for media events; the wire paths
  * below only APPLY controller output.
  */
-
-/** Slot → semantic role for addSurfaceToSpec (mirrors WIRE_SLOT_ROLE in
- *  the planner: the adaptive contract's frozen role vocabulary). */
-function slotRole(slot: string): "primary" | "companion" | "support" {
-  if (slot === "main") return "primary";
-  if (slot === "side") return "companion";
-  return "support";
-}
-
-/**
- * R19 (GATE-3.5): place a surface into a composition deterministically —
- * the first FREE slot of the current template (main→primary, side→
- * companion, rail→support); when the template is full, step up to triple;
- * when nowhere to go, return the input unchanged (the degrade layer would
- * drop the newcomer anyway). Mirrors the legacy engine's "fill empty
- * slots" rule for the manual-open source.
- */
-function addSurfaceToSpec(
-  spec: AdaptiveLayoutSpec,
-  surfaceId: string,
-): AdaptiveLayoutSpec {
-  if (spec.assignments.some((a) => a.surfaceId === surfaceId)) return spec;
-  const occupied = new Set(spec.assignments.map((a) => a.slot));
-  const candidates = [spec.template, "triple"] as const;
-  for (const template of candidates) {
-    const free = TEMPLATE_SLOTS[template].find(
-      (s: string) => !occupied.has(s),
-    );
-    if (free) {
-      return {
-        ...spec,
-        template,
-        assignments: [
-          ...spec.assignments,
-          { surfaceId, role: slotRole(free), slot: free },
-        ],
-      };
-    }
-  }
-  return spec;
-}
 
 /** W3-TRANSPORT: raw transport send slot for the outbound buffer. Rebound by
  *  bindTransport (singleton) or left as the createAppStore argument for
@@ -393,9 +162,6 @@ let resyncHook: (() => void) | null = null;
 export function bindResync(fn: () => void): void {
   resyncHook = fn;
 }
-
-/** GATE-3.5 (A6/R34): cap for the in-memory notification list. */
-const NOTIFICATIONS_CAP = 20;
 
 export function createAppStore(send: SendFn): StoreApi<AppState> {
   const store = createStore<AppState>((set, get) => {
@@ -432,108 +198,28 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       set({ speakTexts });
     };
 
-    /** GATE-3.5 (A6/R34): append a rendered notification (dedupe by id,
-     *  capped). Live events and snapshot restores share this path. */
-    const pushNotification = (item: NotificationItem): void => {
-      const state = get();
-      const notifications = [
-        ...state.notifications.filter((n) => n.notificationId !== item.notificationId),
-        item,
-      ];
-      while (notifications.length > NOTIFICATIONS_CAP) notifications.shift();
-      set({ notifications });
-    };
-
-    /**
-     * GATE-3.5 (W2-STORE): the boot default composition — the adaptive
-     * spec a layout command operates on when the config-driven default
-     * has not landed yet. Registry-gated: an unregistered anchor returns
-     * null (commands no-op; the registry gate never throws on boot data).
-     */
-    const bootDefaultSpec = (): AdaptiveLayoutSpec | null => {
-      if (!surfaceRegistry.has(DEFAULT_PRIMARY)) return null;
-      return {
-        template: "focus",
-        assignments: [
-          { surfaceId: DEFAULT_PRIMARY, role: "primary", slot: "main" },
-        ],
-      };
-    };
-
     /**
      * Apply the server config snapshot to the UI: accessibility modes,
-     * TTS knobs, and (only before any layout command) the default layout.
+     * TTS knobs, and (only before any layout command) the default layout
+     * through the ONE choke (see state/config.ts).
      */
     const applyConfig = (config: AppConfigWire): void => {
-      const state = get();
-      const ui = config.ui ?? {};
-      const tts = config.tts ?? {};
-      const patch: Partial<AppState> = {};
-      if (ui.reduced_motion !== undefined) patch.reducedMotion = ui.reduced_motion;
-      if (ui.large_text !== undefined) patch.largeText = ui.large_text;
-      if (ui.high_contrast !== undefined) patch.highContrast = ui.high_contrast;
-      if (typeof tts.speed === "number" && tts.speed > 0) patch.ttsSpeed = tts.speed;
-      if (typeof tts.queue_max === "number" && tts.queue_max > 0) {
-        patch.ttsQueueMax = tts.queue_max;
-      }
-      if (!layoutApplied) {
-        // R19 (GATE-3.5): the config-driven default layout is a layout
-        // source ("migration") and enters the ONE choke as the initial
-        // adaptive composition — the default lands at connect, before
-        // any user interaction. Legacy template ids map through the
-        // planner's frozen wire map; an unregistered default_primary
-        // falls back to the conversation anchor (the choke's registry
-        // gate must never throw on config data).
-        const template =
-          typeof ui.default_template === "string" && ui.default_template
-            ? adaptiveTemplateFromConfig(ui.default_template)
-            : null;
-        if (template) {
-          // Config data must NEVER throw through the choke's registry
-          // gate: an unregistered default_primary falls back to the
-          // conversation anchor; when even the anchor is unregistered
-          // (e.g. product surfaces not yet registered), skip the default.
-          const configuredPrimary =
-            typeof ui.default_primary === "string" &&
-            isPanelId(ui.default_primary) &&
-            surfaceRegistry.has(ui.default_primary)
-              ? ui.default_primary
-              : null;
-          const primary =
-            configuredPrimary ??
-            (surfaceRegistry.has(DEFAULT_PRIMARY) ? DEFAULT_PRIMARY : null);
-          if (primary) {
-            try {
-              applyAdaptiveSpec(
-                {
-                  template,
-                  assignments: [
-                    { surfaceId: primary, role: "primary", slot: "main" },
-                  ],
-                },
-                { userInitiated: false },
-              );
-              layoutApplied = true;
-            } catch (error) {
-              // never crash the event path on config data
-              console.warn(
-                "[store] config default layout rejected:",
-                (error as Error).message,
-              );
-            }
-          }
-        }
-      }
+      const patch = applyConfigToState(config, {
+        canApplyDefault: !layoutApplied,
+        applyDefault: (template, primary) => {
+          applyAdaptiveSpec(
+            {
+              template,
+              assignments: [
+                { surfaceId: primary, role: "primary", slot: "main" },
+              ],
+            },
+            { userInitiated: false },
+          );
+          layoutApplied = true;
+        },
+      });
       set(patch);
-    };
-
-    /** R19 (GATE-3.5): config default_template → adaptive template id.
-     *  Adaptive ids pass through; legacy wire ids (focus/split/reading/
-     *  dashboard) map through the planner's frozen legacy map. Unknown ids
-     *  → null (no default layout). */
-    const adaptiveTemplateFromConfig = (value: string): AdaptiveTemplate | null => {
-      if (value in TEMPLATE_SLOTS) return value as AdaptiveTemplate;
-      return LEGACY_TEMPLATE_MAP[value] ?? null;
     };
 
     /**
@@ -850,21 +536,19 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // GATE-3.5 (A6/R34): the command path (scheduler emits both the
           // `notification` event and this command) feeds the same rendered
           // list as the event path.
-          pushNotification({
-            notificationId: command.notification_id,
-            kind: command.kind,
-            title: command.title,
-            text: command.text,
-            dueAt: null,
+          set({
+            notifications: pushNotification(state.notifications, {
+              notificationId: command.notification_id,
+              kind: command.kind,
+              title: command.title,
+              text: command.text,
+              dueAt: null,
+            }),
           });
           set({
             messages: [
               ...state.messages,
-              {
-                id: nextMessageId("n"),
-                role: "system",
-                text: `${command.title}: ${command.text}`,
-              },
+              systemMessage("n", `${command.title}: ${command.text}`),
             ],
           });
           return;
@@ -873,16 +557,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           pushSpeak(command.text);
           return;
         }
-        case "media.state": {
+        case "media.state":
+        case "audio.play": {
           // GATE-3.5 (R24-R27 + W3-MEDIA): defensive server-command path —
           // routed through the single MediaController like every other
           // media input; the controller merges the partial command and
           // the store's ONE subscription mirrors the authoritative result.
-          mediaController.applyServerCommand(command);
-          return;
-        }
-        case "audio.play": {
-          mediaController.applyServerCommand(command);
+          applyMediaServerCommand(command);
           return;
         }
         default: {
@@ -945,24 +626,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           });
           return;
         case "user_message":
-          set({
-            messages: [
-              ...state.messages,
-              { id: event.id, role: "user", text: event.text },
-            ],
-          });
+          // Server echo — the single source of truth for the conversation
+          // history (no optimistic append).
+          set({ messages: appendUserMessage(state.messages, event) });
           return;
-        case "agent_message": {
-          const messages = [...state.messages];
-          const last = messages[messages.length - 1];
-          if (event.delta && last && last.role === "assistant") {
-            messages[messages.length - 1] = { ...last, text: last.text + event.text };
-          } else {
-            messages.push({ id: nextMessageId("a"), role: "assistant", text: event.text });
-          }
-          set({ messages });
+        case "agent_message":
+          set({ messages: appendAgentMessage(state.messages, event) });
           return;
-        }
         case "ui_command":
           // C5/A3 (GATE-3.5): the SINGLE wire-boundary normalization site —
           // every incoming ui_command frame passes through normalizeUiCommand
@@ -972,28 +642,17 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           applyUiCommand(normalizeUiCommand(event.command));
           return;
         case "confirmation_requested":
-          set({
-            pending: {
-              pendingId: event.pending_id,
-              tool: event.tool,
-              title: event.title,
-              detail: event.detail,
-              expiresInS: event.expires_in_s,
-            },
-          });
+          set({ pending: confirmationFromEvent(event) });
           return;
         case "confirmation_resolved":
           set({
             pending: null,
             messages: [
               ...state.messages,
-              {
-                id: nextMessageId("c"),
-                role: "system",
-                text: event.message
-                  ? `Confirmación ${event.status}: ${event.message}`
-                  : `Confirmación ${event.status}`,
-              },
+              systemMessage(
+                "c",
+                confirmationResolvedMessage(event.status, event.message),
+              ),
             ],
           });
           return;
@@ -1004,21 +663,19 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // GATE-3.5 (A6/R34): notifications are real UI state now — the
           // persistent region renders them, and the chat keeps its system
           // line for the conversation log.
-          pushNotification({
-            notificationId: event.notification_id,
-            kind: event.kind,
-            title: event.title,
-            text: event.text,
-            dueAt: event.due_at,
+          set({
+            notifications: pushNotification(state.notifications, {
+              notificationId: event.notification_id,
+              kind: event.kind,
+              title: event.title,
+              text: event.text,
+              dueAt: event.due_at,
+            }),
           });
           set({
             messages: [
               ...state.messages,
-              {
-                id: nextMessageId("n"),
-                role: "system",
-                text: `${event.title}: ${event.text}`,
-              },
+              systemMessage("n", `${event.title}: ${event.text}`),
             ],
           });
           return;
@@ -1028,11 +685,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         case "state_snapshot": {
           // H5 reconnect + GATE-3.5 A6: apply the canonical snapshot sent
           // once per WS connect. Authoritative server state — voice,
-          // pending, media, history, notifications and the adaptive
-          // composition are REPLACED (null/empty = absence, R30/R31).
-          // Panels are NOT restored: a fresh page load must start at the
-          // central-mic hero (user directive, 2026-08-08), and a same-tab
-          // reconnect keeps its in-memory desk.
+          // pending, media, notifications and the adaptive composition are
+          // REPLACED (null/empty = absence, R30/R31).
+          // GATE-5 (W0-SLICE): conversation HISTORY is never auto-restored
+          // — fresh start is the central-mic hero ONLY (directive
+          // 2026-08-08); the snapshot's history is stashed (server-side)
+          // for an explicit resume. A same-tab reconnect keeps its
+          // in-memory chat; a fresh load starts empty.
           const snap = event as StateSnapshotEvent;
           // R30 (A6): media=null is authoritative absence — the stale
           // player is CLEARED, never preserved. Snapshot restore is
@@ -1040,158 +699,56 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // MediaController (A5/W3-MEDIA — single authority); the store's
           // ONE subscription mirrors the result into content.media.
           if (snap.media) {
-            mediaController.applyServerEvent(snap.media);
+            applyMediaServerEvent(snap.media);
           } else {
-            mediaController.reset();
+            resetMedia();
           }
           const patch: Partial<AppState> = {
             voiceState: snap.voice_state,
-            pending: snap.pending_confirmation
-              ? {
-                  pendingId: snap.pending_confirmation.pending_id,
-                  tool: snap.pending_confirmation.tool,
-                  title: snap.pending_confirmation.title,
-                  detail: snap.pending_confirmation.detail,
-                  expiresInS: snap.pending_confirmation.expires_in_s,
-                }
-              : null,
-            // R31/R34: history and notifications are authoritative —
-            // empty lists CLEAR stale chat/notification state.
-            messages: snap.history.map((h) => ({
-              id: `h${h.id}`,
-              role: h.role,
-              text: h.text,
-            })),
-            notifications: snap.notifications.map((n) => ({
-              notificationId: n.notification_id,
-              kind: n.kind,
-              title: n.title,
-              text: n.text,
-              dueAt: n.due_at ?? null,
-            })),
+            pending: pendingConfirmationFromSnapshot(
+              snap.pending_confirmation,
+            ),
+            // R34: notifications are authoritative — an empty snapshot
+            // list CLEARS stale notification state.
+            notifications: restoreNotifications(snap),
           };
           // R33: reconstruct the adaptive workspace through the SAME choke
           // live agent compositions use (registry-validated, inertia
-          // guarded). Invalid compositions never crash the event path —
-          // the live desk is kept and the rejection is observable.
-          const ad = snap.adaptive;
-          if (
-            ad &&
-            typeof ad.template === "string" &&
-            ad.template &&
-            Array.isArray(ad.assignments) &&
-            ad.assignments.length > 0
-          ) {
-            const assignments = ad.assignments
-              .filter(
-                (a) =>
-                  a &&
-                  typeof a.surface_id === "string" &&
-                  typeof a.role === "string" &&
-                  typeof a.slot === "string",
-              )
-              .map((a) => ({
-                surfaceId: a.surface_id,
-                role: a.role as SurfaceRole,
-                slot: a.slot,
-              }));
-            if (assignments.length > 0) {
-              try {
-                applyAdaptiveSpec(
-                  {
-                    template: ad.template as AdaptiveTemplate,
-                    assignments,
-                    proportion: (ad.proportion as Proportion) ?? null,
-                  },
-                  {
-                    // Authoritative server truth (R33): restore WITH the
-                    // snapshot constraint set in one shot through the choke,
-                    // never damped by inertia on an authoritative restore.
-                    overrides:
-                      ad.overrides && typeof ad.overrides === "object"
-                        ? ({ bySurface: ad.overrides } as OverrideSet)
-                        : EMPTY_OVERRIDES,
-                    userInitiated: true,
-                  },
-                );
-                // ADV-F4 (2026-08-09): a restored composition must latch the
-                // config-default guard too — without this, a later
-                // config_update could land the default over the restored desk.
-                layoutApplied = true;
-              } catch (error) {
-                // The choke's geometry pre-check records its own rejection;
-                // a throw from the constraint/resolve stages lands here.
-                recordLayoutRejection(
-                  "invalid_shape",
-                  "snapshot composition rejected",
-                  error,
-                );
-              }
-            }
-          }
+          // guarded) — see state/snapshotRestore.ts. Invalid compositions
+          // never crash the event path: the live desk is kept and the
+          // rejection is observable.
+          const restored = restoreAdaptiveFromSnapshot(
+            snap.adaptive,
+            applyAdaptiveSpec,
+            (error) =>
+              recordLayoutRejection(
+                "invalid_shape",
+                "snapshot composition rejected",
+                error,
+              ),
+          );
+          // ADV-F4 (2026-08-09): a restored composition must latch the
+          // config-default guard too — without this, a later config_update
+          // could land the default over the restored desk.
+          if (restored) layoutApplied = true;
           set(patch);
           return;
         }
-        case "youtube.search": {
-          set({
-            content: {
-              ...state.content,
-              youtube: {
-                query: event.query,
-                loading: false,
-                results: event.results,
-              },
-            },
-          });
-          return;
-        }
-        case "browser.navigate": {
-          const ev = event as BrowserNavigateEvent;
-          set({
-            content: {
-              ...state.content,
-              browser: {
-                url: ev.url,
-                title: ev.title,
-                canGoBack: ev.can_go_back,
-                canGoForward: ev.can_go_forward,
-                loading: ev.loading,
-              },
-            },
-          });
-          return;
-        }
-        case "document.load": {
-          set({
-            content: {
-              ...state.content,
-              document_editor: {
-                title: event.title,
-                kind: event.kind,
-                path: event.path,
-                url: event.url ?? null,
-                content: event.content,
-                chapters: event.chapters,
-              },
-            },
-          });
-          return;
-        }
+        case "youtube.search":
+        case "browser.navigate":
+        case "document.load":
         case "tasks.update": {
-          set({
-            content: {
-              ...state.content,
-              tasks: { todos: event.todos, reminders: event.reminders },
-            },
-          });
+          // GATE-5 (W0-SLICE): panel content events reduce through the ONE
+          // content registry — the store routes, the owning slice reduces.
+          const content = contentRegistry.applyEvent(state.content, event);
+          if (content !== state.content) set({ content });
           return;
         }
         case "media.state": {
-          const ev = event as MediaStateEvent;
           // GATE-3.5 (R24-R27 + W3-MEDIA): the authoritative server state
           // (agent tool / client action verdict) feeds the single
           // controller; the store's ONE subscription mirrors it.
-          mediaController.applyServerEvent(ev);
+          applyMediaServerEvent(event);
           return;
         }
         case "action_result": {
@@ -1199,17 +756,8 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // have applied the action optimistically; failed/unsupported
           // means that state is a lie — surface it so the user knows the
           // action did not take effect.
-          const ev = event as ActionResultEvent;
-          if (ev.status === "failed" || ev.status === "unsupported") {
-            set({
-              error: {
-                message: `Acción ${ev.action} ${ev.status}${
-                  ev.detail ? `: ${ev.detail}` : ""
-                }`,
-                recoverable: true,
-              },
-            });
-          }
+          const error = actionResultError(event);
+          if (error) set({ error });
           return;
         }
         case "tool_call":
@@ -1296,85 +844,29 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       dispatchCommand: (command) => {
         const state = get();
         switch (command.action) {
-          case "youtube.search": {
-            set({
-              content: {
-                ...state.content,
-                youtube: {
-                  query: command.query,
-                  loading: true,
-                  results: state.content.youtube?.results ?? [],
-                },
-              },
-            });
-            break;
-          }
-          case "youtube.play": {
-            // GATE-3.5 (W3-MEDIA): user pick -> the controller (optimistic;
-            // the server ack/verdict reconciles afterwards); the store's
-            // ONE subscription mirrors the result.
-            mediaController.userPlayYoutube(command.video_id, command.title);
-            break;
-          }
-          case "browser.navigate": {
-            const b = state.content.browser;
-            set({
-              content: {
-                ...state.content,
-                browser: {
-                  url: command.url,
-                  title: b?.title ?? "",
-                  canGoBack: b?.canGoBack ?? false,
-                  canGoForward: b?.canGoForward ?? false,
-                  loading: true,
-                },
-              },
-            });
-            break;
-          }
+          // GATE-5 (W0-SLICE): optimistic content commands reduce through
+          // the ONE content registry — the store routes, the slice owns
+          // the optimistic effect.
+          case "youtube.search":
+          case "browser.navigate":
           case "browser.back":
           case "browser.forward":
-          case "browser.refresh": {
-            const b = state.content.browser;
-            if (b) {
-              set({ content: { ...state.content, browser: { ...b, loading: true } } });
-            }
+          case "browser.refresh":
+          case "tasks.toggle":
+          case "document.save": {
+            const content = contentRegistry.applyCommand(state.content, command);
+            if (content !== state.content) set({ content });
             break;
           }
-          case "tasks.toggle": {
-            const tasks = state.content.tasks;
-            if (tasks) {
-              set({
-                content: {
-                  ...state.content,
-                  tasks: {
-                    ...tasks,
-                    todos: tasks.todos.map((t) =>
-                      t.id === command.task_id ? { ...t, done: !t.done } : t,
-                    ),
-                  },
-                },
-              });
-            }
-            break;
-          }
-          case "media.play_pause": {
-            // W3-MEDIA: optimistic toggle through the controller — the
-            // subscription mirrors only real changes (no track = no-op =
-            // no fake media surface created).
-            mediaController.userPlayPause();
-            break;
-          }
+          case "youtube.play":
+          case "media.play_pause":
           case "media.seek": {
-            // W3-MEDIA: optimistic seek through the controller — the
-            // subscription mirrors only real changes.
-            mediaController.userSeek(command.position_s);
+            // W3-MEDIA: optimistic user command through the controller —
+            // the subscription mirrors only real changes (no track = no-op
+            // = no fake media surface created).
+            applyMediaUserCommand(command);
             break;
           }
-          case "document.save":
-            // The editor already holds the local content; nothing to
-            // optimistically change here. The command carries the text.
-            break;
         }
         get().send({
           type: "ui_command",
@@ -1403,7 +895,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
        * state: what the iframe reports IS what the progress bar shows.
        */
       applyPlayerMediaEvent: (update) => {
-        mediaController.applyPlayerUpdate(update);
+        applyMediaPlayerUpdate(update);
       },
       applyAdaptiveSpec,
       applyLayoutIntent,
@@ -1438,28 +930,22 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       // rendered notification — additive local action, never sent.
       dismissNotification: (notificationId) => {
         set({
-          notifications: get().notifications.filter(
-            (n) => n.notificationId !== notificationId,
+          notifications: dismissNotification(
+            get().notifications,
+            notificationId,
           ),
         });
       },
     };
   });
 
-  // GATE-3.5 (W3-MEDIA): ONE media authority — content.media is DERIVED
-  // from the MediaController through this single subscription. The store
-  // is never a write-target for media events: every wire path above
-  // (server events, ui_commands, user commands, player callbacks,
-  // snapshot restore) only APPLIES controller output, and this
+  // GATE-3.5 (W3-MEDIA) / GATE-5 (W0-SLICE): ONE media authority —
+  // content.media is DERIVED from the MediaController through this single
+  // subscription (state/media.ts). The store is never a write-target for
+  // media events: every wire path only APPLIES controller output, and the
   // subscription mirrors the authoritative result. Emits that produce no
-  // real change (no-op toggles/seeks, redundant player time updates)
-  // leave the state object untouched — no re-render churn.
-  mediaController.subscribe(() => {
-    const media = mediaController.getState();
-    store.setState((s: AppState) =>
-      s.content.media === media ? s : { ...s, content: { ...s.content, media } },
-    );
-  });
+  // real change leave the state object untouched — no re-render churn.
+  subscribeMediaToStore(store);
 
   return store;
 }
