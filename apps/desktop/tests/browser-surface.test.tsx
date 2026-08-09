@@ -77,16 +77,32 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
     expect(html).toContain("Demo News");
   });
 
-  it("support: compact contextual representation — nav chrome, no address entry", () => {
+  it("support: compact contextual representation — viewport only, no toolbar", () => {
     seedBrowser();
     const html = renderAs("support");
     expect(html).toContain("browser-surface--support");
-    expect(html).toContain("browser-toolbar");
-    expect(html).toContain('aria-label="Atrás"');
-    expect(html).toContain('aria-label="Recargar"');
+    expect(html).not.toContain("browser-toolbar");
     expect(html).not.toContain("browser-address");
     expect(html).toContain("browser-viewport");
     expect(html).toContain(`src="${DEMO_URL}"`);
+  });
+
+  it("kills the dead nav controls: no back/forward/refresh buttons in any variant", () => {
+    // GATE-3.5 (W3-BROWSER): the toolbar buttons were permanently dead —
+    // the service hardcodes can_go_back=false and the cross-origin
+    // sandbox forbids driving the iframe's history from the parent.
+    // Regression: they must not render, and must not come back.
+    seedBrowser();
+    for (const role of ["primary", "companion", "support"] as const) {
+      const html = renderAs(role);
+      expect(html).not.toContain("browser-nav-btn");
+      expect(html).not.toContain('aria-label="Atrás"');
+      expect(html).not.toContain('aria-label="Adelante"');
+      expect(html).not.toContain('aria-label="Recargar"');
+    }
+    // Navigation lives in the address bar (browser.navigate) — it stays.
+    expect(renderAs("primary")).toContain("browser-address");
+    expect(renderAs("primary")).toContain('aria-label="Dirección web"');
   });
 
   it("no outer card and no permanent surface-name label", () => {
