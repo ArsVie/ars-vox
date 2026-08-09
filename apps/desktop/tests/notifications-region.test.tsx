@@ -14,6 +14,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { PersistentRegions } from "../src/components/PersistentRegions";
+import { TasksPanel } from "../src/components/TasksPanel";
+import { SurfaceRoleProvider } from "../src/roles/context";
 import { appStore, EMPTY_ADAPTIVE } from "../src/store";
 import type { StateSnapshotEvent } from "../src/contracts";
 
@@ -191,5 +193,98 @@ describe("notifications region (W2 single-publish + dismiss)", () => {
     appStore.getState().dismissNotification("n1");
 
     expect(appStore.getState().notifications).toHaveLength(0);
+  });
+});
+
+describe("reminder fire -> region AND tasks panel agree (GATE-5 W1-TASKS)", () => {
+  it("one fired reminder lands on both surfaces through the wire", () => {
+    // The scheduler publishes exactly TWO events per fire: the canonical
+    // `notification` (due_at carried) and one `tasks.update` (ADV-F2).
+    appStore.getState().applyEvent({
+      type: "notification",
+      notification_id: "n1",
+      kind: "reminder",
+      title: "Recordatorio",
+      text: "Tomar medicina",
+      due_at: ts(),
+      created_at: ts(),
+    });
+    appStore.getState().applyEvent({
+      type: "tasks.update",
+      todos: [],
+      reminders: [
+        {
+          id: "r1",
+          title: "Tomar medicina",
+          cadence: "none",
+          next_fire: ts(),
+        },
+      ],
+      created_at: ts(),
+    });
+
+    const html = renderToStaticMarkup(
+      <>
+        <PersistentRegions
+          surfaces={[{ surfaceId: "shell.notifications", kind: "notifications" }]}
+        />
+        <SurfaceRoleProvider
+          value={{
+            surfaceId: "tasks",
+            role: "primary",
+            requestedRole: "primary",
+            capabilities: ["primary", "companion", "support"],
+            degraded: false,
+          }}
+        >
+          <TasksPanel meta={{ title: "Tareas" }} />
+        </SurfaceRoleProvider>
+      </>,
+    );
+
+    // NotificationRegion shows the fired reminder...
+    expect(html).toContain("shell-notification");
+    expect(html).toContain("Tomar medicina");
+    expect(html).toContain('data-notification-kind="reminder"');
+    // ...and the TasksPanel lists the same reminder (todos + reminders).
+    expect(html).toContain("Recordatorios");
+    expect(html).toContain("reminder-row");
+  });
+
+  it("a fired one-shot leaves the panel list (tasks.update is authoritative)", () => {
+    // Snooze/dismiss emit tasks.update: the dismissed one-shot must
+    // disappear from the panel while the notification region clears
+    // through the dismiss affordance.
+    appStore.getState().applyEvent({
+      type: "notification",
+      notification_id: "n1",
+      kind: "reminder",
+      title: "Recordatorio",
+      text: "Tomar medicina",
+      due_at: ts(),
+      created_at: ts(),
+    });
+    appStore.getState().applyEvent({
+      type: "tasks.update",
+      todos: [],
+      reminders: [],
+      created_at: ts(),
+    });
+
+    const html = renderToStaticMarkup(
+      <SurfaceRoleProvider
+        value={{
+          surfaceId: "tasks",
+          role: "primary",
+          requestedRole: "primary",
+          capabilities: ["primary", "companion", "support"],
+          degraded: false,
+        }}
+      >
+        <TasksPanel meta={{ title: "Tareas" }} />
+      </SurfaceRoleProvider>,
+    );
+    expect(html).not.toContain("reminder-row");
+    expect(html).toContain("No hay tareas. Pídeme que anote una.");
   });
 });
