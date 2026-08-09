@@ -17,7 +17,7 @@
  */
 
 import { SurfaceRoleProvider } from "../roles/context";
-import { PersistentNotificationsPlaceholder } from "./PlaceholderSurface";
+import { NotificationRegion } from "./NotificationRegion";
 import { MediaDock } from "./MediaDock";
 
 export interface PersistentSurface {
@@ -48,7 +48,9 @@ export function PersistentRegions({
             <MediaDock panelId="media" />
           </SurfaceRoleProvider>
         ) : (
-          <PersistentNotificationsPlaceholder key={s.surfaceId} />
+          // GATE-3.5 (A6/R34): the notifications region renders the real
+          // store list (live events + snapshot restore), not a placeholder.
+          <NotificationRegion key={s.surfaceId} />
         ),
       )}
     </div>

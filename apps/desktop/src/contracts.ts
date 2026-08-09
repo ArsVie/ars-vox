@@ -383,11 +383,22 @@ export interface SnapshotNotification {
   due_at: string | null;
 }
 
+/** GATE-3.5 (A6/R33): adaptive composition carried by the snapshot — a
+ *  renderer reload reconstructs the workspace from this (template, role/
+ *  slot assignments, proportion) plus the user constraint set (overrides,
+ *  keyed by surfaceId — A4's OverrideSet is plain JSON). */
+export interface AdaptiveSnapshot {
+  template: string | null;
+  assignments: { surface_id: string; role: string; slot: string }[];
+  proportion: string | null;
+  overrides: Record<string, unknown>;
+}
+
 export interface StateSnapshotEvent {
   type: "state_snapshot";
   /** Current bus session sequence; every bus event carries one, so gaps
-   *  (QueueFull drops) are detectable. Snapshot-on-connect is the sync
-   *  mechanism for this gate (no resync message). */
+   *  (QueueFull drops) are detectable. The client resets its baseline to
+   *  this value and forces a reconnect when a later event skips a number. */
   sequence: number;
   voice_state: VoiceState;
   config: AppConfigWire;
@@ -401,8 +412,10 @@ export interface StateSnapshotEvent {
   content_keys: string[];
   /** Recent turns of the most recent session — restored on connect so a
    *  reload/reconnect does not blank the conversation (events are
-   *  per-connection, turns are persisted). */
+   *  per-connection, turns are persisted). Empty = authoritative clear. */
   history: { id: number; role: "user" | "assistant"; text: string; created_at: string }[];
+  /** Adaptive composition — reload/reconnect reconstructs the workspace. */
+  adaptive: AdaptiveSnapshot;
   created_at: string;
 }
 

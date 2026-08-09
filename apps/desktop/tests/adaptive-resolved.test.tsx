@@ -48,10 +48,12 @@ beforeEach(() => {
     () => appStore.getState();
   registerProductSurfaces();
   // Fresh adaptive + content + messages per test (shared singleton store).
+  // notifications reset too (A6/R34: rendered list is per-test state).
   appStore.setState({
     adaptive: EMPTY_ADAPTIVE,
     content: {},
     messages: [],
+    notifications: [],
     panelMeta: {},
   });
 });

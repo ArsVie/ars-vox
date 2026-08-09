@@ -220,6 +220,33 @@ class PendingConfirmationSnapshot(BaseModel):
     expires_at: str
 
 
+class AdaptiveAssignmentSnapshot(BaseModel):
+    """One surface placed in one role at one semantic slot (mirror of the
+    frozen adaptive LayoutAssignment; snake_case on the wire)."""
+
+    surface_id: str
+    role: str
+    slot: str
+
+
+class AdaptiveSnapshot(BaseModel):
+    """GATE-3.5 (A6/R33): adaptive composition reconstructed on reconnect.
+
+    Carries the last adaptive composition the SERVICE knows (template,
+    role/slot assignments, proportion) plus the user constraint set
+    (overrides) when one is reported. A renderer reload re-applies this
+    through the same adaptive choke the live events use, so the workspace
+    survives a reload — not just a socket reconnect. Empty means no
+    composition (fresh desk)."""
+
+    template: str | None = None
+    assignments: list[AdaptiveAssignmentSnapshot] = Field(default_factory=list)
+    proportion: str | None = None
+    #: User layout constraints keyed by surfaceId (A4's OverrideSet is
+    #: plain JSON-serializable; the server echoes whatever it receives).
+    overrides: dict[str, Any] = Field(default_factory=dict)
+
+
 class StateSnapshotEvent(BaseModel):
     type: Literal[EventType.STATE_SNAPSHOT] = EventType.STATE_SNAPSHOT
     sequence: int
@@ -238,6 +265,10 @@ class StateSnapshotEvent(BaseModel):
     # Restored on connect so a page reload / reconnect does not blank the
     # chat — events are per-connection, but turns are persisted (H5 gap).
     history: list[dict[str, Any]] = Field(default_factory=list)
+    # GATE-3.5 (A6/R33): the adaptive composition (template / roles /
+    # proportion / user constraints) so a renderer reload reconstructs
+    # the workspace.
+    adaptive: AdaptiveSnapshot = Field(default_factory=AdaptiveSnapshot)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

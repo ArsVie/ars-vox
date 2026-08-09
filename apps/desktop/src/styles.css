@@ -1165,6 +1165,47 @@ body,
   white-space: nowrap;
 }
 
+/* GATE-3.5 (A6/R34): notifications region — real rendered list. */
+.shell-notification-region {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.shell-notification {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.shell-notification-kind {
+  flex: none;
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.shell-notification-title {
+  font-weight: 600;
+  color: var(--text);
+  flex: none;
+}
+
+.shell-notification-text {
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------------------------------------------------- demo select (top bar) */
 .status-demo {
   display: inline-flex;

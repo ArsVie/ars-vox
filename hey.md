@@ -9,27 +9,11 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
-### hermes-g35-a9 (Wave 1 — consumer UI + accessibility cleanup, R43)
-- timestamp: 2026-08-09T02:51:00Z
-- task: R43 visual cleanup ONLY — remove PLANTILLA demo selector from production UI (dev-flag gate, screenshot workflow preserved), remove redundant "agente conectado" indicator (one status indicator), drop CONVERSACIÓN header label when conversation is primary, audit suggestion chips (remove "Lee mis correos" — email not implemented), no raw `tool:` names in confirmation UI, Spanish a11y labels, role="status" moved off interactive controls (pill only), one canonical status vocabulary.
-- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a9-visual (branch wip/g35-a9-visual, base df48da6)
-- files/dirs: apps/desktop/src/components/{StatusBar,ConversationPanel,ConfirmationPanel,PanelHeader}.tsx + styles.css + tests/ (a11y, conversation-surface, surfaces-wiring, panelhost)
-- status: ACTIVE
-
-### hermes-g35-a1 (Wave 1 A1 — voice lifecycle + STOP authority, GATE-3.5)
-- timestamp: 2026-08-08T21:10:00Z
-- task: R01-R08 (TTS started/finished/cancelled acks on the wire, LISTENING only after physical playback ends, silence timer anchored to speech end, one STOP primitive, generation guards). Owns: voice/session state machine, TTS lifecycle events, STOP cancellation path, renderer TTS cancellation, silence timer. Forbidden: confirmation redesign (A7).
-- files/dirs: packages/contracts/arsvox_contracts/{client_messages,__init__}.py + schemas/client-messages.schema.json, services/voice/arsvox_voice/pipeline.py, services/agent/arsvox_agent/{runtime,ws}.py, apps/desktop/src/{contracts.ts,store.ts,components/TtsPlayer.tsx,components/StatusBar.tsx}, tests/python/test_voice_tts_lifecycle.py (new), apps/desktop/tests/tts-player-acks.test.tsx (new), hey.md
-- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a1-voice, branch wip/g35-a1-voice
-- status: resolved (merged to main 2026-08-09, gate merge 2/9)
-
-### g35-a7 (Wave 1 — confirmation semantics + client action contract, 2026-08-08)
-- timestamp: 2026-08-08T21:00:00Z
-- task: A7 — R35-R39 + C1. Spoken confirm/reject vocabulary wired to the frozen pending action; R36 conservative ignore outside confirmation mode; R38 STOP cancels an EXECUTING approved action (cancellation tokens + per-tool point of no return, telegram.send_pending first); R39/C1 ClientAction narrowed to the human-initiated set with authoritative-handler enumeration guard. Files: services/agent/arsvox_agent/{confirmations,runtime,local_intents,ws,actions}.py, tools/{__init__,context,telegram_tools}.py, packages/contracts/arsvox_contracts/client_messages.py, packages/contracts/fixtures/client_actions.json, apps/desktop/src/{contracts.ts,store.ts}, apps/desktop/tests/client-actions.test.ts, tests/python/*.
-- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a7-confirm (branch wip/g35-a7-confirm)
-- boundaries: will NOT touch the STOP voice paths (A1), confirmation popup visuals (A9), or widen the confirmation gate surface (telegram.prepare_message stays the only USER_VISIBLE tool).
-- status: resolved (merged to main 2026-08-09, gate merge 1/9)
-
+### hermes-g35-a6 (GATE-3.5 Wave 1 — snapshot/reconnect authority, R28-R34)
+- timestamp: 2026-08-08T00:00:00Z
+- task: A6 snapshot + reconnect + event-sequence authority — SnapshotTracker continuous (R28), client sequence-gap resync (R29), authoritative null/empty clears (R30/R31), pipeline-derived voice (R32), adaptive composition in snapshot (R33), notifications render after restore (R34). Files: services/agent/arsvox_agent/{snapshot,events}.py, packages/contracts/arsvox_contracts/events.py, apps/desktop/src/{store,contracts,App,main}.ts(x), apps/desktop/src/ws/client.ts, apps/desktop/src/components/PersistentRegions.tsx, tests.
+- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a6-snapshot (branch wip/g35-a6-snapshot)
+- status: IN PROGRESS
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
