@@ -18,7 +18,7 @@ import type {
   VoiceState,
   WirePanelId,
 } from "../src/contracts";
-import { KNOWN_PANELS } from "../src/layout/engine";
+import { KNOWN_PANELS } from "../src/contracts";
 
 const SCHEMA_PATH = new URL(
   "../../../packages/contracts/schemas/ui-commands.schema.json",
@@ -148,14 +148,21 @@ describe("wire enum parity with the Python schemas", () => {
     // Clean-state guard: the wire must never grow the deprecated news
     // panel back (panel-vision: the browser covers news).
     expect(schemaPanels).not.toContain("news");
-    // Every known/overlay panel is on the wire. KNOWN_PANELS still
-    // carries the legacy "news" entry in engine.ts.
-    // TODO(g35r-pycontract, engine.ts removed in Wave 2): drop the news
-    // carve-out — KNOWN_PANELS then equals the wire exactly.
-    const knownAndOverlays = [...KNOWN_PANELS, ...OVERLAY_PANELS];
-    for (const panel of knownAndOverlays) {
-      if (panel === "news") continue;
-      expect(schemaPanels).toContain(panel);
-    }
+    // EXACT two-way parity: the wire is the frozen set of known layout
+    // panels plus the two overlay panels (confirmation/notification).
+    // TODO(g35r-pycontract): KNOWN_PANELS (homed in contracts.ts since
+    // W2-STORE) still carries the deprecated "news" entry verbatim from
+    // the deleted engine.ts. That entry is out of this gate's lane
+    // (src/contracts.ts is frozen here) — once the pycontract lane drops
+    // it, the filter goes away and the sets must match exactly:
+    //   expect(new Set(schemaPanels)).toEqual(
+    //     new Set([...KNOWN_PANELS, ...OVERLAY_PANELS]),
+    //   );
+    expect(new Set(schemaPanels)).toEqual(
+      new Set([
+        ...KNOWN_PANELS.filter((panel) => panel !== "news"),
+        ...OVERLAY_PANELS,
+      ]),
+    );
   });
 });
