@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 
-import type { SurfaceRole } from "../adaptive/contracts";
 import type { PanelId } from "../layout/engine";
 import type { PanelMeta } from "../store";
 import { appStore } from "../store";
@@ -25,31 +24,23 @@ const SUPPORT_EXCHANGE = 2;
  * UI-202 — conversation adaptive surface.
  *
  * The role host (UI-103 SurfaceHost) hands the surface its semantic role
- * through useSurfaceRole(); the legacy PanelHost path (no provider) renders
- * the default primary full conversation. Role changes never remount the
- * component (the host keys by surfaceId), so draft + history survive
- * primary -> companion -> primary. Messages always come from the store —
- * variants only change the render window, never the state.
+ * through useSurfaceRole() — the adaptive mount is the ONLY mount. Role
+ * changes never remount the component (the host keys by surfaceId), so
+ * draft + history survive primary -> companion -> primary. Messages always
+ * come from the store — variants only change the render window, never the
+ * state.
  *
  * Shell-level assistant state (listening/thinking/stopped, connection,
  * activity, STOP) lives in the shell top bar / StatusBar and is NOT
  * repeated here in any variant.
  */
-function useVariantRole(): SurfaceRole {
-  try {
-    return useSurfaceRole().role;
-  } catch {
-    // No SurfaceRoleProvider ancestor: legacy PanelHost mount.
-    return "primary";
-  }
-}
 
 export function ConversationPanel({ meta, panelId }: { meta?: PanelMeta; panelId: PanelId }) {
   const messages = useStore(appStore, (s) => s.messages);
   const sendText = useStore(appStore, (s) => s.sendText);
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
-  const role = useVariantRole();
+  const role = useSurfaceRole().role;
 
   // Keep the newest message in view (follow streaming agent replies).
   useEffect(() => {

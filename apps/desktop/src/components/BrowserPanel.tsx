@@ -1,26 +1,12 @@
 import { useStore } from "zustand";
 import { useState } from "react";
 
-import type { SurfaceRole } from "../adaptive/contracts";
 import { useSurfaceRole } from "../roles/context";
 import { appStore } from "../store";
 import { PanelHeader } from "./PanelHeader";
 import { ChevronLeftIcon, ChevronRightIcon, GlobeIcon, ReloadIcon, SearchIcon } from "./icons";
 
 const START_URL = "about:blank";
-
-/**
- * Read the semantic surface role (UI-103) when mounted through
- * SurfaceHost. Legacy PanelHost mounts have no role provider and render
- * the full primary experience — the pre-adaptive default.
- */
-function useSurfaceRoleOrDefault(): SurfaceRole {
-  try {
-    return useSurfaceRole().role;
-  } catch {
-    return "primary";
-  }
-}
 
 /**
  * Integrated browser panel — the agent drives it (browser.navigate events
@@ -43,7 +29,7 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
   const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
   const [draft, setDraft] = useState("");
 
-  const role = useSurfaceRoleOrDefault();
+  const role = useSurfaceRole().role;
 
   const url = browser?.url ?? "";
   const loading = browser?.loading ?? false;
