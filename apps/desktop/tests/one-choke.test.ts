@@ -243,10 +243,13 @@ describe("R22 — the legacy layout authority is retired (non-authoritative)", (
       created_at: ts(),
     });
     store.getState().toggleFullscreen("conversation");
-    // the fullscreen constraint keeps focus pinned on conversation
+    // every manual command landed in adaptive state — the fullscreen
+    // toggle round-trips back to the pre-fullscreen split composition
+    // (document_editor stays closed via its remove constraint). R19 pins
+    // each command's exact outcome; this test pins the single-writer rule.
     const spec = store.getState().adaptive.spec!;
-    expect(spec.template).toBe("focus");
-    expect(spec.assignments.map((a) => a.surfaceId)).toEqual(["conversation"]);
+    expect(spec.template).toBe("split");
+    expect(spec.assignments.map((a) => a.surfaceId)).toContain("conversation");
     expect(store.getState()).not.toHaveProperty("layout");
     expect(store.getState()).not.toHaveProperty("spec");
   });
