@@ -20,7 +20,7 @@
  *    "persistent". Only surfaces registered persistentCapable are honored —
  *    anything else in the `persistent` list is skipped deterministically.
  *  - A surfaceId without a component renders a neutral unmapped marker
- *    (no crash, matching the legacy PanelHost no-crash contract).
+ *    (no crash).
  */
 
 import type { ComponentType } from "react";

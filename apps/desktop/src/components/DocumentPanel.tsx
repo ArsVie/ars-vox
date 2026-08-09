@@ -1,29 +1,20 @@
 import { useStore } from "zustand";
 import { useMemo, useState } from "react";
 
-import type { SurfaceRole } from "../adaptive/contracts";
 import type { PanelId } from "../layout/engine";
 import type { PanelMeta } from "../store";
 import type { ReaderLocation } from "../readers/reader";
 import { appStore } from "../store";
-import { useSurfaceRole, type SurfaceRoleInfo } from "../roles/context";
+import { useSurfaceRole } from "../roles/context";
 import { PanelHeader } from "./PanelHeader";
 import { ReaderView } from "./ReaderView";
 import { DocumentIcon, PenIcon } from "./icons";
 
 /**
  * UI-203: the reading surface adapts to its semantic role. The role host
- * (SurfaceHost) provides useSurfaceRole(); the legacy PanelHost path has
- * no provider, so fall back to "primary" (the current full reading
- * experience) — never crash outside the adaptive shell.
+ * (SurfaceHost) provides useSurfaceRole() — the adaptive mount is the ONLY
+ * mount; every DocumentPanel instance renders inside a SurfaceRoleProvider.
  */
-function useSurfaceRoleSafe(): SurfaceRoleInfo | null {
-  try {
-    return useSurfaceRole();
-  } catch {
-    return null;
-  }
-}
 
 const KIND_LABEL: Record<string, string> = {
   txt: "Texto",
@@ -89,8 +80,7 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
   const [mode, setMode] = useState<"read" | "edit">("read");
   const [draft, setDraft] = useState("");
 
-  const roleInfo = useSurfaceRoleSafe();
-  const role: SurfaceRole = roleInfo?.role ?? "primary";
+  const { role } = useSurfaceRole();
 
   const content = doc?.content ?? "";
   const chapters = doc?.chapters ?? [];
