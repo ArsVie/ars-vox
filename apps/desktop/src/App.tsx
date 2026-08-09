@@ -74,8 +74,12 @@ export default function App() {
     (media.title !== "" || media.videoId !== null || media.url !== null)
   );
   const mediaInLayout = adaptiveAssignments.some((a) => a.surfaceId === "media");
-  const hasNotificationContent = useStore(appStore, (s) =>
-    s.messages.some((m) => m.role === "system"),
+  // GATE-3.5 (A6/R34): the notifications region shows while there is
+  // something real to render — restored/live notifications (not merely a
+  // system message in the chat).
+  const hasNotificationContent = useStore(
+    appStore,
+    (s) => s.notifications.length > 0,
   );
 
   const resolvedSpec = useMemo(

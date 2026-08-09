@@ -37,13 +37,19 @@ import {
 } from "./layout/engine";
 import { surfaceRegistry } from "./roles/registry";
 import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
-import type { LayoutSpec as AdaptiveLayoutSpec } from "./adaptive/contracts";
+import type {
+  AdaptiveTemplate,
+  LayoutSpec as AdaptiveLayoutSpec,
+  Proportion,
+  SurfaceRole,
+} from "./adaptive/contracts";
 import {
   applyOverrides,
   EMPTY_OVERRIDES,
   mergeOverrideIntent,
   type OverrideIntent,
   type OverrideSet,
+  type SurfaceConstraint,
 } from "./adaptive/overrides";
 import { scoreChange } from "./layout/inertia";
 import {
@@ -188,6 +194,19 @@ export const EMPTY_MEDIA: MediaContent = {
   volume: 1,
 };
 
+/**
+ * GATE-3.5 (A6/R34): a rendered notification. Populated by live
+ * `notification` events AND restored from the reconnect snapshot
+ * (authoritative — an empty snapshot list clears it, R31).
+ */
+export interface NotificationItem {
+  notificationId: string;
+  kind: string;
+  title: string;
+  text: string;
+  dueAt: string | null;
+}
+
 export type SendFn = (message: unknown) => void;
 
 export interface AppState {
@@ -216,6 +235,9 @@ export interface AppState {
   speakTexts: string[];
   /** Panel content state, keyed by panel id (see PanelContent). */
   content: PanelContent;
+  /** GATE-3.5 (A6/R34): notifications to render (live events + snapshot
+   *  restore; the snapshot list is authoritative). */
+  notifications: NotificationItem[];
   /** UI-103: validated adaptive LayoutSpec + role-resolved assignments. */
   adaptive: AdaptiveState;
   /** Per-surface state bag keyed by surfaceId (UI-103). The role framework
@@ -389,11 +411,33 @@ function slotsEqual(
  *  can register its rebind hook. */
 let rebindRawSend: (send: SendFn) => void = () => {};
 
+/**
+ * GATE-3.5 (A6/R29): resync trigger. When the client detects a sequence
+ * gap (a skipped bus number — the server dropped events for a slow
+ * subscriber), it forces a reconnect; the fresh state_snapshot is the
+ * resync. Bound from main.tsx to WsClient.forceReconnect; tests bind
+ * their own observer. No-op until bound.
+ */
+let resyncHook: (() => void) | null = null;
+export function bindResync(fn: () => void): void {
+  resyncHook = fn;
+}
+
+/** GATE-3.5 (A6/R34): cap for the in-memory notification list. */
+const NOTIFICATIONS_CAP = 20;
+
 export function createAppStore(send: SendFn): StoreApi<AppState> {
   const store = createStore<AppState>((set, get) => {
     /** True once any server layout command has been applied; guards the
      *  config-driven default from clobbering later user state on reconnect. */
     let layoutApplied = false;
+    // GATE-3.5 (A6/R29): bus-sequence authority. lastSeq is the highest
+    // sequence seen (reset by every state_snapshot — the snapshot is the
+    // sync point and the only thing that can reset a lower sequence after
+    // a service restart). resyncRequested throttles the reconnect trigger
+    // to once per gap episode (cleared by the next snapshot).
+    let lastSeq: number | null = null;
+    let resyncRequested = false;
     // H5 reconnect: outbound buffering. The raw transport send is rebound
     // by bindTransport (the singleton); per-store instances keep the send
     // passed to createAppStore. While the store is in a known-disconnected
@@ -453,6 +497,18 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       const cap = state.ttsQueueMax > 0 ? state.ttsQueueMax : 10;
       if (speakTexts.length > cap) speakTexts.shift();
       set({ speakTexts });
+    };
+
+    /** GATE-3.5 (A6/R34): append a rendered notification (dedupe by id,
+     *  capped). Live events and snapshot restores share this path. */
+    const pushNotification = (item: NotificationItem): void => {
+      const state = get();
+      const notifications = [
+        ...state.notifications.filter((n) => n.notificationId !== item.notificationId),
+        item,
+      ];
+      while (notifications.length > NOTIFICATIONS_CAP) notifications.shift();
+      set({ notifications });
     };
 
     /**
@@ -706,6 +762,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "notification.show": {
+          // GATE-3.5 (A6/R34): the command path (scheduler emits both the
+          // `notification` event and this command) feeds the same rendered
+          // list as the event path.
+          pushNotification({
+            notificationId: command.notification_id,
+            kind: command.kind,
+            title: command.title,
+            text: command.text,
+            dueAt: null,
+          });
           set({
             messages: [
               ...state.messages,
@@ -738,6 +804,27 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
     };
 
     const applyEvent = (event: ServerEvent): void => {
+      // GATE-3.5 (A6/R29): sequence authority. The snapshot is the sync
+      // point: events older than it (pre-snapshot bus leftovers) are stale
+      // and DROPPED — the snapshot already reflects that state. A skipped
+      // number means the server dropped events (slow-subscriber QueueFull)
+      // and the client forces a reconnect, whose fresh snapshot is the
+      // resync. Events without a sequence (direct sends, tests) pass
+      // through untouched.
+      if (event.type === "state_snapshot") {
+        lastSeq = event.sequence;
+        resyncRequested = false;
+      } else if (typeof (event as unknown as { sequence?: unknown }).sequence === "number") {
+        const seq = (event as unknown as { sequence: number }).sequence;
+        if (lastSeq !== null) {
+          if (seq <= lastSeq) return; // stale pre-snapshot event
+          if (seq > lastSeq + 1 && !resyncRequested) {
+            resyncRequested = true;
+            resyncHook?.();
+          }
+        }
+        lastSeq = seq;
+      }
       const state = get();
       switch (event.type) {
         case "state_update":
@@ -795,6 +882,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           set({ error: { message: event.message, recoverable: event.recoverable } });
           return;
         case "notification":
+          // GATE-3.5 (A6/R34): notifications are real UI state now — the
+          // persistent region renders them, and the chat keeps its system
+          // line for the conversation log.
+          pushNotification({
+            notificationId: event.notification_id,
+            kind: event.kind,
+            title: event.title,
+            text: event.text,
+            dueAt: event.due_at,
+          });
           set({
             messages: [
               ...state.messages,
@@ -810,12 +907,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           applyConfig(event.config);
           return;
         case "state_snapshot": {
-          // H5 reconnect: apply the canonical snapshot sent once per WS
-          // connect. Authoritative server state — pending card and voice
-          // are REPLACED. Panels are NOT restored: a fresh page load must
-          // start at the central-mic hero (user directive, 2026-08-08),
-          // and a same-tab reconnect keeps its in-memory desk (like media:
-          // the agent's own commands re-populate the desk on demand).
+          // H5 reconnect + GATE-3.5 A6: apply the canonical snapshot sent
+          // once per WS connect. Authoritative server state — voice,
+          // pending, media, history, notifications and the adaptive
+          // composition are REPLACED (null/empty = absence, R30/R31).
+          // Panels are NOT restored: a fresh page load must start at the
+          // central-mic hero (user directive, 2026-08-08), and a same-tab
+          // reconnect keeps its in-memory desk.
           const snap = event as StateSnapshotEvent;
           const patch: Partial<AppState> = {
             voiceState: snap.voice_state,
@@ -828,32 +926,99 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                   expiresInS: snap.pending_confirmation.expires_in_s,
                 }
               : null,
-          };
-          if (snap.media) {
-            patch.content = {
+            // R30: media=null is authoritative absence — the stale player
+            // is CLEARED, never preserved.
+            content: {
               ...state.content,
-              media: {
-                state: snap.media.state,
-                source: snap.media.source,
-                kind: snap.media.kind,
-                title: snap.media.title,
-                videoId: snap.media.video_id,
-                url: snap.media.url,
-                positionS: snap.media.position_s,
-                durationS: snap.media.duration_s,
-                volume: snap.media.volume,
-              },
-            };
-          }
-          if (snap.history && snap.history.length > 0) {
-            // Server truth for the conversation: a reload/reconnect must
-            // not blank the chat (events are per-connection, turns are
-            // persisted). Replace — the snapshot is authoritative.
-            patch.messages = snap.history.map((h) => ({
+              media: snap.media
+                ? {
+                    state: snap.media.state,
+                    source: snap.media.source,
+                    kind: snap.media.kind,
+                    title: snap.media.title,
+                    videoId: snap.media.video_id,
+                    url: snap.media.url,
+                    positionS: snap.media.position_s,
+                    durationS: snap.media.duration_s,
+                    volume: snap.media.volume,
+                  }
+                : EMPTY_MEDIA,
+            },
+            // R31/R34: history and notifications are authoritative —
+            // empty lists CLEAR stale chat/notification state.
+            messages: snap.history.map((h) => ({
               id: `h${h.id}`,
               role: h.role,
               text: h.text,
-            }));
+            })),
+            notifications: snap.notifications.map((n) => ({
+              notificationId: n.notification_id,
+              kind: n.kind,
+              title: n.title,
+              text: n.text,
+              dueAt: n.due_at ?? null,
+            })),
+          };
+          // R33: reconstruct the adaptive workspace through the SAME choke
+          // live agent compositions use (registry-validated, inertia
+          // guarded). Invalid compositions never crash the event path —
+          // the live desk is kept and the rejection is observable.
+          const ad = snap.adaptive;
+          if (
+            ad &&
+            typeof ad.template === "string" &&
+            ad.template &&
+            Array.isArray(ad.assignments) &&
+            ad.assignments.length > 0
+          ) {
+            const assignments = ad.assignments
+              .filter(
+                (a) =>
+                  a &&
+                  typeof a.surface_id === "string" &&
+                  typeof a.role === "string" &&
+                  typeof a.slot === "string",
+              )
+              .map((a) => ({
+                surfaceId: a.surface_id,
+                role: a.role as SurfaceRole,
+                slot: a.slot,
+              }));
+            if (assignments.length > 0) {
+              try {
+                applyAdaptiveSpec(
+                  {
+                    template: ad.template as AdaptiveTemplate,
+                    assignments,
+                    proportion: (ad.proportion as Proportion) ?? null,
+                  },
+                  { userInitiated: false },
+                );
+              } catch {
+                // never crash the event path on an invalid composition
+              }
+            }
+          }
+          // Snapshot overrides are authoritative when present (same-tab
+          // reconnect keeps its live constraints; a reload restores them).
+          if (
+            ad &&
+            ad.overrides &&
+            typeof ad.overrides === "object" &&
+            Object.keys(ad.overrides).length > 0
+          ) {
+            const bySurface: Record<string, SurfaceConstraint> = {};
+            for (const [k, v] of Object.entries(ad.overrides)) {
+              if (v && typeof v === "object") bySurface[k] = v as SurfaceConstraint;
+            }
+            if (Object.keys(bySurface).length > 0) {
+              set({
+                adaptive: {
+                  ...get().adaptive,
+                  overrides: { bySurface },
+                },
+              });
+            }
           }
           set(patch);
           recompute();
@@ -977,6 +1142,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       viewport: DEFAULT_VIEWPORT,
       speakTexts: [],
       content: {},
+      notifications: [],
       adaptive: EMPTY_ADAPTIVE,
       surfaceState: {},
 

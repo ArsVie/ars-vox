@@ -86,6 +86,34 @@ export class WsClient {
     };
   }
 
+  /**
+   * GATE-3.5 (A6/R29): force a resync by reconnecting NOW — the server
+   * sends a fresh state_snapshot on every connect, which is the sync
+   * mechanism. Bypasses the backoff timer; safe to call repeatedly (no-op
+   * when already reconnecting / user-closed). Called by the store when a
+   * bus sequence gap is detected.
+   */
+  forceReconnect(): void {
+    if (this.closedByUser) return;
+    if (this.timer !== null) {
+      window.clearTimeout(this.timer);
+      this.timer = null;
+    }
+    const current = this.ws;
+    if (current) {
+      // Closing fires onclose, which would schedule a backoff reconnect —
+      // suppress it (the immediate reopen below replaces it).
+      current.onclose = null;
+      try {
+        current.close();
+      } catch {
+        // already closing/closed — fine
+      }
+    }
+    this.ws = null;
+    this.open();
+  }
+
   private scheduleReconnect(): void {
     if (this.closedByUser || this.timer !== null) return;
     this.timer = window.setTimeout(() => {
