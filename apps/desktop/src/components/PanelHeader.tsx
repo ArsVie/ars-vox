@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useStore } from "zustand";
 
-import type { PanelId } from "../layout/engine";
+import type { PanelId } from "../contracts";
 import { appStore } from "../store";
 import { MaximizeIcon, RestoreIcon } from "./icons";
 
@@ -9,6 +9,10 @@ import { MaximizeIcon, RestoreIcon } from "./icons";
  * Panel titlebar: icon + label on the left, optional chrome actions on
  * the right (currently: maximize/restore, driven by the local
  * toggleFullscreen action — never sent to the server).
+ *
+ * GATE-3.5 (W2-STORE carve-out): the fullscreen icon state derives from
+ * the adaptive fullscreen constraint (adaptive.overrides — the choke's
+ * authoritative state). The legacy fullscreenPanel mirror is deleted.
  */
 export function PanelHeader({
   panelId,
@@ -19,9 +23,9 @@ export function PanelHeader({
   icon: ReactNode;
   children: ReactNode;
 }) {
-  const fullscreenPanel = useStore(appStore, (s) => s.fullscreenPanel);
+  const overrides = useStore(appStore, (s) => s.adaptive.overrides);
   const toggleFullscreen = useStore(appStore, (s) => s.toggleFullscreen);
-  const fullscreen = fullscreenPanel === panelId;
+  const fullscreen = overrides.bySurface[panelId]?.fullscreen === true;
 
   return (
     <header className="panel-header">
