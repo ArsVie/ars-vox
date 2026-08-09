@@ -113,6 +113,11 @@ async def media_seek(tctx: ToolContext, seconds: int) -> str:
     # R25: real seek — the controller moves the position and emits the
     # actual target in the MediaStateEvent (no fake "Posición cambiada"
     # without a position). The renderer drives the iframe from it.
+    if not media_controller.has_track():
+        # Nothing loaded: nothing moved. Say so plainly — never claim a
+        # position change for a seek that could not apply (R25 no-fake-
+        # success contract).
+        return "No hay medios cargados para cambiar la posición."
     await media_controller.seek(tctx.bus, max(0, int(seconds)))
     return f"Posición cambiada a {media_controller.position_s} segundos."
 

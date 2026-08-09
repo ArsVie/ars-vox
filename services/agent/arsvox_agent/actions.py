@@ -385,8 +385,11 @@ async def _media_action(
     # media.seek
     position = max(0, command.position_s)  # type: ignore[attr-defined]
     if not media_controller.has_track():
+        # R25: seek with nothing loaded must NOT read as a success — the
+        # UI must not believe a position change happened. "failed" =
+        # understood but could not be applied (module docstring).
         return ActionResultEvent(
-            action="media.seek", status="done", detail="no media loaded"
+            action="media.seek", status="failed", detail="no media loaded"
         )
     await media_controller.seek(deps.bus, position)
     return ActionResultEvent(

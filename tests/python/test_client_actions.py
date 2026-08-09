@@ -425,7 +425,10 @@ def test_media_play_pause_seek_have_authoritative_handlers(client):
             client=client, ws=ws,
             expected_break=lambda e: e["type"] == "action_result",
         )
-        assert _result(events, "media.seek")["status"] == "done"
+        # R25: seek with nothing loaded must NOT read as a success — the
+        # UI must not believe a position change happened. The verdict is
+        # an honest "failed" (understood but could not be applied).
+        assert _result(events, "media.seek")["status"] == "failed"
     reset_media_state()
 
 
