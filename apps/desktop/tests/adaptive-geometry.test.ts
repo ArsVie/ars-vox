@@ -463,23 +463,16 @@ describe("W0 viewport ownership — adaptive geometry follows the shell (regress
     appStore.setState({ adaptive: EMPTY_ADAPTIVE });
   });
 
-  it("the viewport writer lives in the app shell, not PanelHost", () => {
+  it("the viewport writer lives in the app shell", () => {
     const appSource = readFileSync(
       new URL("../src/App.tsx", import.meta.url),
       "utf8",
     );
-    const panelHostSource = readFileSync(
-      new URL("../src/components/PanelHost.tsx", import.meta.url),
-      "utf8",
-    );
-    // The adaptive path mounts AdaptiveStage and UNMOUNTS PanelHost the
-    // moment a composition lands (App.tsx branch). A setViewport writer
-    // inside PanelHost therefore freezes the viewport at boot size and
-    // geometry stops following window resizes. The shell must own it.
+    // W2-STORE deleted PanelHost outright (its half of this regression
+    // pin is moot); the shell must own the viewport writer so geometry
+    // follows window resizes — App.tsx is the only place it may live.
     expect(appSource).toContain("ResizeObserver");
     expect(appSource).toContain("setViewport");
-    expect(panelHostSource).not.toContain("ResizeObserver");
-    expect(panelHostSource).not.toContain("setViewport");
   });
 
   it("resizing in the adaptive path changes geometry", () => {

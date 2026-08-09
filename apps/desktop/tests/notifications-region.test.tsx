@@ -171,37 +171,25 @@ describe("notifications region (W2 single-publish + dismiss)", () => {
     expect(html).toContain('aria-label="Descartar Alarma"');
   });
 
-  // TODO(g35r-reminders, store-dismiss): W2-STORE adds dismissNotification(id)
-  // to store.ts; the NotificationRegion seam calls it. Expected-fail until
-  // then — when the action lands this test passes and the marker goes away.
-  it.fails(
-    "dismiss button seam removes the notification from the renderer store",
-    () => {
-      appStore.getState().applyEvent(
-        snapshot({
-          notifications: [
-            {
-              notification_id: "n1",
-              kind: "reminder",
-              title: "Alarma",
-              text: "Reunión en 10 minutos",
-              due_at: ts(),
-            },
-          ],
-        }),
-      );
-      expect(appStore.getState().notifications).toHaveLength(1);
+  it("dismiss button seam removes the notification from the renderer store", () => {
+    appStore.getState().applyEvent(
+      snapshot({
+        notifications: [
+          {
+            notification_id: "n1",
+            kind: "reminder",
+            title: "Alarma",
+            text: "Reunión en 10 minutos",
+            due_at: ts(),
+          },
+        ],
+      }),
+    );
+    expect(appStore.getState().notifications).toHaveLength(1);
 
-      // the exact call the dismiss button makes (NotificationRegion seam)
-      const dismiss = (
-        appStore.getState() as unknown as {
-          dismissNotification?: (id: string) => void;
-        }
-      ).dismissNotification;
-      expect(typeof dismiss).toBe("function");
-      dismiss?.("n1");
+    // the exact call the dismiss button makes (NotificationRegion seam)
+    appStore.getState().dismissNotification("n1");
 
-      expect(appStore.getState().notifications).toHaveLength(0);
-    },
-  );
+    expect(appStore.getState().notifications).toHaveLength(0);
+  });
 });

@@ -54,7 +54,6 @@ beforeEach(() => {
     content: {},
     messages: [],
     notifications: [],
-    panelMeta: {},
   });
 });
 
