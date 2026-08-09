@@ -72,6 +72,7 @@ KNOWN_ACTIONS = [
     "layout.restore",
     "media.play_pause",
     "media.seek",
+    "media.select_result",
     "youtube.search",
     "youtube.play",
     "browser.navigate",

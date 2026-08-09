@@ -238,9 +238,78 @@ export interface MediaStateEvent {
   title: string;
   video_id: string | null;
   url: string | null;
+  /** GATE-5: local-source member for the unified player — the file the
+   *  renderer must play (local path / custom-protocol url). Absent/null
+   *  for youtube sources. Same controls/UI regardless of source. */
+  local_path?: string | null;
   position_s: number;
   duration_s: number;
   volume: number;
+  created_at: string;
+}
+
+/** GATE-5: one selectable result card in the UNIFIED media search
+ *  surface — youtube video or local library file, same card shape. */
+export interface MediaSearchResult {
+  id: string;
+  title: string;
+  source: MediaSource;
+  kind: MediaKind;
+  channel: string;
+  duration_s: number;
+  published: string;
+  thumbnail_url: string | null;
+  local_path: string | null;
+}
+
+/** media.search_results — real result cards the user picks by click
+ *  (media.select_result) or voice (agent play tools). Never a fixture
+ *  list pretending to be a search. */
+export interface MediaSearchResultsEvent {
+  type: "media.search_results";
+  query: string;
+  results: MediaSearchResult[];
+  created_at: string;
+}
+
+/** document.changed — an agent-side edit reached the stored document;
+ *  an open editor reconciles live (one document, one authority). Full
+ *  content: the editor replaces, it never guesses deltas. */
+export interface DocumentChangedEvent {
+  type: "document.changed";
+  document_id: number;
+  title: string;
+  path: string;
+  content: string;
+  created_at: string;
+}
+
+/** browser.dom_action — the agent drives the integrated browser:
+ *  set_value (search bar / form input), click, scroll, query (read page
+ *  state / text). Applied to the SAME view the user manipulates. */
+export interface BrowserDomActionEvent {
+  type: "browser.dom_action";
+  operation: "click" | "scroll" | "set_value" | "query";
+  target: string;
+  value: string | null;
+  result: string | null;
+  created_at: string;
+}
+
+export interface MemoryResult {
+  id: string;
+  kind: "note" | "conversation";
+  text: string;
+  created_at: string | null;
+  source: string;
+}
+
+/** memory.search_results — semantic/FTS recall over the authoritative
+ *  memory, distinct from the exact-key memory.recall. */
+export interface MemorySearchResultsEvent {
+  type: "memory.search_results";
+  query: string;
+  results: MemoryResult[];
   created_at: string;
 }
 
@@ -316,6 +385,15 @@ export type UiCommand =
     }
   | { action: "media.play_pause" }
   | { action: "media.seek"; position_s: number }
+  | {
+      action: "media.select_result";
+      result_id: string;
+      source: MediaSource;
+      kind: MediaKind;
+      title: string;
+      url?: string | null;
+      local_path?: string | null;
+    }
   | { action: "youtube.search"; query: string }
   | { action: "youtube.play"; video_id: string; title: string }
   | { action: "browser.navigate"; url: string }
@@ -324,6 +402,7 @@ export type UiCommand =
   | { action: "browser.refresh" }
   | { action: "document.save"; panel_type: string; content: string }
   | { action: "tasks.toggle"; task_id: string }
+  | { action: "memory.search"; query: string; limit?: number }
   | { action: "tts.speak"; text: string; priority?: boolean }
   | { action: "audio.play"; asset: string };
 
@@ -386,6 +465,7 @@ export type ClientCommand = Extract<
   | { action: "layout.restore" }
   | { action: "media.play_pause" }
   | { action: "media.seek" }
+  | { action: "media.select_result" }
   | { action: "youtube.search" }
   | { action: "youtube.play" }
   | { action: "browser.navigate" }
@@ -508,6 +588,18 @@ export interface AdaptiveSnapshot {
   overrides: Record<string, unknown>;
 }
 
+/** GATE-5: canonical browser state in the reconnect snapshot — REAL
+ *  can_go_back/can_go_forward so the UI never fabricates history
+ *  navigation after a reconnect. Null on the snapshot = the service has
+ *  no browser-state source yet (W2-VIEW owns the channel). */
+export interface BrowserSnapshot {
+  url: string;
+  title: string;
+  can_go_back: boolean;
+  can_go_forward: boolean;
+  loading: boolean;
+}
+
 export interface StateSnapshotEvent {
   type: "state_snapshot";
   /** Current bus session sequence; every bus event carries one, so gaps
@@ -530,6 +622,9 @@ export interface StateSnapshotEvent {
   history: { id: number; role: "user" | "assistant"; text: string; created_at: string }[];
   /** Adaptive composition — reload/reconnect reconstructs the workspace. */
   adaptive: AdaptiveSnapshot;
+  /** GATE-5: real browser back/forward state (absent/null = not known
+   *  yet; W2-VIEW feeds it once the browser-state channel exists). */
+  browser?: BrowserSnapshot | null;
   created_at: string;
 }
 
@@ -549,6 +644,10 @@ export type ServerEvent =
   | DocumentLoadEvent
   | TasksUpdateEvent
   | MediaStateEvent
+  | MediaSearchResultsEvent
+  | DocumentChangedEvent
+  | BrowserDomActionEvent
+  | MemorySearchResultsEvent
   | PongEvent
   | ActionResultEvent
   | StateSnapshotEvent;

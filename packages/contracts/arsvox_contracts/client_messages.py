@@ -17,6 +17,7 @@ from arsvox_contracts.commands import (
     LayoutApply,
     LayoutRestore,
     MediaPlayPause,
+    MediaSelectResult,
     MediaSeek,
     PanelClose,
     PanelFullscreen,
@@ -85,10 +86,11 @@ class PingMessage(BaseModel):
 # C1 (GATE-3.5): client-initiated actions — NARROWED union.
 #
 # ClientAction is ONLY the actions the human client is allowed to
-# initiate: media play/pause/seek, browser navigation, document.save,
-# tasks.toggle, layout/panel overrides. Server-originated commands
-# (notification.show, media.state, tts.speak, audio.play) are NOT here —
-# they travel server->client via the full UiCommand union
+# initiate: media play/pause/seek + result selection, browser
+# navigation, document.save, tasks.toggle, layout/panel overrides.
+# Server-originated commands (notification.show, media.state, tts.speak,
+# audio.play, memory.search) are NOT here — they travel server->client
+# via the full UiCommand union
 # (arsvox_contracts.commands), never as client frames. Every declared
 # ClientAction MUST have an authoritative handler
 # (services/agent/arsvox_agent/actions.py); tests/python/
@@ -107,6 +109,7 @@ ClientAction = Annotated[
         LayoutRestore,
         MediaPlayPause,
         MediaSeek,
+        MediaSelectResult,
         YoutubeSearch,
         YoutubePlay,
         BrowserNavigate,

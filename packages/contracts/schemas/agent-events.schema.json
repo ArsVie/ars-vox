@@ -182,6 +182,66 @@
       "title": "BrowserBack",
       "type": "object"
     },
+    "BrowserDomActionEvent": {
+      "description": "browser.dom_action \u2014 the agent drives the integrated browser.\n\nW2-DRIVE: search bar, scroll, click, read. ``operation`` is the typed\nDOM capability: set_value (search bar / form input), click, scroll,\nquery (read page state / text). The renderer applies it to the SAME\nview the user manipulates \u2014 one browser state, one authority. The\nagent never sends coordinates; it targets elements.",
+      "properties": {
+        "type": {
+          "const": "browser.dom_action",
+          "default": "browser.dom_action",
+          "title": "Type",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "click",
+            "scroll",
+            "set_value",
+            "query"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "target": {
+          "default": "",
+          "title": "Target",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "title": "BrowserDomActionEvent",
+      "type": "object"
+    },
     "BrowserForward": {
       "properties": {
         "action": {
@@ -267,6 +327,38 @@
         }
       },
       "title": "BrowserRefresh",
+      "type": "object"
+    },
+    "BrowserSnapshot": {
+      "description": "GATE-5 (W0-CONTRACT): canonical browser state in the reconnect\nsnapshot \u2014 REAL can_go_back/can_go_forward so the UI never fabricates\nhistory navigation after a reconnect. W2-VIEW feeds the webview\nvalues once the browser-state channel exists; until then None on the\nsnapshot means \"no browser state known\", which is the truth.",
+      "properties": {
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "can_go_back": {
+          "default": false,
+          "title": "Can Go Back",
+          "type": "boolean"
+        },
+        "can_go_forward": {
+          "default": false,
+          "title": "Can Go Forward",
+          "type": "boolean"
+        },
+        "loading": {
+          "default": false,
+          "title": "Loading",
+          "type": "boolean"
+        }
+      },
+      "title": "BrowserSnapshot",
       "type": "object"
     },
     "ConfigUpdateEvent": {
@@ -391,6 +483,46 @@
       ],
       "title": "ConfirmationStatus",
       "type": "string"
+    },
+    "DocumentChangedEvent": {
+      "description": "document.changed \u2014 an agent-side edit reached the stored document.\n\nEmitted by the document tools after every agent mutation so an OPEN\neditor reconciles live (W1-DOC-SHARED: one document, one authority \u2014\nno agent copy and user copy). Carries the FULL updated content; the\neditor replaces, it never guesses deltas.",
+      "properties": {
+        "type": {
+          "const": "document.changed",
+          "default": "document.changed",
+          "title": "Type",
+          "type": "string"
+        },
+        "document_id": {
+          "title": "Document Id",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_id",
+        "title",
+        "path",
+        "content"
+      ],
+      "title": "DocumentChangedEvent",
+      "type": "object"
     },
     "DocumentChapter": {
       "properties": {
@@ -733,6 +865,104 @@
       "title": "MediaPlayPause",
       "type": "object"
     },
+    "MediaSearchResult": {
+      "description": "One selectable result card in the UNIFIED media search surface.\n\nCovers both sources the single player hosts: youtube (video) and the\nlocal library (audio/video). ``local_path`` is the local-source\nmember the renderer resolves; ``channel`` carries the artist/folder\nfor local files. The user picks a card by click (media.select_result)\nor by voice (agent play tools).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/MediaSource"
+        },
+        "kind": {
+          "$ref": "#/$defs/MediaKind"
+        },
+        "channel": {
+          "default": "",
+          "title": "Channel",
+          "type": "string"
+        },
+        "duration_s": {
+          "default": 0,
+          "title": "Duration S",
+          "type": "integer"
+        },
+        "published": {
+          "default": "",
+          "title": "Published",
+          "type": "string"
+        },
+        "thumbnail_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thumbnail Url"
+        },
+        "local_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Path"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "source",
+        "kind"
+      ],
+      "title": "MediaSearchResult",
+      "type": "object"
+    },
+    "MediaSearchResultsEvent": {
+      "description": "media.search_results \u2014 real result cards the user can pick.\n\nEmitted by the youtube search (W1-YOUTUBE) and the local-library\ndiscovery (W1-MEDIA-LOCAL) tools. The media panel renders the cards;\nthe user picks by click or voice. Never a fixture list pretending to\nbe a search (the FIXTURE_RESULTS defect class).",
+      "properties": {
+        "type": {
+          "const": "media.search_results",
+          "default": "media.search_results",
+          "title": "Type",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/MediaSearchResult"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "MediaSearchResultsEvent",
+      "type": "object"
+    },
     "MediaSeek": {
       "properties": {
         "action": {
@@ -750,6 +980,62 @@
         "position_s"
       ],
       "title": "MediaSeek",
+      "type": "object"
+    },
+    "MediaSelectResult": {
+      "properties": {
+        "action": {
+          "const": "media.select_result",
+          "default": "media.select_result",
+          "title": "Action",
+          "type": "string"
+        },
+        "result_id": {
+          "title": "Result Id",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/MediaSource"
+        },
+        "kind": {
+          "$ref": "#/$defs/MediaKind"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "local_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Path"
+        }
+      },
+      "required": [
+        "result_id",
+        "source",
+        "kind",
+        "title"
+      ],
+      "title": "MediaSelectResult",
       "type": "object"
     },
     "MediaSource": {
@@ -869,6 +1155,18 @@
           "default": null,
           "title": "Url"
         },
+        "local_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Path"
+        },
         "position_s": {
           "default": 0,
           "title": "Position S",
@@ -896,6 +1194,107 @@
         "kind"
       ],
       "title": "MediaStateEvent",
+      "type": "object"
+    },
+    "MemoryResult": {
+      "description": "One recalled memory row (note or conversation turn).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "note",
+          "enum": [
+            "note",
+            "conversation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "MemoryResult",
+      "type": "object"
+    },
+    "MemorySearch": {
+      "properties": {
+        "action": {
+          "const": "memory.search",
+          "default": "memory.search",
+          "title": "Action",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "limit": {
+          "default": 10,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "MemorySearch",
+      "type": "object"
+    },
+    "MemorySearchResultsEvent": {
+      "description": "memory.search_results \u2014 semantic/FTS recall over the authoritative\nmemory (W1-MEMORY: arsvox_memory search_all), DISTINCT from the\nexact-key memory.recall. The agent uses these to shape its queries.",
+      "properties": {
+        "type": {
+          "const": "memory.search_results",
+          "default": "memory.search_results",
+          "title": "Type",
+          "type": "string"
+        },
+        "query": {
+          "title": "Query",
+          "type": "string"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/MemoryResult"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "MemorySearchResultsEvent",
       "type": "object"
     },
     "NotificationEvent": {
@@ -1300,6 +1699,17 @@
         "adaptive": {
           "$ref": "#/$defs/AdaptiveSnapshot"
         },
+        "browser": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BrowserSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "created_at": {
           "format": "date-time",
           "title": "Created At",
@@ -1560,7 +1970,9 @@
               "layout.restore": "#/$defs/LayoutRestore",
               "media.play_pause": "#/$defs/MediaPlayPause",
               "media.seek": "#/$defs/MediaSeek",
+              "media.select_result": "#/$defs/MediaSelectResult",
               "media.state": "#/$defs/MediaStateChange",
+              "memory.search": "#/$defs/MemorySearch",
               "notification.show": "#/$defs/NotificationShow",
               "panel.close": "#/$defs/PanelClose",
               "panel.fullscreen": "#/$defs/PanelFullscreen",
@@ -1636,6 +2048,12 @@
             },
             {
               "$ref": "#/$defs/TasksToggle"
+            },
+            {
+              "$ref": "#/$defs/MediaSelectResult"
+            },
+            {
+              "$ref": "#/$defs/MemorySearch"
             }
           ],
           "title": "Command"
@@ -1819,13 +2237,17 @@
     "mapping": {
       "action_result": "#/$defs/ActionResultEvent",
       "agent_message": "#/$defs/AgentMessageEvent",
+      "browser.dom_action": "#/$defs/BrowserDomActionEvent",
       "browser.navigate": "#/$defs/BrowserNavigateEvent",
       "config_update": "#/$defs/ConfigUpdateEvent",
       "confirmation_requested": "#/$defs/ConfirmationRequestedEvent",
       "confirmation_resolved": "#/$defs/ConfirmationResolvedEvent",
+      "document.changed": "#/$defs/DocumentChangedEvent",
       "document.load": "#/$defs/DocumentLoadEvent",
       "error": "#/$defs/ErrorEvent",
+      "media.search_results": "#/$defs/MediaSearchResultsEvent",
       "media.state": "#/$defs/MediaStateEvent",
+      "memory.search_results": "#/$defs/MemorySearchResultsEvent",
       "notification": "#/$defs/NotificationEvent",
       "pong": "#/$defs/PongEvent",
       "state_snapshot": "#/$defs/StateSnapshotEvent",
@@ -1883,6 +2305,18 @@
     },
     {
       "$ref": "#/$defs/MediaStateEvent"
+    },
+    {
+      "$ref": "#/$defs/MediaSearchResultsEvent"
+    },
+    {
+      "$ref": "#/$defs/DocumentChangedEvent"
+    },
+    {
+      "$ref": "#/$defs/BrowserDomActionEvent"
+    },
+    {
+      "$ref": "#/$defs/MemorySearchResultsEvent"
     },
     {
       "$ref": "#/$defs/PongEvent"

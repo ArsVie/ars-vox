@@ -173,6 +173,107 @@ class TasksUpdateEvent(BaseModel):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+# ---------------------------------------------------------------------- #
+# GATE-5 (W0-CONTRACT): the full program wire surface, landed as honest
+# scaffolding before any W1-W3 lane implements behind it. Each member is
+# typed and emitted by the lane that owns the real capability; nothing
+# here fakes a result.
+# ---------------------------------------------------------------------- #
+
+
+class MediaSearchResult(BaseModel):
+    """One selectable result card in the UNIFIED media search surface.
+
+    Covers both sources the single player hosts: youtube (video) and the
+    local library (audio/video). ``local_path`` is the local-source
+    member the renderer resolves; ``channel`` carries the artist/folder
+    for local files. The user picks a card by click (media.select_result)
+    or by voice (agent play tools).
+    """
+
+    id: str
+    title: str
+    source: MediaSource
+    kind: MediaKind
+    channel: str = ""
+    duration_s: int = 0
+    published: str = ""
+    thumbnail_url: str | None = None
+    local_path: str | None = None
+
+
+class MediaSearchResultsEvent(BaseModel):
+    """media.search_results — real result cards the user can pick.
+
+    Emitted by the youtube search (W1-YOUTUBE) and the local-library
+    discovery (W1-MEDIA-LOCAL) tools. The media panel renders the cards;
+    the user picks by click or voice. Never a fixture list pretending to
+    be a search (the FIXTURE_RESULTS defect class).
+    """
+
+    type: Literal[EventType.MEDIA_SEARCH_RESULTS] = EventType.MEDIA_SEARCH_RESULTS
+    query: str
+    results: list[MediaSearchResult] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class DocumentChangedEvent(BaseModel):
+    """document.changed — an agent-side edit reached the stored document.
+
+    Emitted by the document tools after every agent mutation so an OPEN
+    editor reconciles live (W1-DOC-SHARED: one document, one authority —
+    no agent copy and user copy). Carries the FULL updated content; the
+    editor replaces, it never guesses deltas.
+    """
+
+    type: Literal[EventType.DOCUMENT_CHANGED] = EventType.DOCUMENT_CHANGED
+    document_id: int
+    title: str
+    path: str
+    content: str
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class BrowserDomActionEvent(BaseModel):
+    """browser.dom_action — the agent drives the integrated browser.
+
+    W2-DRIVE: search bar, scroll, click, read. ``operation`` is the typed
+    DOM capability: set_value (search bar / form input), click, scroll,
+    query (read page state / text). The renderer applies it to the SAME
+    view the user manipulates — one browser state, one authority. The
+    agent never sends coordinates; it targets elements.
+    """
+
+    type: Literal[EventType.BROWSER_DOM_ACTION] = EventType.BROWSER_DOM_ACTION
+    operation: Literal["click", "scroll", "set_value", "query"]
+    target: str = ""
+    value: str | None = None
+    result: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class MemoryResult(BaseModel):
+    """One recalled memory row (note or conversation turn)."""
+
+    id: str
+    kind: Literal["note", "conversation"] = "note"
+    text: str
+    created_at: str | None = None
+    source: str = ""
+
+
+class MemorySearchResultsEvent(BaseModel):
+    """memory.search_results — semantic/FTS recall over the authoritative
+    memory (W1-MEMORY: arsvox_memory search_all), DISTINCT from the
+    exact-key memory.recall. The agent uses these to shape its queries.
+    """
+
+    type: Literal[EventType.MEMORY_SEARCH_RESULTS] = EventType.MEMORY_SEARCH_RESULTS
+    query: str
+    results: list[MemoryResult] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class MediaStateEvent(BaseModel):
     type: Literal[EventType.MEDIA_STATE] = EventType.MEDIA_STATE
     state: MediaState
@@ -181,6 +282,10 @@ class MediaStateEvent(BaseModel):
     title: str = ""
     video_id: str | None = None
     url: str | None = None
+    # GATE-5 (W0-CONTRACT): local-source member for the unified player —
+    # the file the renderer must play (local path / custom-protocol url).
+    # None for youtube sources. Same controls/UI regardless of source.
+    local_path: str | None = None
     position_s: int = 0
     duration_s: int = 0
     volume: float = 1.0
@@ -247,6 +352,20 @@ class AdaptiveSnapshot(BaseModel):
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 
+class BrowserSnapshot(BaseModel):
+    """GATE-5 (W0-CONTRACT): canonical browser state in the reconnect
+    snapshot — REAL can_go_back/can_go_forward so the UI never fabricates
+    history navigation after a reconnect. W2-VIEW feeds the webview
+    values once the browser-state channel exists; until then None on the
+    snapshot means \"no browser state known\", which is the truth."""
+
+    url: str = ""
+    title: str = ""
+    can_go_back: bool = False
+    can_go_forward: bool = False
+    loading: bool = False
+
+
 class StateSnapshotEvent(BaseModel):
     type: Literal[EventType.STATE_SNAPSHOT] = EventType.STATE_SNAPSHOT
     sequence: int
@@ -269,6 +388,11 @@ class StateSnapshotEvent(BaseModel):
     # proportion / user constraints) so a renderer reload reconstructs
     # the workspace.
     adaptive: AdaptiveSnapshot = Field(default_factory=AdaptiveSnapshot)
+    # GATE-5 (W0-CONTRACT): real browser back/forward state in the
+    # canonical state shape. None = the service has no browser-state
+    # source yet (W2-VIEW owns the channel); the UI must not fabricate
+    # history navigation from a missing block.
+    browser: BrowserSnapshot | None = None
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -289,6 +413,10 @@ AgentEvent = Annotated[
         DocumentLoadEvent,
         TasksUpdateEvent,
         MediaStateEvent,
+        MediaSearchResultsEvent,
+        DocumentChangedEvent,
+        BrowserDomActionEvent,
+        MemorySearchResultsEvent,
         PongEvent,
         ActionResultEvent,
         StateSnapshotEvent,
