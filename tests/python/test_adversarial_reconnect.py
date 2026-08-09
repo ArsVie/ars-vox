@@ -2,9 +2,12 @@
 snapshot + reconnect authority.
 
 R28 — SnapshotTracker must hold current state after >1000 bus events
-      (no starvation). Main: the tracker's subscriber queue is capped at
-      1000 (events.py _SUBSCRIBER_CAP) and only drained when a snapshot
-      is built, so a long gap between connects silently loses events.
+      (no starvation). Main: the old queue-backed tracker capped its
+      subscriber queue at 1000 (events.py _SUBSCRIBER_CAP) and only
+      drained when a snapshot was built, so a long gap between connects
+      silently lost events. A6's listener-based tracker (C8) records
+      every payload synchronously — continuously current, nothing
+      buffered.
 R29 — bus sequence tagging: every event carries a monotonic sequence and
       the reconnect snapshot carries the current value (the client-side
       gap detection + resync is A6's renderer work — covered by
@@ -52,52 +55,62 @@ def _media_event(i: int) -> MediaStateEvent:
 
 
 def test_r28_tracker_holds_latest_after_1500_events():
-    """Publish 1500 interleaved media/voice events with NO drain between
-    (a long window with no connects), then drain. The tracker must hold
-    the FINAL media and voice state. EXPECTED-FAIL until A6 lands (C8:
-    continuous current state) — today the tracker's queue caps at 1000
-    and events 1001+ are dropped."""
+    """Publish 1500 interleaved media/voice events with no snapshot built
+    in between (a long window with no connects), then read the tracker.
+    The listener-based tracker (C8: continuous current state) must hold
+    the FINAL media and voice state — nothing is buffered, so nothing can
+    drop past the old 1000-event subscriber cap."""
     bus = EventBus()
     tracker = SnapshotTracker(bus)
     tracker.start()
+    try:
+        async def pump():
+            for i in range(1, 1501):
+                if i % 2 == 0:
+                    await bus.publish(_media_event(i))
+                else:
+                    await bus.publish(StateUpdateEvent(voice_state=VoiceState.LISTENING))
 
-    async def pump():
-        for i in range(1, 1501):
-            if i % 2 == 0:
-                await bus.publish(_media_event(i))
-            else:
-                await bus.publish(StateUpdateEvent(voice_state=VoiceState.LISTENING))
+        asyncio.run(pump())
 
-    asyncio.run(pump())
-    tracker.drain()
-
-    assert tracker.last_media is not None
-    assert tracker.last_media["video_id"] == "v1500", (
-        f"tracker lost the final media event (got {tracker.last_media.get('video_id')}) — "
-        "subscriber queue capped at 1000 drops events between connects"
-    )
-    assert tracker.last_voice == VoiceState.LISTENING.value
+        assert tracker.last_media is not None
+        assert tracker.last_media["video_id"] == "v1500", (
+            f"tracker lost the final media event (got {tracker.last_media.get('video_id')}) — "
+            "listener-based tracker must stay current past the old 1000-event queue cap"
+        )
+        assert tracker.last_voice == VoiceState.LISTENING.value
+    finally:
+        tracker.close()
 
 
-def test_r28_tracker_stays_current_when_drained_periodically():
-    """Guard: when snapshots are built regularly (drain every 500
-    events), the tracker keeps the latest state with zero loss."""
+def test_r28_tracker_stays_current_over_long_window():
+    """Guard: the listener-based tracker is continuously current — at
+    checkpoints mid-pump (500/1000/1500 events) last_media/last_voice
+    already reflect the newest event so far, so a snapshot built at any
+    point is authoritative (the old queue only drained on demand)."""
     bus = EventBus()
     tracker = SnapshotTracker(bus)
     tracker.start()
+    try:
+        checkpoints = {}
 
-    async def pump():
-        for i in range(1, 1501):
-            if i % 2 == 0:
-                await bus.publish(_media_event(i))
-            else:
-                await bus.publish(StateUpdateEvent(voice_state=VoiceState.LISTENING))
-            if i % 500 == 0:
-                tracker.drain()
+        async def pump():
+            for i in range(1, 1501):
+                if i % 2 == 0:
+                    await bus.publish(_media_event(i))
+                else:
+                    await bus.publish(StateUpdateEvent(voice_state=VoiceState.LISTENING))
+                if i in (500, 1000, 1500):
+                    checkpoints[i] = (tracker.last_media, tracker.last_voice)
 
-    asyncio.run(pump())
-    tracker.drain()
-    assert tracker.last_media["video_id"] == "v1500"
+        asyncio.run(pump())
+
+        assert checkpoints[500][0]["video_id"] == "v500"
+        assert checkpoints[1000][0]["video_id"] == "v1000"
+        assert checkpoints[1500][0]["video_id"] == "v1500"
+        assert checkpoints[1500][1] == VoiceState.LISTENING.value
+    finally:
+        tracker.close()
 
 
 # --------------------------------------------------------------------- #

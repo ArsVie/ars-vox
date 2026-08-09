@@ -29,7 +29,6 @@ class PanelType(str, Enum):
     MEDIA = "media"
     BOOK_READER = "book_reader"
     DOCUMENT_EDITOR = "document_editor"
-    NEWS = "news"
     NOTES = "notes"
     TASKS = "tasks"
     REMINDERS = "reminders"

@@ -7,15 +7,15 @@ R16 — the model's layout tool must speak the native adaptive vocabulary
 R17 — invalid specs (duplicate surfaces, unsupported roles) are rejected
       deterministically and never reach state.
 R18 — the model-visible surface vocabulary (tool descriptions + PanelType
-      enum + system prompt) contains NO news. Today: PanelType.NEWS
-      exists and ui.open_panel's description lists news.
-R39 — ClientAction must be the narrowed human-initiated union and every
-      declared member must have an authoritative handler. Today the union
-      mirrors the full UiCommand (tts.speak, layout.apply, panel.* ...)
-      and those members have no handler (unsupported).
+      enum + system prompt) contains NO news: the panel vision is that
+      the browser covers news, no news panel exists (PanelType.NEWS
+      deleted).
+R39 — ClientAction is the narrowed human-initiated union (16 members)
+      and every declared member has an authoritative handler.
 
 EXPECTED-FAIL markers name the owner: A3 (agent layout contract) for
-R16/R17/R18; A7 (confirmations + client contracts) for R39.
+R16/R17. R18 and R39 assert landed state (A3's enum cleanup + A7's
+narrowed union).
 """
 
 from pathlib import Path
@@ -51,13 +51,13 @@ def _layout_tools(registry: ToolRegistry):
 def test_r18_panel_type_has_no_news():
     """The PanelType enum is model-visible (tool arg schemas). A news
     panel does not exist per the frozen panel vision (browser covers
-    news). EXPECTED-FAIL until A3 lands (PanelType.NEWS exists today)."""
+    news)."""
     assert not hasattr(PanelType, "NEWS"), "PanelType.NEWS must be deleted (R18)"
 
 
 def test_r18_tool_descriptions_have_no_news(registry):
-    """Every tool description the model sees must not teach a news panel.
-    EXPECTED-FAIL until A3 lands (ui.open_panel lists news today)."""
+    """Every tool description the model sees must not teach a news
+    panel."""
     for spec in registry.all():
         assert "news" not in spec.description.lower(), (
             f"model-visible tool {spec.name} mentions news: {spec.description}"
@@ -136,36 +136,48 @@ def _client_action_members():
     return sorted(actions)
 
 
-# The authoritative handlers in arsvox_agent/actions.py (H1). When A7
-# narrows the union, ClientAction must equal this set exactly.
+# The landed narrowed human-initiated union (A7/C1), exactly the 16
+# members with authoritative handlers in arsvox_agent/actions.py (H1).
+# Server-originated commands (tts.speak, audio.play, notification.show,
+# media.state) are correctly ABSENT — they travel server->client, never
+# as client frames. The test's value is the exact-set drift guard: it
+# fails if the union gains or loses a member.
 HANDLED_ACTIONS = {
-    "tasks.toggle",
-    "document.save",
-    "youtube.search",
-    "youtube.play",
-    "browser.navigate",
     "browser.back",
     "browser.forward",
+    "browser.navigate",
     "browser.refresh",
+    "document.save",
+    "layout.apply",
+    "layout.restore",
     "media.play_pause",
     "media.seek",
-    "audio.play",
+    "panel.close",
+    "panel.fullscreen",
+    "panel.open",
+    "panel.set_primary",
+    "tasks.toggle",
+    "youtube.play",
+    "youtube.search",
 }
 
 
 def test_r39_every_client_action_has_authoritative_handler():
-    """Every declared ClientAction member must have an authoritative
-    handler — an enumeration test that fails if one drifts (C1/R39).
-    EXPECTED-FAIL until A7 lands: the union mirrors the full UiCommand
-    (layout.apply, panel.*, tts.speak, ...) and those members answer
-    'unsupported'."""
+    """ClientAction must equal the landed union EXACTLY — an enumeration
+    test that fails if the set drifts in either direction (C1/R39)."""
     members = _client_action_members()
     assert members, "ClientAction union must not be empty"
     missing = sorted(set(members) - HANDLED_ACTIONS)
     assert not missing, (
         f"ClientAction members without an authoritative handler: {missing} "
-        "(R39/C1 — A7 narrows the union to the human-initiated set)"
+        "(R39/C1 — the union must stay the narrowed human-initiated set)"
     )
+    extra = sorted(HANDLED_ACTIONS - set(members))
+    assert not extra, (
+        f"handled actions no longer declared in the ClientAction union: {extra} "
+        "(R39/C1 — the landed union is exactly the handled set)"
+    )
+    assert len(members) == 16, f"landed ClientAction union has 16 members (got {len(members)})"
 
 
 def test_r39_tts_speak_is_not_a_client_action():
