@@ -29,10 +29,9 @@ from typing import Any
 
 from arsvox_contracts import ActionResultEvent
 from arsvox_contracts.commands import UiCommand
-from arsvox_contracts.enums import MediaKind, MediaSource, MediaState
+from arsvox_contracts.enums import MediaState
 from arsvox_contracts.events import (
     BrowserNavigateEvent,
-    MediaStateEvent,
     ReminderItem,
     TasksUpdateEvent,
     TodoItem,
@@ -41,52 +40,30 @@ from arsvox_contracts.events import (
 )
 
 from arsvox_agent.deps import Deps
+from arsvox_agent.media import media_controller
 from arsvox_agent.tools import ToolRegistry
 from arsvox_agent.tools.context import ToolContext
 
 log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------- #
-# Service-side media controller — the authoritative media state the UI
-# reconciles against. In-memory for iteration 1 (no persisted media
-# state); audio.play / media.play_pause / media.seek update it and emit
-# media.state events.
+# Service-side media authority — ONE controller (GATE-3.5, R24-R27).
+#
+# Agent media tools (tools/media_tools.py), client actions (below) and
+# the demo tool all route through ``media_controller`` (arsvox_agent/
+# media.py). Every transition publishes a full MediaStateEvent carrying
+# position/duration/source/kind — there is no second partial command
+# path, so agent and user inputs can never disagree about the loaded
+# track (R24), seek really emits the target position (R25) and the
+# renderer reconciles player callbacks against the same shape (R26).
 # --------------------------------------------------------------------- #
-
-
-class _MediaController:
-    def __init__(self) -> None:
-        self.state = MediaState.STOPPED
-        self.source = MediaSource.LOCAL
-        self.kind = MediaKind.AUDIO
-        self.title = ""
-        self.video_id: str | None = None
-        self.url: str | None = None
-        self.position_s = 0
-        self.duration_s = 0
-        self.volume = 1.0
-
-    def snapshot(self) -> dict[str, Any]:
-        return {
-            "state": self.state,
-            "source": self.source,
-            "kind": self.kind,
-            "title": self.title,
-            "video_id": self.video_id,
-            "url": self.url,
-            "position_s": self.position_s,
-            "duration_s": self.duration_s,
-            "volume": self.volume,
-        }
-
-
-_media = _MediaController()
 
 
 def reset_media_state() -> None:
     """Test hook: clear the in-memory media controller."""
-    global _media
-    _media = _MediaController()
+    from arsvox_agent.media import reset_media_controller
+
+    reset_media_controller()
 
 
 # --------------------------------------------------------------------- #
@@ -281,50 +258,35 @@ def _acknowledge_local(action: str) -> ActionResultEvent:
 async def _media_action(
     deps: Deps, action: str, command: UiCommand
 ) -> ActionResultEvent:
+    # One controller for every media input (GATE-3.5, R24): the agent
+    # tool path (media_tools.py) and this client-action path share
+    # ``media_controller``, so a user pause/seek after an agent play
+    # always finds the loaded track — never "no media loaded".
     if action == "audio.play":
         asset = command.asset  # type: ignore[attr-defined]
-        _media.state = MediaState.PLAYING
-        _media.source = MediaSource.LOCAL
-        _media.kind = MediaKind.AUDIO
-        _media.title = asset
-        _media.position_s = 0
-        await _emit_media_state(deps)
+        await media_controller.play_local(deps.bus, asset)
         return ActionResultEvent(action="audio.play", status="done", detail=asset)
     if action == "media.play_pause":
-        if _media.state == MediaState.STOPPED:
+        if not media_controller.has_track():
             return ActionResultEvent(
                 action="media.play_pause", status="done", detail="no media loaded"
             )
-        _media.state = (
-            MediaState.PAUSED if _media.state == MediaState.PLAYING else MediaState.PLAYING
-        )
-        await _emit_media_state(deps)
+        if media_controller.state == MediaState.PLAYING:
+            await media_controller.pause(deps.bus)
+        else:
+            # paused or stopped-with-track: resume. Stopped with a loaded
+            # track is NOT a dead end (R24: user actions always apply).
+            await media_controller.resume(deps.bus)
         return ActionResultEvent(
-            action="media.play_pause", status="done", detail=_media.state.value
+            action="media.play_pause", status="done", detail=media_controller.state.value
         )
     # media.seek
     position = max(0, command.position_s)  # type: ignore[attr-defined]
-    if _media.state == MediaState.STOPPED:
+    if not media_controller.has_track():
         return ActionResultEvent(
             action="media.seek", status="done", detail="no media loaded"
         )
-    _media.position_s = position
-    await _emit_media_state(deps)
-    return ActionResultEvent(action="media.seek", status="done", detail=str(position))
-
-
-async def _emit_media_state(deps: Deps) -> None:
-    snap = _media.snapshot()
-    await deps.bus.publish(
-        MediaStateEvent(
-            state=snap["state"],
-            source=snap["source"],
-            kind=snap["kind"],
-            title=snap["title"],
-            video_id=snap["video_id"],
-            url=snap["url"],
-            position_s=snap["position_s"],
-            duration_s=snap["duration_s"],
-            volume=snap["volume"],
-        )
+    await media_controller.seek(deps.bus, position)
+    return ActionResultEvent(
+        action="media.seek", status="done", detail=str(media_controller.position_s)
     )

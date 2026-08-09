@@ -1,30 +1,30 @@
 """Media tools. YouTube adapter is a fixture stub for iteration 1
-(real adapter lands with the browser service); the media panel plays
-the configured sample video.
+(real adapter lands with the browser service — Wave 2); the media panel
+plays the configured sample video.
 
-H7 (GATE-2.5): these tools emit the event path the media surface consumes:
-  - media.search_youtube -> YoutubeSearchEvent (populates the YouTube panel
-    surface, same wire the demo tool uses);
-  - media.play/pause/resume/stop/seek/set_volume -> UiCommandEvent with
-    MediaStateChange (media.state command). The desktop store merges those
-    commands into the SAME store.content.media state the MediaStateEvent
-    path populates, so both emitters stay consistent on one surface.
-  - media.play picks a real YouTube watch URL when the result id is a real
-    video id (the store derives videoId from the url and renders the embed);
-    otherwise it falls back to the configured sample video.
+GATE-3.5 (R24-R27): ALL media tools route through the single
+service-side MediaController (arsvox_agent/media.py) — the same
+controller client actions use. No tool emits a partial media command
+anymore: every transition publishes ONE full MediaStateEvent carrying
+position/duration/source/kind, so agent play -> user pause/seek -> agent
+resume share one authoritative state (R24), seek really emits the target
+position (R25), and the renderer's player callbacks reconcile against
+the same shape (R26).
 """
 
 import json
 import re
 
-from arsvox_contracts import MediaState, PanelType
-from arsvox_contracts.commands import MediaStateChange, PanelOpen
+from arsvox_contracts import PanelType
+from arsvox_contracts.commands import PanelOpen
+from arsvox_contracts.enums import MediaKind, MediaSource
 from arsvox_contracts.events import UiCommandEvent, YoutubeSearchEvent, YoutubeVideoResult
 
+from arsvox_agent.media import media_controller
 from arsvox_agent.tools.context import ToolContext
 
 # Real YouTube video ids are exactly 11 chars of [A-Za-z0-9_-]; fixture-only
-# ids ("yt-1") fall back to the sample video url.
+# ids (\"yt-1\") fall back to the sample video url.
 YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 FIXTURE_RESULTS = [
@@ -74,47 +74,52 @@ async def media_search_youtube(tctx: ToolContext, query: str) -> str:
 
 async def media_play(tctx: ToolContext, result_id: str) -> str:
     result = next((r for r in FIXTURE_RESULTS if r.id == result_id), FIXTURE_RESULTS[0])
-    url = (
-        f"https://www.youtube.com/watch?v={result.id}"
-        if YOUTUBE_ID_RE.match(result.id)
-        else tctx.deps.config.media.sample_video_url
-    )
+    if YOUTUBE_ID_RE.match(result.id):
+        url = f"https://www.youtube.com/watch?v={result.id}"
+        source, kind, video_id = MediaSource.YOUTUBE, MediaKind.VIDEO, result.id
+    else:
+        # Fixture-only id -> configured sample video (local-ish source).
+        url = tctx.deps.config.media.sample_video_url
+        source, kind, video_id = MediaSource.LOCAL, MediaKind.VIDEO, None
     tctx.deps.panels.upsert(PanelType.MEDIA.value, result.title)
     await tctx.emit(UiCommandEvent(command=PanelOpen(panel_type=PanelType.MEDIA, title=result.title)))
-    await tctx.emit(
-        UiCommandEvent(
-            command=MediaStateChange(state=MediaState.PLAYING, title=result.title, url=url)
-        )
+    await media_controller.play(
+        tctx.bus,
+        title=result.title,
+        url=url,
+        video_id=video_id,
+        source=source,
+        kind=kind,
     )
     return f"Reproduciendo: {result.title}"
 
 
 async def media_pause(tctx: ToolContext) -> str:
-    await tctx.emit(UiCommandEvent(command=MediaStateChange(state=MediaState.PAUSED)))
+    await media_controller.pause(tctx.bus)
     return "Video en pausa."
 
 
 async def media_resume(tctx: ToolContext) -> str:
-    await tctx.emit(UiCommandEvent(command=MediaStateChange(state=MediaState.PLAYING)))
+    await media_controller.resume(tctx.bus)
     return "Video reanudado."
 
 
 async def media_stop(tctx: ToolContext) -> str:
-    await tctx.emit(UiCommandEvent(command=MediaStateChange(state=MediaState.STOPPED)))
+    await media_controller.stop(tctx.bus)
     return "Video detenido."
 
 
 async def media_seek(tctx: ToolContext, seconds: int) -> str:
-    await tctx.emit(UiCommandEvent(command=MediaStateChange(state=MediaState.PLAYING)))
-    return f"Posición cambiada a {seconds} segundos."
+    # R25: real seek — the controller moves the position and emits the
+    # actual target in the MediaStateEvent (no fake "Posición cambiada"
+    # without a position). The renderer drives the iframe from it.
+    await media_controller.seek(tctx.bus, max(0, int(seconds)))
+    return f"Posición cambiada a {media_controller.position_s} segundos."
 
 
 async def media_set_volume(tctx: ToolContext, volume: float) -> str:
-    volume = max(0.0, min(1.0, volume))
-    await tctx.emit(
-        UiCommandEvent(command=MediaStateChange(state=MediaState.PLAYING, volume=volume))
-    )
-    return f"Volumen al {int(volume * 100)}%."
+    await media_controller.set_volume(tctx.bus, volume)
+    return f"Volumen al {int(media_controller.volume * 100)}%."
 
 
 # --------------------------------------------------------------------- #
