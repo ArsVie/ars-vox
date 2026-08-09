@@ -17,6 +17,22 @@ reduced-motion coverage, STOP active while listening.
   with icon, DETENER, template selector, conversation hero) — captured
   with real Chrome headless at 1920x1080.
 
+### Live real-model captures (2026-08-08, NO mock)
+
+Captured from the REAL deepseek-v4-flash model (harness boot, auth off)
+via the page's quick-action chips (headless typing is impossible; chips
+are the page-originated triggers that transmit over the page's WS).
+
+* [Mic hero live](24-mic-hero-live.png) — fresh boot = central-mic hero
+  (snapshot no longer restores panels, 2026-08-08): Escuchando status,
+  DETENER, plantilla selector, suggestion chips, input.
+* [Document + chat live](25-doc-chat-live.png) — after clicking "Abre un
+  documento": REAL turn (audit: document.list → document.open →
+  ui.open_panel → ui.apply_layout, all done), document_editor became the
+  main panel, conversation beside. NOTE: opened doc was an empty file, so
+  the editor shows its empty-state; chat-bubble rendering in headless is
+  under debug (deleg_5facf00a).
+
 ## Wave 2 — adaptive surfaces + motion (GATE-2, merged 2026-08-08)
 
 Post-GATE-2 state: UI-201..207 + gate wiring. The adaptive stage now hosts

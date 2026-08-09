@@ -175,6 +175,15 @@ wins.
 
 ## Known gaps (next work, prioritized)
 
+0. GATE-3.5 consolidation (user-approved direction, 2026-08-08):
+   A single layout authority (native LayoutSpec vocabulary, delete news),
+   B single media authority (one MediaController; real YouTube search),
+   C authoritative snapshot (media state + adaptive composition persisted),
+   D secure launch (Electron generates one token), E execution
+   cancellation. Plus UI: confirmation popup-in-chat / voice-ask,
+   minimal state panel embedded near the gaze, remove PLANTILLA selector
+   and the "Lee mis correos" fake suggestion, one status indicator,
+   media-player progress bar tied to the YouTube iframe.
 1. Voice loop proof on the physical machine (wake/VAD/STT/TTS/barge-in/
    sleep/STOP) + latency + recovery measurements.
 2. Browser as security boundary: WebContentsView, allowlist enforced,
