@@ -245,6 +245,10 @@ describe("store: spoken STOP clears the TTS queue (R01 renderer half)", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
     store.getState().enqueueTts("Hola");
+    // R11 (A2): outbound messages are buffered until the first connect,
+    // so the transport must be connected for {type:"stop"} to reach the
+    // send channel (same pattern as tests/store.test.ts).
+    store.getState().setConnected(true);
     store.getState().stop();
     expect(store.getState().speakTexts).toEqual([]);
     expect(sent).toEqual([{ type: "stop" }]);

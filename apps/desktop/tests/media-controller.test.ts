@@ -50,6 +50,10 @@ describe("R24: agent play -> user pause -> user seek -> agent resume (one contro
     expect(mediaController.getState().videoId).toBe("dQw4w9WgXcQ");
 
     // Leg 2 — user pause (dispatchCommand -> controller -> sent frame).
+    // R11 (A2) buffers outbound messages until the first connect, so the
+    // transport must be connected for the command to reach the send
+    // channel (same pattern as tests/store.test.ts / reconnect.test.ts).
+    store.getState().setConnected(true);
     store.getState().dispatchCommand({ action: "media.play_pause" });
     expect(
       sent.some(

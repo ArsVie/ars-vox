@@ -8,10 +8,17 @@
  * renderer guard below passes today).
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ServerEvent, StateSnapshotEvent } from "../src/contracts";
-import { createAppStore } from "../src/store";
+import { createAppStore, bindResync } from "../src/store";
+import { resetMediaController } from "../src/media/controller";
+
+// The MediaController is a module-level singleton; every test starts
+// from the empty track so no test can pollute the next one (R25).
+beforeEach(() => {
+  resetMediaController();
+});
 
 function ts(): string {
   return new Date().toISOString();
@@ -73,21 +80,23 @@ describe("R30 — media=null is authoritative absence (clears the player)", () =
     expect(store.getState().content.media?.videoId).toBe("abc123");
 
     // A service restart with no media is authoritative: the stale player
-    // must be cleared, not preserved.
-    // EXPECTED-FAIL until A6 lands (C2) — today the store preserves the
-    // player (store.ts only writes media when snap.media is truthy; the
-    // old preservation behavior is asserted in reconnect.test.ts).
+    // must be cleared, not preserved. The restore routes through the
+    // MediaController (A5 single authority), so the cleared shape is the
+    // controller's EMPTY_MEDIA state — "stopped", no video — NOT a
+    // leftover playing track.
     store.getState().applyEvent(snapshot({ media: null }));
-    expect(store.getState().content.media).toBeUndefined();
+    const media = store.getState().content.media;
+    expect(media?.state).toBe("stopped");
+    expect(media?.videoId).toBeNull();
   });
 });
 
 describe("R34/R47 — snapshot notifications render", () => {
   it("renders the snapshot's active notifications", () => {
     const store = createAppStore(() => {});
-    // EXPECTED-FAIL until A6 lands — the snapshot carries notifications
-    // but the store ignores them (no render channel exists today; only
-    // live `notification` events become system messages).
+    // A6 (R34) merged: snapshot notifications restore into the
+    // notifications list (NotificationItem[]), NOT the chat messages —
+    // the persistent NotificationRegion renders them.
     store.getState().applyEvent(
       snapshot({
         notifications: [
@@ -101,41 +110,50 @@ describe("R34/R47 — snapshot notifications render", () => {
         ],
       }),
     );
-    const texts = store.getState().messages.map((m) => m.text).join(" ");
-    expect(texts).toContain("Toma la pastilla");
+    const notifications = store.getState().notifications;
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toEqual({
+      notificationId: "1",
+      kind: "reminder",
+      title: "Recordatorio",
+      text: "Toma la pastilla",
+      dueAt: null,
+    });
   });
 });
 
 describe("R29 — client-side sequence gap detection", () => {
   it("requests a resync when an event sequence jumps the snapshot's", () => {
-    const sent: unknown[] = [];
-    const store = createAppStore((m) => sent.push(m));
+    // A6 (R29) merged: a detected gap fires the bound resync hook
+    // (wired to WsClient.forceReconnect in main.tsx) — the fresh
+    // snapshot the reconnect brings IS the resync. No message is sent.
+    const resync = vi.fn();
+    bindResync(resync);
+    const store = createAppStore(() => {});
     store.getState().applyEvent(snapshot({ sequence: 100 }));
 
     // An event 3 past the snapshot's sequence means the client missed
     // bus events (QueueFull drop) — it must resync instead of silently
-    // continuing with a gap.
-    // EXPECTED-FAIL until A6 lands (STATUS gap 5: sequence numbers are
-    // never checked client-side; the store ignores the sequence field).
+    // continuing with a gap. The event must carry its sequence number.
     store.getState().applyEvent({
       ...mediaEvent("abc123"),
       sequence: 103,
     } as unknown as ServerEvent);
 
-    const resync = sent.some(
-      (m) =>
-        (m as { type?: string }).type === "resync" ||
-        (m as { type?: string }).type === "reconnect" ||
-        (m as { type?: string }).type === "sync",
-    );
-    expect(resync).toBe(true);
+    expect(resync).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("R25 — no fake seek success in the renderer", () => {
   it("does not claim a position when nothing is loaded", () => {
+    // The singleton controller starts EMPTY (beforeEach reset — no
+    // pollution from earlier tests), so the seek is an honest no-op:
+    // userSeek() with no track leaves the controller untouched.
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    // R11 (A2): outbound messages buffer until the first connect — mark
+    // the transport connected so the sent assertion sees the wire.
+    store.getState().setConnected(true);
     store.getState().dispatchCommand({
       action: "media.seek",
       position_s: 30,
