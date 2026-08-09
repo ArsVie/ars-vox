@@ -5,6 +5,8 @@
  */
 
 import type { AnyTemplate, PanelId, SlotName } from "./layout/engine";
+import type { LayoutSpec } from "./adaptive/contracts";
+import type { OverrideSet } from "./adaptive/overrides";
 
 /** Wire shape of layout.apply `slots` (mirror of LayoutSlots in Python). */
 export interface LayoutSlotsWire {

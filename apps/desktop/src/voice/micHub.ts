@@ -78,7 +78,15 @@ export function createMicHub(onTranscript: (text: string) => void): MicHub {
   };
 }
 
-export const micHub = createMicHub((text) => appStore.getState().sendText(text));
+export const micHub = createMicHub((text) => {
+  const store = appStore.getState();
+  // R21 (GATE-3.5): deterministic spoken overrides FIRST — a matched
+  // layout phrase ("haz esto más grande", "quítalo", ...) becomes an
+  // OverrideIntent through the one layout choke and is consumed here;
+  // it never reaches the model as a vague suggestion. Everything else
+  // follows the normal user_text path.
+  if (!store.handleSpokenText(text)) store.sendText(text);
+});
 export const micHubStore = micHub.store;
 
 // The app store's stop() aborts capture/STT locally before notifying the

@@ -190,4 +190,122 @@ describe("GATE-3.5 — cross-feature: persistent override vs later agent composi
     expect(ids).not.toContain("placeholder.companion");
     expect(ids).toContain("placeholder.primary");
   });
+
+  it("a pinned (keep) surface survives an agent composition that drops it", () => {
+    const store = createAppStore(() => {});
+    const baseline: LayoutSpec = {
+      template: "sidecar",
+      assignments: [
+        { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+        { surfaceId: "placeholder.companion", role: "companion", slot: "side" },
+      ],
+    };
+    store.getState().applyAdaptiveSpec(baseline);
+    // "déjalo ahí" — pin + stick the companion.
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "keep", surfaceId: "placeholder.companion" },
+    });
+    // The agent proposes focus (drops the companion).
+    store.getState().applyLayoutIntent({
+      template: "focus",
+      assignments: [
+        { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+      ],
+    });
+    const { adaptive } = store.getState();
+    // The explicit constraint wins: the agent's focus proposal is
+    // neutralized — the pinned companion is still in the composition and
+    // the constraint set survived the planner round.
+    expect(adaptive.spec?.template).not.toBe("focus");
+    expect(
+      adaptive.spec?.assignments.map((a) => a.surfaceId),
+    ).toContain("placeholder.companion");
+    expect(
+      adaptive.overrides.bySurface["placeholder.companion"],
+    ).toBeDefined();
+  });
+
+  it("a 'put it on the right' constraint beats a later agent composition", () => {
+    const store = createAppStore(() => {});
+    const baseline: LayoutSpec = {
+      template: "sidecar",
+      assignments: [
+        { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+        { surfaceId: "placeholder.companion", role: "companion", slot: "side" },
+      ],
+    };
+    store.getState().applyAdaptiveSpec(baseline);
+    // "ponlo a la derecha" — the primary must live in the side region.
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "right", surfaceId: "placeholder.primary" },
+    });
+    expect(
+      store.getState().adaptive.spec?.assignments.find(
+        (a) => a.surfaceId === "placeholder.primary",
+      )?.slot,
+    ).toBe("side");
+    // The agent later proposes the primary back in main.
+    store.getState().applyLayoutIntent(baseline);
+    const spec = store.getState().adaptive.spec!;
+    // The explicit user constraint still wins.
+    expect(
+      spec.assignments.find((a) => a.surfaceId === "placeholder.primary")?.slot,
+    ).toBe("side");
+    expect(
+      spec.assignments.find((a) => a.surfaceId === "placeholder.companion")
+        ?.role,
+    ).toBe("primary");
+  });
+
+  it("a fullscreen constraint survives a later agent composition", () => {
+    const store = createAppStore(() => {});
+    const baseline: LayoutSpec = {
+      template: "sidecar",
+      assignments: [
+        { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+        { surfaceId: "placeholder.companion", role: "companion", slot: "side" },
+      ],
+    };
+    store.getState().applyAdaptiveSpec(baseline);
+    // "pantalla completa" — the companion alone in focus.
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "fullscreen", surfaceId: "placeholder.companion" },
+    });
+    expect(store.getState().adaptive.spec?.template).toBe("focus");
+    // The agent later proposes the sidecar again.
+    store.getState().applyLayoutIntent(baseline);
+    const { adaptive } = store.getState();
+    // The explicit user constraint still wins — the agent cannot break
+    // the fullscreen.
+    expect(adaptive.spec?.template).toBe("focus");
+    expect(
+      adaptive.spec?.assignments.map((a) => a.surfaceId),
+    ).toEqual(["placeholder.companion"]);
+  });
+
+  it("a showBoth constraint survives a later agent composition", () => {
+    const store = createAppStore(() => {});
+    const baseline: LayoutSpec = {
+      template: "sidecar",
+      assignments: [
+        { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+        { surfaceId: "placeholder.companion", role: "companion", slot: "side" },
+      ],
+    };
+    store.getState().applyAdaptiveSpec(baseline);
+    // "muéstrame los dos" — an equal two-primary split.
+    store.getState().applyAdaptiveSpec(baseline, {
+      overrideIntent: { kind: "showBoth", surfaceId: "placeholder.primary" },
+    });
+    expect(store.getState().adaptive.spec?.template).toBe("split");
+    // The agent later proposes the sidecar (one primary).
+    store.getState().applyLayoutIntent(baseline);
+    const { adaptive } = store.getState();
+    // The explicit user constraint still wins — still the equal split.
+    expect(adaptive.spec?.template).toBe("split");
+    const primaries = adaptive.spec?.assignments.filter(
+      (a) => a.role === "primary",
+    );
+    expect(primaries?.length).toBe(2);
+  });
 });

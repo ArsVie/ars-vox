@@ -27,7 +27,6 @@ import {
   computeLayout,
   DEFAULT_PRIMARY,
   isPanelId,
-  resolveTemplate,
   TEMPLATE_SLOTS,
   type LayoutResult,
   type LayoutSpec,
@@ -44,16 +43,24 @@ import type {
   Proportion,
   SurfaceRole,
 } from "./adaptive/contracts";
+import { TEMPLATE_SLOTS as ADAPTIVE_TEMPLATE_SLOTS } from "./adaptive/contracts";
 import {
   applyOverrides,
   EMPTY_OVERRIDES,
   mergeOverrideIntent,
+  removeSurfaceOverrides,
   type OverrideIntent,
   type OverrideSet,
   type SurfaceConstraint,
 } from "./adaptive/overrides";
+import {
+  matchSpokenOverride,
+  resolveSpokenOverrideTarget,
+  spokenOverrideIntent,
+} from "./adaptive/spokenOverrides";
 import { scoreChange } from "./layout/inertia";
 import {
+  LEGACY_TEMPLATE_MAP,
   planLayout,
   type PlannerInput,
   type PlannerRejection,
@@ -91,6 +98,11 @@ export interface AdaptiveState {
   lastRejection: PlannerRejection | null;
   /** UI-302: active user layout constraints, keyed by surfaceId. */
   overrides: OverrideSet;
+  /** R19 (GATE-3.5): the composition captured when a fullscreen constraint
+   *  ENGAGED — the fullscreen toggle's restore target. Null while no
+   *  fullscreen constraint is active (or when it arrived via a snapshot
+   *  restore, where it is not carried). Plain JSON — snapshot-safe. */
+  preFullscreen: AdaptiveLayoutSpec | null;
 }
 
 export const EMPTY_ADAPTIVE: AdaptiveState = {
@@ -98,6 +110,7 @@ export const EMPTY_ADAPTIVE: AdaptiveState = {
   assignments: [],
   lastRejection: null,
   overrides: EMPTY_OVERRIDES,
+  preFullscreen: null,
 };
 
 /**
@@ -114,6 +127,12 @@ export interface ApplyAdaptiveSpecOptions {
    *  this spec AFTER the planner's output and to every future planner
    *  spec until removed ("restore layout" / removeSurfaceOverrides). */
   overrideIntent?: OverrideIntent;
+  /** R19 (GATE-3.5): full replacement constraint set, used WITHOUT
+   *  overrideIntent when a caller needs to apply a modified set directly
+   *  (e.g. removeSurfaceOverrides for the fullscreen toggle-off or a
+   *  reconnect restoring the snapshot's constraints). When both are
+   *  present, overrideIntent merges into this set. */
+  overrides?: OverrideSet;
 }
 
 export interface ConfirmationInfo {
@@ -278,6 +297,12 @@ export interface AppState {
    *  the same choke as applyAdaptiveSpec (registry + inertia guard).
    *  Returns the rejection reason when the intent was rejected, else null. */
   applyLayoutIntent: (intent: PlannerInput) => PlannerRejection | null;
+  /** R21 (GATE-3.5): the spoken-override route. Deterministic phrase
+   *  matching on an STT transcript BEFORE any user_text reaches the model:
+   *  a matched layout phrase becomes an OverrideIntent through the ONE
+   *  choke and the utterance is consumed (never a vague model suggestion).
+   *  Returns true when the utterance was consumed as a layout override. */
+  handleSpokenText: (text: string) => boolean;
   /** UI-103: write a per-surface state value (keyed by surfaceId). */
   setSurfaceState: (surfaceId: string, key: string, value: unknown) => void;
   recompute: () => void;
@@ -392,16 +417,45 @@ function initialSpec(): LayoutSpec {
   };
 }
 
-function slotsEqual(
-  a: LayoutSpec["slots"],
-  b: LayoutSpec["slots"],
-): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  for (const slot of ["main", "side", "rail", "dock"] as SlotName[]) {
-    if (a[slot] !== b[slot]) return false;
+/** Slot → semantic role for addSurfaceToSpec (mirrors WIRE_SLOT_ROLE in
+ *  the planner: the adaptive contract's frozen role vocabulary). */
+function slotRole(slot: string): "primary" | "companion" | "support" {
+  if (slot === "main") return "primary";
+  if (slot === "side") return "companion";
+  return "support";
+}
+
+/**
+ * R19 (GATE-3.5): place a surface into a composition deterministically —
+ * the first FREE slot of the current template (main→primary, side→
+ * companion, rail→support); when the template is full, step up to triple;
+ * when nowhere to go, return the input unchanged (the degrade layer would
+ * drop the newcomer anyway). Mirrors the legacy engine's "fill empty
+ * slots" rule for the manual-open source.
+ */
+function addSurfaceToSpec(
+  spec: AdaptiveLayoutSpec,
+  surfaceId: string,
+): AdaptiveLayoutSpec {
+  if (spec.assignments.some((a) => a.surfaceId === surfaceId)) return spec;
+  const occupied = new Set(spec.assignments.map((a) => a.slot));
+  const candidates = [spec.template, "triple"] as const;
+  for (const template of candidates) {
+    const free = ADAPTIVE_TEMPLATE_SLOTS[template].find(
+      (s: string) => !occupied.has(s),
+    );
+    if (free) {
+      return {
+        ...spec,
+        template,
+        assignments: [
+          ...spec.assignments,
+          { surfaceId, role: slotRole(free), slot: free },
+        ],
+      };
+    }
   }
-  return true;
+  return spec;
 }
 
 /** H5: raw transport send slot for the outbound buffer. Rebound by
@@ -529,22 +583,54 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         patch.ttsQueueMax = tts.queue_max;
       }
       if (!layoutApplied) {
+        // R19 (GATE-3.5): the config-driven default layout is a layout
+        // source ("migration") and enters the ONE choke as the initial
+        // adaptive composition. Legacy template ids map through the
+        // planner's frozen wire map; an unregistered default_primary
+        // falls back to the conversation anchor (the choke's registry
+        // gate must never throw on config data).
         const template =
           typeof ui.default_template === "string" && ui.default_template
-            ? resolveTemplate(ui.default_template)
+            ? adaptiveTemplateFromConfig(ui.default_template)
             : null;
-        if (template && template !== state.spec.template) {
-          const primaryPanel =
+        if (template) {
+          // Config data must NEVER throw through the choke's registry
+          // gate: an unregistered default_primary falls back to the
+          // conversation anchor; when even the anchor is unregistered
+          // (e.g. product surfaces not yet registered), skip the default.
+          const configuredPrimary =
             typeof ui.default_primary === "string" &&
             isPanelId(ui.default_primary) &&
-            ui.default_primary !== state.spec.primaryPanel
+            surfaceRegistry.has(ui.default_primary)
               ? ui.default_primary
-              : state.spec.primaryPanel;
-          patch.spec = { ...state.spec, template, primaryPanel };
+              : null;
+          const primary =
+            configuredPrimary ??
+            (surfaceRegistry.has(DEFAULT_PRIMARY) ? DEFAULT_PRIMARY : null);
+          if (primary) {
+            applyAdaptiveSpec(
+              {
+                template,
+                assignments: [
+                  { surfaceId: primary, role: "primary", slot: "main" },
+                ],
+              },
+              { userInitiated: false },
+            );
+            layoutApplied = true;
+          }
         }
       }
       set(patch);
-      if (patch.spec) recompute();
+    };
+
+    /** R19 (GATE-3.5): config default_template → adaptive template id.
+     *  Adaptive ids pass through; legacy wire ids (focus/split/reading/
+     *  dashboard) map through the planner's frozen legacy map. Unknown ids
+     *  → null (no default layout). */
+    const adaptiveTemplateFromConfig = (value: string): AdaptiveTemplate | null => {
+      if (value in ADAPTIVE_TEMPLATE_SLOTS) return value as AdaptiveTemplate;
+      return LEGACY_TEMPLATE_MAP[value] ?? null;
     };
 
     /**
@@ -558,9 +644,9 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
      * (equivalent layouts, sub-bar movement, unjustified template changes)
      * is damped: the current composition is kept untouched (zero churn).
      * User-initiated changes and primary re-focusing always apply — the
-     * policy never blocks a real signal. The legacy engine path
-     * (applyUiCommand / layout.apply) does not flow through this choke
-     * point and is untouched.
+     * policy never blocks a real signal. The legacy engine path is RETIRED
+     * (R22): no layout command writes state.spec anymore — every layout
+     * source flows through this choke.
      *
     /**
      * UI-301: agent layout intents (wire ui_command/layout.apply) now flow
@@ -589,9 +675,10 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       options: ApplyAdaptiveSpecOptions = {},
     ): void => {
       const state = get();
+      const baseOverrides = options.overrides ?? state.adaptive.overrides;
       const overrides = options.overrideIntent
-        ? mergeOverrideIntent(state.adaptive.overrides, options.overrideIntent, spec)
-        : state.adaptive.overrides;
+        ? mergeOverrideIntent(baseOverrides, options.overrideIntent, spec)
+        : baseOverrides;
       const constrained = applyOverrides(
         spec,
         overrides,
@@ -600,18 +687,34 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       const assignments = resolveLayout(constrained, surfaceRegistry);
       const userInitiated =
         options.userInitiated === true || options.overrideIntent !== undefined;
+      // R19: capture the pre-fullscreen composition when a fullscreen
+      // constraint ENGAGES (once), and clear it when it disengages — the
+      // toggle-off restore target. Spec is the incoming (unconstrained)
+      // composition, so the restore returns to exactly what the user had.
+      const wasFullscreen = Object.values(state.adaptive.overrides.bySurface).some(
+        (c) => c.fullscreen === true,
+      );
+      const nowFullscreen = Object.values(overrides.bySurface).some(
+        (c) => c.fullscreen === true,
+      );
+      const preFullscreen =
+        !wasFullscreen && nowFullscreen
+          ? spec
+          : wasFullscreen && !nowFullscreen
+            ? null
+            : state.adaptive.preFullscreen;
       const verdict = scoreChange(state.adaptive.spec, constrained, {
         userInitiated,
       });
       if (verdict.decision === "keep") {
         // No layout churn — but a fresh constraint set must still persist
         // (a no-op user command still pins for future planner rounds).
-        if (overrides !== state.adaptive.overrides) {
-          set({ adaptive: { ...state.adaptive, overrides } });
+        if (overrides !== state.adaptive.overrides || preFullscreen !== state.adaptive.preFullscreen) {
+          set({ adaptive: { ...state.adaptive, overrides, preFullscreen } });
         }
         return;
       }
-      set({ adaptive: { spec: constrained, assignments, overrides, lastRejection: null } });
+      set({ adaptive: { spec: constrained, assignments, overrides, lastRejection: null, preFullscreen } });
     };
 
     /**
@@ -665,31 +768,18 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       const state = get();
       switch (command.action) {
         case "layout.apply": {
-          // UI-301: the agent's layout intent (H1 wire path) also flows
-          // through the planner into the adaptive layer. The planner maps
-          // the legacy wire vocabulary to a LayoutSpec and validates it
-          // deterministically — invalid intents are rejected and recorded
-          // (adaptive.lastRejection), never thrown and never corrupting
-          // layout state. The legacy engine path below stays authoritative
-          // for state.spec and is untouched.
+          // UI-301: the agent's layout intent (H1 wire path) flows through
+          // the planner into the ONE adaptive choke (applyAdaptiveSpec via
+          // applyLayoutIntent). The planner maps the legacy wire vocabulary
+          // to a LayoutSpec and validates it deterministically — invalid
+          // intents are rejected and recorded (adaptive.lastRejection),
+          // never thrown and never corrupting layout state.
+          // R22 (GATE-3.5): the legacy engine (state.spec/computeLayout) is
+          // NON-AUTHORITATIVE — it is no longer written by ANY layout
+          // command, so invalid model output can never reach layout state
+          // through it either.
           applyLayoutIntent(command);
           layoutApplied = true;
-          const next: LayoutSpec = {
-            template: command.template,
-            primaryPanel: command.primary_panel,
-            secondaryPanel: command.secondary_panel,
-            slots: command.slots ? { ...command.slots } : undefined,
-            preserve: command.preserve ?? true,
-          };
-          const same =
-            state.spec.template === next.template &&
-            state.spec.primaryPanel === next.primaryPanel &&
-            state.spec.secondaryPanel === next.secondaryPanel &&
-            slotsEqual(state.spec.slots, next.slots);
-          if (same) return;
-          pushHistory();
-          set({ spec: next, fullscreenPanel: null });
-          recompute();
           return;
         }
         case "panel.open": {
@@ -703,8 +793,32 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
               contentReference: command.content_reference ?? undefined,
             },
           };
+          if (state.adaptive.spec == null) {
+            // Legacy boot path (before the first composition): PanelHost
+            // renders the legacy engine — keep the legacy mount semantics.
+            set({ panelMeta });
+            recompute();
+            return;
+          }
+          // R19 (GATE-3.5): the manual-open source enters the ONE choke.
+          // Opening a surface cancels any prior close constraint for it and
+          // places it into the composition deterministically (first free
+          // template slot; the degrade layer rehomes/drops when the
+          // template cannot host it). Unregistered ids are ignored (the
+          // frozen registry check applies at the choke, never silently).
+          layoutApplied = true;
+          const opened =
+            surfaceRegistry.has(command.panel_type)
+              ? addSurfaceToSpec(state.adaptive.spec, command.panel_type)
+              : state.adaptive.spec;
+          applyAdaptiveSpec(opened, {
+            userInitiated: true,
+            overrides: removeSurfaceOverrides(
+              state.adaptive.overrides,
+              command.panel_type,
+            ),
+          });
           set({ panelMeta });
-          recompute();
           return;
         }
         case "panel.close": {
@@ -714,52 +828,105 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           if (!target) return;
           const panelMeta = { ...state.panelMeta };
           delete panelMeta[target];
-          const next: LayoutSpec = { ...state.spec };
-          if (next.primaryPanel === target) next.primaryPanel = null;
-          if (next.secondaryPanel === target) next.secondaryPanel = null;
-          if (next.slots) {
-            const slots = { ...next.slots };
-            for (const slot of Object.keys(slots) as SlotName[]) {
-              if (slots[slot] === target) slots[slot] = null;
+          if (state.adaptive.spec == null) {
+            // Legacy boot path — keep the legacy close semantics.
+            const next: LayoutSpec = { ...state.spec };
+            if (next.primaryPanel === target) next.primaryPanel = null;
+            if (next.secondaryPanel === target) next.secondaryPanel = null;
+            if (next.slots) {
+              const slots = { ...next.slots };
+              for (const slot of Object.keys(slots) as SlotName[]) {
+                if (slots[slot] === target) slots[slot] = null;
+              }
+              next.slots = slots;
             }
-            next.slots = slots;
+            set({
+              panelMeta,
+              spec: next,
+              fullscreenPanel: state.fullscreenPanel === target ? null : state.fullscreenPanel,
+            });
+            recompute();
+            return;
           }
+          // R19/R20 (GATE-3.5): closing a surface is a USER close intent —
+          // a persistent constraint through the ONE choke. A later agent
+          // composition that proposes the surface cannot bring it back.
+          layoutApplied = true;
+          applyAdaptiveSpec(state.adaptive.spec, {
+            userInitiated: true,
+            overrideIntent: { kind: "close", surfaceId: target },
+          });
           set({
             panelMeta,
-            spec: next,
-            fullscreenPanel: state.fullscreenPanel === target ? null : state.fullscreenPanel,
+            fullscreenPanel:
+              state.fullscreenPanel === target ? null : state.fullscreenPanel,
           });
-          recompute();
           return;
         }
         case "panel.set_primary": {
           if (!isPanelId(command.panel_type)) return;
           layoutApplied = true;
-          pushHistory();
-          set({
-            spec: {
-              ...state.spec,
-              primaryPanel: command.panel_type,
-              slots: state.spec.slots
-                ? { ...state.spec.slots, main: command.panel_type }
-                : undefined,
-            },
+          if (state.adaptive.spec == null) {
+            // Legacy boot path — keep the legacy semantics.
+            pushHistory();
+            set({
+              spec: {
+                ...state.spec,
+                primaryPanel: command.panel_type,
+                slots: state.spec.slots
+                  ? { ...state.spec.slots, main: command.panel_type }
+                  : undefined,
+              },
+            });
+            recompute();
+            return;
+          }
+          // R19 (GATE-3.5): "make this the primary" == the frozen "left"
+          // intent (the target becomes the main primary; the previous main
+          // occupant moves to the side companion) — through the ONE choke.
+          applyAdaptiveSpec(state.adaptive.spec, {
+            userInitiated: true,
+            overrideIntent: { kind: "left", surfaceId: command.panel_type },
           });
-          recompute();
           return;
         }
         case "panel.fullscreen": {
           if (!isPanelId(command.panel_type)) return;
+          layoutApplied = true;
+          if (state.adaptive.spec == null) {
+            // Legacy boot path — the legacy overlay.
+            set({ fullscreenPanel: command.panel_type });
+            return;
+          }
+          // R19 (GATE-3.5): fullscreen through the ONE choke; the legacy
+          // fullscreenPanel field becomes a non-authoritative VIEW mirror
+          // of the fullscreen constraint (PanelHeader's icon state).
+          applyAdaptiveSpec(state.adaptive.spec, {
+            userInitiated: true,
+            overrideIntent: { kind: "fullscreen", surfaceId: command.panel_type },
+          });
           set({ fullscreenPanel: command.panel_type });
           return;
         }
         case "layout.restore": {
           layoutApplied = true;
-          const history = [...state.history];
-          const previous = history.pop();
-          if (!previous) return;
-          set({ history, spec: previous, fullscreenPanel: null });
-          recompute();
+          if (state.adaptive.spec == null) {
+            // Legacy boot path — keep the legacy history pop.
+            const history = [...state.history];
+            const previous = history.pop();
+            if (!previous) return;
+            set({ history, spec: previous, fullscreenPanel: null });
+            recompute();
+            return;
+          }
+          // R19 (GATE-3.5): "restore layout" == the frozen restore intent —
+          // clears the persistent constraint set through the ONE choke (the
+          // explicit user reset; the unconstrained composition applies).
+          applyAdaptiveSpec(state.adaptive.spec, {
+            userInitiated: true,
+            overrideIntent: { kind: "restore" },
+          });
+          set({ fullscreenPanel: null });
           return;
         }
         case "notification.show": {
@@ -1002,32 +1169,20 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                     assignments,
                     proportion: (ad.proportion as Proportion) ?? null,
                   },
-                  { userInitiated: false },
+                  {
+                    // Authoritative server truth (R33): restore WITH the
+                    // snapshot constraint set in one shot through the choke,
+                    // never damped by inertia on an authoritative restore.
+                    overrides:
+                      ad.overrides && typeof ad.overrides === "object"
+                        ? ({ bySurface: ad.overrides } as OverrideSet)
+                        : EMPTY_OVERRIDES,
+                    userInitiated: true,
+                  },
                 );
               } catch {
                 // never crash the event path on an invalid composition
               }
-            }
-          }
-          // Snapshot overrides are authoritative when present (same-tab
-          // reconnect keeps its live constraints; a reload restores them).
-          if (
-            ad &&
-            ad.overrides &&
-            typeof ad.overrides === "object" &&
-            Object.keys(ad.overrides).length > 0
-          ) {
-            const bySurface: Record<string, SurfaceConstraint> = {};
-            for (const [k, v] of Object.entries(ad.overrides)) {
-              if (v && typeof v === "object") bySurface[k] = v as SurfaceConstraint;
-            }
-            if (Object.keys(bySurface).length > 0) {
-              set({
-                adaptive: {
-                  ...get().adaptive,
-                  overrides: { bySurface },
-                },
-              });
             }
           }
           set(patch);
@@ -1189,7 +1344,32 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       },
       toggleFullscreen: (panel) => {
         const state = get();
-        set({ fullscreenPanel: state.fullscreenPanel === panel ? null : panel });
+        if (state.adaptive.spec == null) {
+          // Legacy boot path — the legacy overlay (PanelHost).
+          set({ fullscreenPanel: state.fullscreenPanel === panel ? null : panel });
+          return;
+        }
+        // R19 (GATE-3.5): the manual fullscreen source enters the ONE
+        // choke. The constraint set decides the toggle direction: a
+        // fullscreen constraint on this surface → OFF (drop the surface's
+        // constraints and restore the pre-fullscreen composition captured
+        // when the constraint engaged); otherwise → ON (fullscreen intent).
+        layoutApplied = true;
+        const c = state.adaptive.overrides.bySurface[panel];
+        if (c?.fullscreen === true) {
+          const restoreTo = state.adaptive.preFullscreen ?? state.adaptive.spec;
+          applyAdaptiveSpec(restoreTo, {
+            userInitiated: true,
+            overrides: removeSurfaceOverrides(state.adaptive.overrides, panel),
+          });
+          set({ fullscreenPanel: null });
+        } else {
+          applyAdaptiveSpec(state.adaptive.spec, {
+            userInitiated: true,
+            overrideIntent: { kind: "fullscreen", surfaceId: panel },
+          });
+          set({ fullscreenPanel: panel });
+        }
       },
       stop: () => {
         // STOP is locally authoritative: run the LOCAL cancellation
@@ -1327,6 +1507,28 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       applyUiCommand,
       applyAdaptiveSpec,
       applyLayoutIntent,
+      handleSpokenText: (text) => {
+        const state = get();
+        // R21: deterministic spoken-override route. Whole-utterance phrase
+        // matching (accent-stripped, punctuation-free) — a matched layout
+        // phrase becomes an OverrideIntent applied through the ONE choke
+        // and is CONSUMED (no user_text reaches the model, so no vague
+        // model suggestion can be produced). Non-matches and utterances
+        // before any composition exists fall through to the normal path.
+        const kind = matchSpokenOverride(text);
+        if (!kind || state.adaptive.spec == null) return false;
+        const intent = spokenOverrideIntent(
+          kind,
+          resolveSpokenOverrideTarget(state.adaptive.spec),
+        );
+        if (!intent) return false;
+        layoutApplied = true;
+        applyAdaptiveSpec(state.adaptive.spec, {
+          userInitiated: true,
+          overrideIntent: intent,
+        });
+        return true;
+      },
       setSurfaceState,
       recompute,
       enqueueTts: pushSpeak,
