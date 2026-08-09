@@ -9,6 +9,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
+### g35-a5 (media authority — GATE-3.5 consolidation, Wave 1)
+- timestamp: 2026-08-08 (Wave 1 kickoff)
+- task: Single media authority (R24-R27): one MediaController shared by agent tools (media_tools.py), client actions (actions.py) and player callbacks; real seek (position emitted + iframe seekTo); duration/currentTime synced from the YouTube iframe into the controller (no React-only simulated state); primary<->persistent no-remount preserved.
+- files/dirs: services/agent/arsvox_agent/{media.py (new), actions.py, tools/media_tools.py, tools/demo_tools.py}, apps/desktop/src/{media/controller.ts (new), store.ts, components/MediaDock.tsx}, tests/python/{test_media_controller.py (new), test_media_tools.py, test_client_actions.py}, apps/desktop/tests/{media-controller.test.ts (new), media-wiring.test.tsx}, hey.md
+- boundaries: will NOT touch snapshot.py (A6), layout reducer/adaptive (A4), contracts command types (A7), reconnect tests (A6). CROSS-OWNER note for A6 in handoff.
+- status: in_progress
+
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
