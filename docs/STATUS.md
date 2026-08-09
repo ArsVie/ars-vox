@@ -17,18 +17,77 @@ this file wins.
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-09 ~00:00 CST, post GATE-3.5 consolidation)
+## Test gates (last full run, 2026-08-09 ~14:20 CST, post GATE-4 remediation close)
 
-- vitest: 601 passed (48 files) — apps/desktop (441 post-wave-3 + GATE-3.5:
-  A1 TTS acks, A4 one-choke + spoken overrides, A5 media controller, A6
-  snapshot/sequence, A7 confirmation, A9 R43 visual, A10 adversarial TS)
-- pytest: 308 passed — tests/python (194 post-GATE-2.5 + GATE-3.5: A1 voice
-  lifecycle, A3 native layout, A5 media tools + honest seek, A6 tracker +
-  snapshot, A7 spoken confirmation + client actions, A10 adversarial python,
-  R18 no-news enum, G1/G2 gate fixes)
+- vitest: 567 passed (48 files) — apps/desktop (post-remediation:
+  transport outbox/validation/backoff, media single-authority, browser
+  dead-control removal, layout restore regression, GATE-2 reconciliation)
+- pytest: 322 passed — tests/python (remediation: F1 confirm-settle,
+  F2 tasks-update emission, layout tools two-primary derivation)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
 - OKF docs validator: 23 concepts validated (2026-08-09)
+
+## GATE-4 remediation (CLOSED 2026-08-09)
+
+Program: docs/plans/gate-4-remediation-orchestration-2026-08-09.md.
+GATE-3.5 closed on green suites alone and four production defects were
+later found living in the seams between individually-correct branches.
+GATE-4 reopened the system: four waves of lane-parallel work, packaged
+gates after every wave (the packaged build is the proof, suites are the
+floor), plus a read-only adversarial seam audit.
+
+Defects found and fixed (7 + 5 advisory):
+- D1 TTS auth (renderer fetch had no token) — W0-TTS.
+- D2 reconnect spin (server sent snapshot before the client's connect
+  ack; client acked, server already listening) — W0-RECONNECT.
+- D3 resize geometry — W0-VIEWPORT.
+- D4 layout.compose wire+store never landed — W1-STORE/PYCONTRACT/
+  DISPATCH.
+- D5 packaged app never opened a window (scheme registered inside
+  app.whenReady) — gate fix 433c707.
+- D6 boot white-screen: a split composition with two primaries in
+  "main" passed the frozen validator and crashed the geometry engine
+  at render (snapshot restore) — gate fix 80f750d (second primary →
+  side, never-crash choke + render net).
+- D7 fullscreen restore lost the composition (preFullscreen captured
+  but never consumed; restore based on the fullscreen-constrained
+  spec) — gate fix 50e0e38, caught by the packaged GATE-2 spoken check.
+- ADV F1–F6 (adversarial audit, commit 0fb7c0e): button-confirm
+  published a stale WAITING_FOR_CONFIRMATION and disarmed the silence
+  timer (blocking — fixed); reminder fires never refreshed content.tasks;
+  geometry rejections were silent; snapshot restore didn't latch the
+  config-default guard; dead dismiss shim; stale docstring.
+
+Wave map (all merged, zero unresolved conflicts):
+- W0: TTS / RECONNECT / VIEWPORT / HYGIENE.
+- W1: STORE (LayoutCompose wire member + one-choke routing + default
+  clause) / PYCONTRACT (snapshot mapping + schemas regen + parity
+  tests) / VOICE (settle paths) / ELECTRON (CSP, hardened-view) /
+  DISPATCH (layout_compose tool, validators, authoritative events).
+- W2: SURFACES (legacy dual-mount forks removed from all five
+  components) / REMINDERS (one publish per reminder, tasks-update
+  emission, dismiss affordance) / STORE (legacy layout authority
+  deleted: engine.ts, PanelHost, legacy store fields, six legacy boot
+  branches — net −1,095 lines; default composition before first paint;
+  fullscreen derived from adaptive.overrides).
+- W3: MEDIA (single media authority — controller subscribe/emit, the
+  store derives content.media, MediaDock hand mirrors gone) / BROWSER
+  (dead back/forward/refresh buttons removed — the iframe sandbox
+  cannot navigate cross-origin content) / TRANSPORT (one outbox — the
+  store's send is a pass-through, the transport buffers in both modes;
+  one validation file; one shared exponential-jitter backoff).
+- GATE-2 reconciliation: 10-item foreign-file checklist (imports
+  re-homed from the deleted engine, panelhost test deleted, conformance
+  parity, provider wraps, reconnect/adaptive tests pinned to the new
+  reality, dismiss seam flipped).
+
+Packaged gate evidence: GATE-0 TTS speaks / reconnect recovers /
+geometry follows; GATE-1 compose changes the layout and reload restores
+it; GATE-2 cold start is clean with PanelHost gone and the spoken
+fullscreen→restore round trip works; final smoke (2026-08-09): cold
+start clean, compose split → fullscreen → restore returns the 50/50
+split.
 
 ## GATE-3.5 consolidation (CLOSED 2026-08-09)
 
