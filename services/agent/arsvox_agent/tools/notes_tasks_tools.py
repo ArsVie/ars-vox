@@ -1,7 +1,14 @@
 """Notes and tasks tools. The agent can suggest tags but never edits the
-original note content."""
+original note content.
 
-import json
+GATE-5 (W1-MEMORY): memory.remember / memory.recall are RETIRED — the
+exact-key k/v path against PreferenceStore with a "memory:" prefix was a
+second memory authority the model could only reach by guessing keys
+(charter finding). Recall is now memory.search (arsvox_memory FTS over
+notes + turns, tools/memory_tools.py); the k/v write path survives only
+as the demoted preferences.set there (explicit preference-setting, no
+"memory:" prefix).
+"""
 
 from arsvox_agent.tools.context import ToolContext
 
@@ -53,19 +60,6 @@ async def tasks_complete(tctx: ToolContext, task_id: int) -> str:
     return f"No encontré la tarea #{task_id} pendiente."
 
 
-async def memory_remember(tctx: ToolContext, key: str, value: str) -> str:
-    tctx.deps.preferences.set(f"memory:{key}", value)
-    tctx.deps.audit.log("memory", "remember", {"key": key})
-    return f"Recordado: {key}."
-
-
-async def memory_recall(tctx: ToolContext, key: str) -> str:
-    value = tctx.deps.preferences.get(f"memory:{key}")
-    if value is None:
-        return f"No tengo nada guardado como '{key}'."
-    return json.dumps({key: value}, ensure_ascii=False)
-
-
 # --------------------------------------------------------------------- #
 from arsvox_contracts import PolicyKind
 
@@ -88,6 +82,4 @@ SPECS = [
     ),
     ToolSpec("tasks.list", "List tasks; status is optional ('pending' or 'done').", tasks_list, PolicyKind.READ_ONLY),
     ToolSpec("tasks.complete", "Mark a task as done by id.", tasks_complete, PolicyKind.REVERSIBLE),
-    ToolSpec("memory.remember", "Store a small durable fact (key/value).", memory_remember, PolicyKind.REVERSIBLE),
-    ToolSpec("memory.recall", "Recall a stored fact by key.", memory_recall, PolicyKind.READ_ONLY),
 ]

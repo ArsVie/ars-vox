@@ -1,7 +1,9 @@
 """Per-turn context builder. Keeps the model's view of the application
 small and current: open panels, pending confirmations, active reminders,
-and the most recent turns (full history stays in SQLite)."""
+recalled preferences (memory section), and the most recent turns (full
+history stays in SQLite)."""
 
+import json
 from datetime import datetime, timezone
 
 from arsvox_contracts import AppConfig
@@ -54,6 +56,28 @@ def build_context(config: AppConfig, deps: Deps) -> str:
             "Recordatorios activos: "
             + "; ".join(f"#{r['id']} {r['due_at']} {r['text']}" for r in reminders[:5])
         )
+    # GATE-5 (W1-MEMORY): memory section — recalled preferences guide the
+    # agent's searches (vision line: "know user preferences from MEMORIES
+    # and query searches accordingly"). The k/v PreferenceStore is NOT a
+    # memory authority: "memory:"-prefixed keys (retired misuse) are never
+    # embedded. Deeper recall is the memory.search tool.
+    if deps.db is not None:
+        prefs: list[tuple[str, str]] = []
+        for row in deps.db.rows("SELECT key, value_json FROM preferences ORDER BY key"):
+            if row["key"].startswith("memory:"):
+                continue
+            try:
+                value = json.loads(row["value_json"])
+            except json.JSONDecodeError:
+                value = row["value_json"]
+            prefs.append(
+                (row["key"], value if isinstance(value, str) else json.dumps(value, ensure_ascii=False))
+            )
+        if prefs:
+            lines.append(
+                "Preferencias recordadas: "
+                + "; ".join(f"{k}: {v}" for k, v in prefs)
+            )
     if deps.session_id:
         turns = deps.sessions.recent_turns(
             deps.session_id, config.agent.recent_turns_in_context
