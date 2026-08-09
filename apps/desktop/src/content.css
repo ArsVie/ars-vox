@@ -727,6 +727,22 @@
   color: var(--text-faint);
 }
 
+/* GATE-5 (W1-MEDIA-LOCAL): the local half of the unified player. The
+   native element is driven by the SAME controller + custom controls as
+   the YouTube embed — the audio element is hidden (its own controls
+   would be a SECOND control set; the unified player controls win), the
+   video element fills the stage like the iframe does. */
+.media-player-local-audio {
+  display: none;
+}
+
+.media-player-local-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
 .media-player-controls {
   display: flex;
   align-items: center;
