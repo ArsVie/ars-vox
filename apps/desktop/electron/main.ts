@@ -278,6 +278,13 @@ function setupIpc(): void {
 
 // --------------------------------------------------------------- app #
 
+// R40: registerLocalDocProtocol must run BEFORE app.whenReady() —
+// registerSchemesAsPrivileged is pre-ready only; calling it inside
+// whenReady rejects and ABORTS window creation (found by the GATE-0
+// packaged smoke). The protocol handler itself is deferred to whenReady
+// inside hardened-view.ts.
+registerLocalDocProtocol({ roots: localDocRoots() });
+
 app.whenReady().then(() => {
   // Voice-first product: the mic must be usable without fiddling with
   // site permissions — but ONLY in our own window. Any other WebContents
@@ -293,7 +300,6 @@ app.whenReady().then(() => {
   // Local-document protocol: inert until Wave 2 supplies roots
   // (ARSVOX_DOC_ROOTS = path.delimiter-separated absolute dirs; alias
   // "docs" for the first, "docsN" for the rest).
-  registerLocalDocProtocol({ roots: localDocRoots() });
   // Defense in depth: any WebContents that is not the app window gets the
   // remote guards (navigation filter + window-open denial).
   installGlobalWebContentsGuard({ allowlist: DEFAULT_REMOTE_ALLOWLIST, isAppWebContents });
