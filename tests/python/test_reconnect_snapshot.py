@@ -238,3 +238,25 @@ def test_turn_context_does_not_duplicate_current_text(script_client):
     # the turn is still persisted for history (only the context is fixed)
     services = c.app.state.services
     assert services.sessions.get(services.runtime.session_id)["turn_count"] >= 2
+
+
+def test_snapshot_history_roundtrip():
+    """History field: parses, defaults empty, and survives a roundtrip."""
+    snap = StateSnapshotEvent(
+        sequence=1,
+        voice_state=VoiceState.LISTENING,
+        config={},
+        layout={"panels": []},
+        history=[
+            {"id": 1, "role": "user", "text": "Abre un documento", "created_at": "2026-08-08T22:00:00+00:00"},
+            {"id": 2, "role": "assistant", "text": "Listo.", "created_at": "2026-08-08T22:00:05+00:00"},
+        ],
+    )
+    assert len(snap.history) == 2
+    assert snap.history[0]["role"] == "user"
+    dumped = snap.model_dump(mode="json")
+    parsed = StateSnapshotEvent.model_validate_json(json.dumps(dumped))
+    assert parsed.history[1]["text"] == "Listo."
+
+    empty = StateSnapshotEvent(sequence=0, voice_state=VoiceState.LISTENING, config={}, layout={"panels": []})
+    assert empty.history == []

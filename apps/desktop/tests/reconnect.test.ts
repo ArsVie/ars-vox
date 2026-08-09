@@ -29,6 +29,7 @@ function snapshot(overrides: Partial<StateSnapshotEvent> = {}): StateSnapshotEve
     media: null,
     notifications: [],
     content_keys: [],
+    history: [],
     created_at: ts(),
     ...overrides,
   };
@@ -154,6 +155,34 @@ describe("H5 state_snapshot application on connect", () => {
     store.getState().applyEvent(snapshot({ media: null }));
     expect(store.getState().content.media?.videoId).toBe("vid");
     expect(store.getState().content.media?.state).toBe("paused");
+  });
+
+  it("restores conversation history from the snapshot (reload does not blank the chat)", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent(
+      snapshot({
+        history: [
+          { id: 1, role: "user", text: "Abre un documento", created_at: ts() },
+          { id: 2, role: "assistant", text: "Listo, abrí el documento.", created_at: ts() },
+        ],
+      }),
+    );
+    const msgs = store.getState().messages;
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0]).toEqual({ id: "h1", role: "user", text: "Abre un documento" });
+    expect(msgs[1]).toEqual({ id: "h2", role: "assistant", text: "Listo, abrí el documento." });
+  });
+
+  it("does not wipe in-memory messages when the snapshot has no history", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "user_message",
+      id: "u1",
+      text: "hola",
+      created_at: ts(),
+    });
+    store.getState().applyEvent(snapshot({ history: [] }));
+    expect(store.getState().messages).toHaveLength(1);
   });
 });
 

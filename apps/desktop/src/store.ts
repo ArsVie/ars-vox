@@ -845,6 +845,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
               },
             };
           }
+          if (snap.history && snap.history.length > 0) {
+            // Server truth for the conversation: a reload/reconnect must
+            // not blank the chat (events are per-connection, turns are
+            // persisted). Replace — the snapshot is authoritative.
+            patch.messages = snap.history.map((h) => ({
+              id: `h${h.id}`,
+              role: h.role,
+              text: h.text,
+            }));
+          }
           set(patch);
           recompute();
           return;

@@ -22,6 +22,11 @@ class SessionStore:
     def get(self, session_id: str) -> dict | None:
         return self.db.row("SELECT * FROM sessions WHERE id = ?", (session_id,))
 
+    def latest(self, limit: int = 1) -> list[dict]:
+        return self.db.rows(
+            "SELECT * FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,)
+        )
+
     def append_turn(self, session_id: str, role: str, text: str, tokens: int | None = None) -> int:
         cur = self.db.execute(
             "INSERT INTO turns (session_id, role, text, tokens) VALUES (?, ?, ?, ?)",

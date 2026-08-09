@@ -368,6 +368,10 @@ export interface StateSnapshotEvent {
   media: MediaStateEvent | null;
   notifications: SnapshotNotification[];
   content_keys: string[];
+  /** Recent turns of the most recent session — restored on connect so a
+   *  reload/reconnect does not blank the conversation (events are
+   *  per-connection, turns are persisted). */
+  history: { id: number; role: "user" | "assistant"; text: string; created_at: string }[];
   created_at: string;
 }
 

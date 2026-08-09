@@ -24,6 +24,7 @@ from arsvox_contracts.events import (
 )
 
 from arsvox_agent.events import EventBus
+from arsvox_agent.deps import Deps
 from arsvox_agent.runtime import AgentRuntime
 
 log = logging.getLogger(__name__)
@@ -77,6 +78,33 @@ def _expires_in_s(row: dict) -> int:
         return 0
 
 
+def _recent_history(deps: "Deps", limit: int) -> list[dict[str, Any]]:
+    """Recent turns of the most recent session (server truth for the chat).
+
+    Turns are persisted per session; WS events are per-connection. Without
+    this, a page reload blanks the conversation forever (H5 gap)."""
+    try:
+        sessions = deps.sessions.latest(1)
+    except Exception:  # noqa: BLE001 — snapshot must never fail
+        return []
+    if not sessions:
+        return []
+    sid = sessions[0]["id"]
+    try:
+        turns = deps.sessions.recent_turns(sid, limit)
+    except Exception:  # noqa: BLE001
+        return []
+    return [
+        {
+            "id": t["id"],
+            "role": t["role"],
+            "text": t["text"][:500],
+            "created_at": t["created_at"],
+        }
+        for t in turns
+    ]
+
+
 def build_state_snapshot(
     runtime: AgentRuntime,
     config_snapshot: dict[str, Any],
@@ -111,6 +139,7 @@ def build_state_snapshot(
         sequence=runtime.bus.sequence,
         voice_state=voice,
         config=config_snapshot,
+        history=_recent_history(deps, runtime.config.agent.recent_turns_in_context),
         layout={
             "panels": [
                 {

@@ -234,6 +234,10 @@ class StateSnapshotEvent(BaseModel):
     media: MediaStateEvent | None = None
     notifications: list[dict[str, Any]] = Field(default_factory=list)
     content_keys: list[str] = Field(default_factory=list)
+    # Conversation history (recent turns of the most recent session).
+    # Restored on connect so a page reload / reconnect does not blank the
+    # chat — events are per-connection, but turns are persisted (H5 gap).
+    history: list[dict[str, Any]] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)
 
 
