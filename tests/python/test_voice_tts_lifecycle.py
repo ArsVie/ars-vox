@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import yaml
 from fastapi.testclient import TestClient
-from pydantic_ai.messages import ModelResponse, TextPart
+from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
 from arsvox_agent.app import create_app
@@ -61,6 +61,21 @@ class _FakeClock:
 def _text_model(text: str = "Hola mundo."):
     """FunctionModel that answers with text only (no tool calls)."""
     return FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content=text)]))
+
+
+def _tool_then_text_model(tool_name: str, args: dict, text: str = "Listo."):
+    """FunctionModel that calls one tool, then answers with text — the
+    shape of a turn that raises a confirmation AND speaks a final
+    phrase (auto_speak)."""
+    state = {"step": 0}
+
+    def handler(messages, info):
+        if state["step"] == 0:
+            state["step"] += 1
+            return ModelResponse(parts=[ToolCallPart(tool_name=tool_name, args=args)])
+        return ModelResponse(parts=[TextPart(content=text)])
+
+    return FunctionModel(handler)
 
 
 @pytest.fixture
@@ -250,6 +265,71 @@ def test_spoken_stop_during_tts_same_primitive(tts_client, monkeypatch):
         # Same primitive: the pipeline's on_stop callback is runtime.cancel,
         # identical to the {type: "stop"} path.
         assert c.app.state.services.runtime.pipeline.state == VoiceState.SLEEPING
+
+
+def test_confirm_during_tts_does_not_settle_to_listening(tts_client, monkeypatch):
+    """R05 through the confirmation seam: a turn that raises a
+    confirmation AND speaks (auto_speak) keeps the machine SPEAKING
+    while playback runs; resolving the confirmation mid-speech must not
+    force LISTENING — only the tts.finished ack settles, with the fresh
+    (now empty) pending state."""
+    monkeypatch.setattr(
+        "arsvox_agent.runtime.build_model",
+        lambda cfg: _tool_then_text_model(
+            "telegram_prepare_message", {"text": "Hola, confirma esto"}
+        ),
+    )
+    c = tts_client
+    with c.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.receive_json()
+        ws.receive_json()
+        ws.send_json({"type": "user_text", "text": "prepara un mensaje"})
+        # The telegram tool emits its own priority tts.speak BEFORE the
+        # confirmation; break on the confirmation_requested event, then
+        # verify a tts.speak (final auto-speak) is in the collected set.
+        events = ws_collect(
+            client=c, ws=ws,
+            expected_break=lambda e: e["type"] == "confirmation_requested",
+        )
+        reqs = [e for e in events if e["type"] == "confirmation_requested"]
+        assert reqs, "expected a confirmation request"
+        pending_id = reqs[-1]["pending_id"]
+        assert any(
+            e["type"] == "ui_command" and e["command"].get("action") == "tts.speak"
+            for e in events
+        ), "expected a tts.speak (telegram read-back or final auto-speak)"
+        assert not any(
+            e["type"] == "state_update" and e["voice_state"] == "listening"
+            for e in events
+        ), "LISTENING before speech ended (R05)"
+
+        ws.send_json({"type": "tts.started"})
+        ws_collect(
+            client=c, ws=ws,
+            expected_break=lambda e: e["type"] == "state_update"
+            and e["voice_state"] == "speaking",
+        )
+
+        # Confirm while the final phrase is physically playing.
+        ws.send_json({"type": "confirm", "pending_id": pending_id})
+        events = ws_collect(
+            client=c, ws=ws,
+            expected_break=lambda e: e["type"] == "confirmation_resolved"
+            and e["status"] == "executed",
+        )
+        assert not any(
+            e["type"] == "state_update" for e in events
+        ), "confirm mid-speech must not move the voice state (R05)"
+
+        # Only the finished ack settles — to LISTENING (pending cleared).
+        ws.send_json({"type": "tts.finished"})
+        events = ws_collect(
+            client=c, ws=ws,
+            expected_break=lambda e: e["type"] == "state_update"
+            and e["voice_state"] == "listening",
+        )
+        assert events[-1]["voice_state"] == "listening"
 
 
 # --------------------------------------------------------------------- #

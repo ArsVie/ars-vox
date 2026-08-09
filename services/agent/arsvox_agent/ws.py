@@ -168,6 +168,16 @@ async def _handle_local_intent(
 
 
 async def _sync_state_after_resolve(ws: WebSocket, runtime: AgentRuntime) -> None:
+    if runtime.pipeline is not None:
+        # GATE-3.5 (R05): NEVER settle to LISTENING while speech is
+        # physically playing or pending — the tts.finished ack settles
+        # with the fresh pending state instead. (The voice machine owns
+        # this transition; confirmation resolution itself is A7's.)
+        if (
+            runtime._speech_pending  # noqa: SLF001 — ws owns the wire lifecycle
+            or runtime.pipeline.state == VoiceState.SPEAKING
+        ):
+            return
     pending = runtime.deps_base.pending.list_pending()
     state = VoiceState.WAITING_FOR_CONFIRMATION if pending else VoiceState.LISTENING
     if runtime.pipeline is not None:
