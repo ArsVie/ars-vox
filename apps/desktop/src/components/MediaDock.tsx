@@ -5,7 +5,7 @@ import type { MediaState } from "../contracts";
 import type { PanelId } from "../layout/engine";
 import type { PanelMeta } from "../store";
 import { appStore, EMPTY_MEDIA } from "../store";
-import { useSurfaceRole, type SurfaceRoleInfo } from "../roles/context";
+import { useSurfaceRole } from "../roles/context";
 import { PanelHeader } from "./PanelHeader";
 import { PauseIcon, PlayIcon, WaveformIcon, YoutubeIcon } from "./icons";
 
@@ -264,17 +264,14 @@ function useYoutubePlayer(
  * path); role changes never touch it, so primary -> persistent keeps
  * playing without a reset. The component is mounted by the role host keyed
  * by surfaceId (never remounted on role change) — see roles/host.tsx.
- *
- * Legacy path: PanelHost and direct renders mount MediaDock without a
- * SurfaceRoleProvider; the safe read falls back to the classic full dock
- * rendering (existing DOM contracts .media-dock / .media-player kept).
+ * The adaptive mount is the ONLY mount: every MediaDock instance renders
+ * inside a SurfaceRoleProvider.
  */
 export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelId }) {
   const media = useStore(appStore, (s) => s.content.media);
   const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
 
-  const roleInfo = useOptionalSurfaceRole();
-  const role = roleInfo?.role ?? "primary";
+  const { role } = useSurfaceRole();
 
   const m = media ?? EMPTY_MEDIA;
   const hasTrack = m.title !== "" || m.videoId !== null || m.url !== null;
@@ -406,20 +403,4 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
       )}
     </section>
   );
-}
-
-/**
- * Safe role read: surfaces mounted through the role host (roles/host.tsx)
- * receive SurfaceRoleInfo via context. Legacy mounts (PanelHost, direct
- * renders, SSR tests) have no provider — useSurfaceRole() throws there, so
- * this returns null and the surface falls back to its classic rendering.
- * The hook is still called unconditionally (hook-order stable); the throw is
- * caught locally.
- */
-function useOptionalSurfaceRole(): SurfaceRoleInfo | null {
-  try {
-    return useSurfaceRole();
-  } catch {
-    return null;
-  }
 }

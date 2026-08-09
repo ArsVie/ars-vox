@@ -112,12 +112,30 @@ describe("TasksPanel role variants (UI-204)", () => {
     expect(html).toContain("Próximo · Revisar correo · 2026-08-08 09:00");
   });
 
-  it("without a role provider (legacy mount) defaults to primary", () => {
+  it("renders the RESOLVED role when the requested role was degraded (ladder output is authoritative)", () => {
     appStore.getState().applyEvent(TASKS_EVENT as never);
-    const html = renderToStaticMarkup(<TasksPanel meta={{ title: "Tareas" }} />);
-    expect(html).toContain('data-tasks-role="primary"');
-    expect(html).toContain("panel-header");
-    expect(html).toContain("Llamar a María");
+    // A degraded request (requestedRole != role) must render the role the
+    // host RESOLVED — never a component-side default. Here the ladder
+    // resolved a companion request down to support.
+    const html = renderToStaticMarkup(
+      <SurfaceRoleProvider
+        value={{
+          surfaceId: "tasks",
+          role: "support",
+          requestedRole: "companion",
+          capabilities: ["primary", "companion", "support"],
+          degraded: true,
+        }}
+      >
+        <TasksPanel meta={{ title: "Tareas" }} />
+      </SurfaceRoleProvider>,
+    );
+    expect(html).toContain('data-tasks-role="support"');
+    expect(html).toContain("tasks-panel--support");
+    // Support chrome: urgent subset, no management header.
+    expect(html).not.toContain("panel-header");
+    expect(html).not.toContain("Hechas ·");
+    expect(html).toContain("Comprar leche");
   });
 
   it("preserves tasks state across role changes (never clears content)", () => {

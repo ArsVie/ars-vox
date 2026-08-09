@@ -1,8 +1,7 @@
 import { useStore } from "zustand";
 
-import type { SurfaceRole } from "../adaptive/contracts";
 import type { TodoItem } from "../contracts";
-import { useSurfaceRole, type SurfaceRoleInfo } from "../roles/context";
+import { useSurfaceRole } from "../roles/context";
 import { appStore } from "../store";
 import { PanelHeader } from "./PanelHeader";
 import { BellIcon, CheckIcon } from "./icons";
@@ -19,41 +18,15 @@ import { BellIcon, CheckIcon } from "./icons";
  *   - companion — current tasks: pending to-dos plus reminders, less chrome.
  *   - support   — small high-priority summary: urgent (pending, high
  *                 priority) to-dos and the next reminder only.
- * The legacy PanelHost mount has no role provider — that renders as primary
- * (current behavior). Role changes never touch store.content.tasks.
+ * The role host (SurfaceHost) hands the surface its role through
+ * SurfaceRoleProvider — the adaptive mount is the ONLY mount. Role changes
+ * never touch store.content.tasks.
  */
-
-/** Roles this surface can render (mirrors its registry declaration). */
-const TASKS_CAPABILITIES: readonly SurfaceRole[] = [
-  "primary",
-  "companion",
-  "support",
-];
-
-/**
- * Safe role read: under the legacy PanelHost mount there is no
- * SurfaceRoleProvider, so useSurfaceRole() throws by design. Fall back to
- * primary (the full experience) there; the adaptive host always provides
- * the real role. The hook call stays unconditional (no conditional hooks).
- */
-function useTasksRole(): SurfaceRoleInfo {
-  try {
-    return useSurfaceRole();
-  } catch {
-    return {
-      surfaceId: "tasks",
-      role: "primary",
-      requestedRole: "primary",
-      capabilities: TASKS_CAPABILITIES,
-      degraded: false,
-    };
-  }
-}
 
 export function TasksPanel({ meta }: { meta?: { title?: string } }) {
   const tasks = useStore(appStore, (s) => s.content.tasks);
   const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
-  const { role } = useTasksRole();
+  const { role } = useSurfaceRole();
 
   const todos = tasks?.todos ?? [];
   const reminders = tasks?.reminders ?? [];
