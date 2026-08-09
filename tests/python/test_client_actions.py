@@ -58,6 +58,11 @@ FIXTURE_PATH = REPO_ROOT / "packages" / "contracts" / "fixtures" / "client_actio
 # C1: the NARROWED human-initiated set. Server-originated commands
 # (notification.show, media.state, tts.speak, audio.play) are NOT client
 # actions — they travel server->client through the full UiCommand union.
+# NOTE(g35r-dispatch): when W1-PYCONTRACT adds layout.compose to the
+# ClientAction wire union + client_actions.json fixture, add
+# "layout.compose" to KNOWN_ACTIONS here (the authoritative handler
+# already exists and is pinned by
+# test_layout_compose_has_authoritative_handler).
 KNOWN_ACTIONS = [
     "layout.apply",
     "panel.open",
