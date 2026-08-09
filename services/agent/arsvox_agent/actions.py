@@ -23,25 +23,51 @@ Backend capabilities implemented here:
     panel.fullscreen / layout.restore (C1 human-initiated layout
     surface) -> service panel registry updated + the matching
     UiCommand re-emitted as the authoritative event
+  * layout.compose     -> frozen adaptive validation (LayoutSpec +
+                          registered-surface gate) then the command
+                          re-emitted as the authoritative event
+                          (mirrors the agent-side layout.compose tool)
   * everything else    -> unsupported (server-originated commands or
                           capabilities that do not exist yet)
+
+Dispatch is an EXHAUSTIVE match over the UiCommand discriminated union
+(GATE-3.5 W1): every union member has a typed case below, so a wire
+action that joins the union without a handler FAILS at type-check time
+(the ``_assert_never`` tail guard) instead of silently falling through
+— the drift class that produced the layout.compose gap.
 """
 
 import json
 import logging
-from typing import Any
+from typing import Never
 
-from arsvox_contracts import ActionResultEvent
+from arsvox_contracts import ActionResultEvent, validate_layout_spec
+from arsvox_contracts.adaptive import LayoutSpec
 from arsvox_contracts.commands import (
+    AudioPlay,
+    BrowserBack,
+    BrowserForward,
+    BrowserNavigate,
+    BrowserRefresh,
+    DocumentSave,
     LayoutApply,
+    LayoutCompose,
     LayoutRestore,
+    MediaPlayPause,
+    MediaSeek,
+    MediaStateChange,
+    NotificationShow,
     PanelClose,
     PanelFullscreen,
     PanelOpen,
     PanelSetPrimary,
+    TasksToggle,
+    TtsSpeak,
     UiCommand,
+    YoutubePlay,
+    YoutubeSearch,
 )
-from arsvox_contracts.enums import MediaKind, MediaSource, MediaState
+from arsvox_contracts.enums import MediaState
 from arsvox_contracts.events import (
     BrowserNavigateEvent,
     ReminderItem,
@@ -56,6 +82,7 @@ from arsvox_agent.deps import Deps
 from arsvox_agent.media import media_controller
 from arsvox_agent.tools import ToolRegistry
 from arsvox_agent.tools.context import ToolContext
+from arsvox_agent.tools.ui_tools import REGISTERED_SURFACES
 
 log = logging.getLogger(__name__)
 
@@ -92,35 +119,53 @@ async def handle_ui_command(
     The verdict is returned, not published: the WS layer publishes it on
     the bus after the handler returns, so it is always queued AFTER any
     authoritative events the handler emitted (FIFO ordering).
+
+    The match below is exhaustive over the UiCommand union — every
+    member has a typed case (GATE-3.5 W1). A new member without a case
+    fails the ``_assert_never`` tail guard at type-check time.
     """
     action = command.action
     try:
-        if action == "tasks.toggle":
-            return await _toggle_task(deps, command)
-        if action == "document.save":
-            return await _save_document(deps, registry, command)
-        if action == "youtube.search":
-            return await _search_youtube(deps, registry, command)
-        if action == "browser.navigate":
-            return await _navigate_browser(deps, command)
-        if action in ("browser.back", "browser.forward", "browser.refresh", "youtube.play"):
-            return _acknowledge_local(action)
-        if action in ("media.play_pause", "media.seek", "audio.play"):
-            return await _media_action(deps, action, command)
-        if action in (
-            "layout.apply",
-            "panel.open",
-            "panel.close",
-            "panel.set_primary",
-            "panel.fullscreen",
-            "layout.restore",
-        ):
-            return await _panel_action(deps, action, command)
+        match command:
+            case TasksToggle():
+                return await _toggle_task(deps, command)
+            case DocumentSave():
+                return await _save_document(deps, registry, command)
+            case YoutubeSearch():
+                return await _search_youtube(deps, registry, command)
+            case BrowserNavigate():
+                return await _navigate_browser(deps, command)
+            case BrowserBack() | BrowserForward() | BrowserRefresh():
+                return _acknowledge_local(command.action)
+            case YoutubePlay():
+                return _acknowledge_local(command.action)
+            case AudioPlay() | MediaPlayPause() | MediaSeek():
+                return await _media_action(deps, command)
+            case LayoutApply() | PanelOpen() | PanelClose() | PanelSetPrimary() | PanelFullscreen() | LayoutRestore():
+                return await _panel_action(deps, command)
+            case LayoutCompose():
+                return await _compose_layout(deps, command)
+            case NotificationShow() | MediaStateChange() | TtsSpeak():
+                # Server-originated commands (C1): they cannot arrive on
+                # the client wire union today, but they ARE UiCommand
+                # members, so the exhaustive match must account for
+                # them. Recorded + honest verdict (this was silent
+                # before GATE-3.5).
+                return _unsupported(deps, command.action)
     except Exception as exc:  # noqa: BLE001 — never crash the ws loop
         log.exception("client action %s failed", action)
         deps.audit.log("action", "failed", {"action": action, "error": str(exc)})
         return ActionResultEvent(action=action, status="failed", detail=str(exc))
-    # Parsed but with no backend handler: keep the UI honest.
+    # Unreachable — every UiCommand member has a case above (R39). If a
+    # new member joins the union without one, `command` is no longer
+    # `Never` here and this call is a type error (the drift guard that
+    # type-ignore comments used to silence).
+    _assert_never(command)
+
+
+def _unsupported(deps: Deps, action: str) -> ActionResultEvent:
+    """Parsed but with no backend handler: keep the UI honest."""
+    log.warning("client action %s has no backend handler (unsupported)", action)
     return ActionResultEvent(
         action=action,
         status="unsupported",
@@ -128,19 +173,24 @@ async def handle_ui_command(
     )
 
 
+def _assert_never(value: Never) -> Never:
+    """Type-level exhaustiveness guard for the UiCommand dispatch match."""
+    raise AssertionError(f"unhandled UiCommand member: {value!r}")
+
+
 # --------------------------------------------------------------------- #
 # Handlers
 # --------------------------------------------------------------------- #
 
 
-async def _toggle_task(deps: Deps, command: UiCommand) -> ActionResultEvent:
+async def _toggle_task(deps: Deps, command: TasksToggle) -> ActionResultEvent:
     try:
-        task_id = int(command.task_id)  # type: ignore[attr-defined]
+        task_id = int(command.task_id)
     except (TypeError, ValueError):
         return ActionResultEvent(
             action="tasks.toggle",
             status="failed",
-            detail=f"task_id must be an integer id, got {command.task_id!r}",  # type: ignore[attr-defined]
+            detail=f"task_id must be an integer id, got {command.task_id!r}",
         )
     row = deps.tasks.get(task_id)
     if row is None:
@@ -182,10 +232,10 @@ async def _emit_tasks_update(deps: Deps) -> None:
 
 
 async def _save_document(
-    deps: Deps, registry: ToolRegistry, command: UiCommand
+    deps: Deps, registry: ToolRegistry, command: DocumentSave
 ) -> ActionResultEvent:
-    panel_type = command.panel_type  # type: ignore[attr-defined]
-    content = command.content  # type: ignore[attr-defined]
+    panel_type = command.panel_type
+    content = command.content
     panel = next((p for p in deps.panels.list() if p["id"] == panel_type), None)
     if panel is None or not panel.get("content_reference"):
         return ActionResultEvent(
@@ -219,9 +269,9 @@ async def _save_document(
 
 
 async def _search_youtube(
-    deps: Deps, registry: ToolRegistry, command: UiCommand
+    deps: Deps, registry: ToolRegistry, command: YoutubeSearch
 ) -> ActionResultEvent:
-    query = command.query  # type: ignore[attr-defined]
+    query = command.query
     spec = registry.get("media.search_youtube")
     if spec is None:
         return ActionResultEvent(
@@ -251,8 +301,17 @@ async def _search_youtube(
     )
 
 
-async def _navigate_browser(deps: Deps, command: UiCommand) -> ActionResultEvent:
-    url = command.url  # type: ignore[attr-defined]
+async def _navigate_browser(deps: Deps, command: BrowserNavigate) -> ActionResultEvent:
+    url = command.url
+    # GATE-3.5 (reported to W2-BROWSER by g35r-dispatch): title,
+    # can_go_back and can_go_forward stay at the contract defaults
+    # because the agent service has NO browser-state source — the
+    # browser surface lives client-side (apps/desktop) and no
+    # browser-state channel exists back to the service (the only other
+    # emitter, demo_tools.py, hardcodes the same defaults). The UI must
+    # not believe history navigation is available.
+    # TODO(g35r-dispatch, remove when W2-BROWSER adds a browser-state channel):
+    #   feed real title/can_go_back/can_go_forward into this event.
     await deps.bus.publish(
         BrowserNavigateEvent(
             url=url,
@@ -277,121 +336,173 @@ def _acknowledge_local(action: str) -> ActionResultEvent:
     )
 
 
-async def _panel_action(deps: Deps, action: str, command: UiCommand) -> ActionResultEvent:
+async def _panel_action(
+    deps: Deps,
+    command: LayoutApply
+    | PanelOpen
+    | PanelClose
+    | PanelSetPrimary
+    | PanelFullscreen
+    | LayoutRestore,
+) -> ActionResultEvent:
     """Authoritative handlers for the C1 human-initiated layout/panel
     surface. Mirror the agent-side ui_*_panel tools: the service panel
     registry is updated and the matching UiCommand is re-emitted, so the
     UI reconciles against the authoritative event rather than its own
     optimistic copy."""
-    if action == "panel.open":
-        panel_type = command.panel_type  # type: ignore[attr-defined]
-        title = command.title  # type: ignore[attr-defined]
-        content_reference = command.content_reference  # type: ignore[attr-defined]
-        deps.panels.upsert(panel_type.value, title, content_reference)
-        deps.audit.log("action", "panel.open", {"panel_type": panel_type.value})
-        await deps.bus.publish(
-            UiCommandEvent(
-                command=PanelOpen(
-                    panel_type=panel_type, title=title, content_reference=content_reference
+    match command:
+        case PanelOpen():
+            panel_type = command.panel_type
+            title = command.title
+            content_reference = command.content_reference
+            deps.panels.upsert(panel_type.value, title, content_reference)
+            deps.audit.log("action", "panel.open", {"panel_type": panel_type.value})
+            await deps.bus.publish(
+                UiCommandEvent(
+                    command=PanelOpen(
+                        panel_type=panel_type, title=title, content_reference=content_reference
+                    )
                 )
             )
-        )
-        return ActionResultEvent(action="panel.open", status="done", detail=panel_type.value)
-    if action == "panel.close":
-        panel_type = command.panel_type  # type: ignore[attr-defined]
-        panel_id = command.panel_id  # type: ignore[attr-defined]
-        target = panel_id or (panel_type.value if panel_type else None)
-        if not target:
-            return ActionResultEvent(
-                action="panel.close", status="failed", detail="panel_type or panel_id required"
+            return ActionResultEvent(action="panel.open", status="done", detail=panel_type.value)
+        case PanelClose():
+            # Distinct local names: mypy types each name once per
+            # function scope, and PanelClose's panel_type is optional
+            # while PanelOpen's is not.
+            close_type = command.panel_type
+            close_id = command.panel_id
+            target = close_id or (close_type.value if close_type else None)
+            if not target:
+                return ActionResultEvent(
+                    action="panel.close", status="failed", detail="panel_type or panel_id required"
+                )
+            deps.panels.remove(target)
+            deps.audit.log("action", "panel.close", {"target": target})
+            await deps.bus.publish(
+                UiCommandEvent(command=PanelClose(panel_type=close_type, panel_id=close_id))
             )
-        deps.panels.remove(target)
-        deps.audit.log("action", "panel.close", {"target": target})
-        await deps.bus.publish(
-            UiCommandEvent(command=PanelClose(panel_type=panel_type, panel_id=panel_id))
-        )
-        return ActionResultEvent(action="panel.close", status="done", detail=target)
-    if action == "panel.set_primary":
-        panel_type = command.panel_type  # type: ignore[attr-defined]
-        deps.panels.touch(panel_type.value)
-        deps.audit.log("action", "panel.set_primary", {"panel_type": panel_type.value})
-        await deps.bus.publish(UiCommandEvent(command=PanelSetPrimary(panel_type=panel_type)))
-        return ActionResultEvent(action="panel.set_primary", status="done", detail=panel_type.value)
-    if action == "panel.fullscreen":
-        panel_type = command.panel_type  # type: ignore[attr-defined]
-        deps.audit.log("action", "panel.fullscreen", {"panel_type": panel_type.value})
-        await deps.bus.publish(UiCommandEvent(command=PanelFullscreen(panel_type=panel_type)))
-        return ActionResultEvent(action="panel.fullscreen", status="done", detail=panel_type.value)
-    if action == "layout.apply":
-        template = command.template  # type: ignore[attr-defined]
-        primary_panel = command.primary_panel  # type: ignore[attr-defined]
-        secondary_panel = command.secondary_panel  # type: ignore[attr-defined]
-        slots = command.slots  # type: ignore[attr-defined]
-        preserve = command.preserve  # type: ignore[attr-defined]
-        deps.panels.upsert(primary_panel.value)
-        deps.audit.log(
-            "action", "layout.apply",
-            {"template": template.value, "primary_panel": primary_panel.value},
-        )
-        await deps.bus.publish(
-            UiCommandEvent(
-                command=LayoutApply(
-                    template=template,
-                    primary_panel=primary_panel,
-                    secondary_panel=secondary_panel,
-                    slots=slots,
-                    preserve=preserve,
+            return ActionResultEvent(action="panel.close", status="done", detail=target)
+        case PanelSetPrimary():
+            panel_type = command.panel_type
+            deps.panels.touch(panel_type.value)
+            deps.audit.log("action", "panel.set_primary", {"panel_type": panel_type.value})
+            # PanelSetPrimary is the one union member whose `action`
+            # literal has no default — pass it explicitly or the
+            # re-emitted command fails pydantic validation (latent bug
+            # surfaced by the W1 narrowing: the old type-ignore made
+            # this call Any, so the missing arg was silent).
+            await deps.bus.publish(
+                UiCommandEvent(
+                    command=PanelSetPrimary(action="panel.set_primary", panel_type=panel_type)
                 )
             )
+            return ActionResultEvent(action="panel.set_primary", status="done", detail=panel_type.value)
+        case PanelFullscreen():
+            panel_type = command.panel_type
+            deps.audit.log("action", "panel.fullscreen", {"panel_type": panel_type.value})
+            await deps.bus.publish(UiCommandEvent(command=PanelFullscreen(panel_type=panel_type)))
+            return ActionResultEvent(action="panel.fullscreen", status="done", detail=panel_type.value)
+        case LayoutApply():
+            template = command.template
+            primary_panel = command.primary_panel
+            secondary_panel = command.secondary_panel
+            slots = command.slots
+            preserve = command.preserve
+            deps.panels.upsert(primary_panel.value)
+            deps.audit.log(
+                "action", "layout.apply",
+                {"template": template.value, "primary_panel": primary_panel.value},
+            )
+            await deps.bus.publish(
+                UiCommandEvent(
+                    command=LayoutApply(
+                        template=template,
+                        primary_panel=primary_panel,
+                        secondary_panel=secondary_panel,
+                        slots=slots,
+                        preserve=preserve,
+                    )
+                )
+            )
+            return ActionResultEvent(action="layout.apply", status="done", detail=template.value)
+        case LayoutRestore():
+            deps.audit.log("action", "layout.restore", {})
+            await deps.bus.publish(UiCommandEvent(command=LayoutRestore()))
+            return ActionResultEvent(action="layout.restore", status="done")
+    # Unreachable — every member of the panel/layout union has a case
+    # above (R39). A new member without one fails here at type-check.
+    _assert_never(command)
+
+
+async def _compose_layout(deps: Deps, command: LayoutCompose) -> ActionResultEvent:
+    """Authoritative client-side handler for layout.compose (C5/A3) —
+    mirrors the agent-side ui_tools.layout_compose tool: the frozen
+    adaptive invariants (LayoutSpec) plus the registered-surface gate
+    run server-side, then the command is re-emitted as the
+    authoritative event for the UI to reconcile against."""
+    try:
+        spec = LayoutSpec(
+            template=command.template,
+            assignments=command.assignments,
+            proportion=command.proportion,
         )
-        return ActionResultEvent(action="layout.apply", status="done", detail=template.value)
-    if action == "layout.restore":
-        deps.audit.log("action", "layout.restore", {})
-        await deps.bus.publish(UiCommandEvent(command=LayoutRestore()))
-        return ActionResultEvent(action="layout.restore", status="done")
-    # unreachable — every ClientAction member has a branch above (R39).
-    return ActionResultEvent(
-        action=action,
-        status="unsupported",
-        detail="no backend capability for this action",
+        validate_layout_spec(spec, set(REGISTERED_SURFACES))
+    except ValueError as exc:
+        return ActionResultEvent(action="layout.compose", status="failed", detail=str(exc))
+    deps.audit.log("action", "layout.compose", {"template": command.template.value})
+    await deps.bus.publish(
+        UiCommandEvent(
+            command=LayoutCompose(
+                template=command.template,
+                assignments=spec.assignments,
+                proportion=command.proportion,
+            )
+        )
     )
+    return ActionResultEvent(action="layout.compose", status="done", detail=command.template.value)
 
 
 async def _media_action(
-    deps: Deps, action: str, command: UiCommand
+    deps: Deps, command: AudioPlay | MediaPlayPause | MediaSeek
 ) -> ActionResultEvent:
     # One controller for every media input (GATE-3.5, R24): the agent
     # tool path (media_tools.py) and this client-action path share
     # ``media_controller``, so a user pause/seek after an agent play
     # always finds the loaded track — never "no media loaded".
-    if action == "audio.play":
-        asset = command.asset  # type: ignore[attr-defined]
-        await media_controller.play_local(deps.bus, asset)
-        return ActionResultEvent(action="audio.play", status="done", detail=asset)
-    if action == "media.play_pause":
-        if not media_controller.has_track():
+    match command:
+        case AudioPlay():
+            asset = command.asset
+            await media_controller.play_local(deps.bus, asset)
+            return ActionResultEvent(action="audio.play", status="done", detail=asset)
+        case MediaPlayPause():
+            if not media_controller.has_track():
+                return ActionResultEvent(
+                    action="media.play_pause", status="done", detail="no media loaded"
+                )
+            if media_controller.state == MediaState.PLAYING:
+                await media_controller.pause(deps.bus)
+            else:
+                # paused or stopped-with-track: resume. Stopped with a
+                # loaded track is NOT a dead end (R24: user actions
+                # always apply).
+                await media_controller.resume(deps.bus)
             return ActionResultEvent(
-                action="media.play_pause", status="done", detail="no media loaded"
+                action="media.play_pause", status="done", detail=media_controller.state.value
             )
-        if media_controller.state == MediaState.PLAYING:
-            await media_controller.pause(deps.bus)
-        else:
-            # paused or stopped-with-track: resume. Stopped with a loaded
-            # track is NOT a dead end (R24: user actions always apply).
-            await media_controller.resume(deps.bus)
-        return ActionResultEvent(
-            action="media.play_pause", status="done", detail=media_controller.state.value
-        )
-    # media.seek
-    position = max(0, command.position_s)  # type: ignore[attr-defined]
-    if not media_controller.has_track():
-        # R25: seek with nothing loaded must NOT read as a success — the
-        # UI must not believe a position change happened. "failed" =
-        # understood but could not be applied (module docstring).
-        return ActionResultEvent(
-            action="media.seek", status="failed", detail="no media loaded"
-        )
-    await media_controller.seek(deps.bus, position)
-    return ActionResultEvent(
-        action="media.seek", status="done", detail=str(media_controller.position_s)
-    )
+        case MediaSeek():
+            # media.seek
+            position = max(0, command.position_s)
+            if not media_controller.has_track():
+                # R25: seek with nothing loaded must NOT read as a
+                # success — the UI must not believe a position change
+                # happened. "failed" = understood but could not be
+                # applied (module docstring).
+                return ActionResultEvent(
+                    action="media.seek", status="failed", detail="no media loaded"
+                )
+            await media_controller.seek(deps.bus, position)
+            return ActionResultEvent(
+                action="media.seek", status="done", detail=str(media_controller.position_s)
+            )
+    # Unreachable — every member of the media union has a case above.
+    _assert_never(command)
