@@ -32,8 +32,8 @@ export function PanelHeader({
         type="button"
         className="panel-action"
         onClick={() => toggleFullscreen(panelId)}
-        aria-label={fullscreen ? "Restore panel" : "Maximize panel"}
-        title={fullscreen ? "Restore" : "Maximize"}
+        aria-label={fullscreen ? "Restaurar panel" : "Maximizar panel"}
+        title={fullscreen ? "Restaurar" : "Maximizar"}
       >
         {fullscreen ? <RestoreIcon size={14} /> : <MaximizeIcon size={14} />}
       </button>

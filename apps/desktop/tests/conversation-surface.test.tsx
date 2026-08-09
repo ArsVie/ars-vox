@@ -67,17 +67,21 @@ beforeEach(() => {
 });
 
 describe("ConversationPanel variants", () => {
-  it("primary renders the full conversation (header, empty state, suggestions, composer)", () => {
+  it("primary renders the full conversation (empty state, suggestions, composer — no redundant container header)", () => {
     const html = render("primary");
     expect(html).toContain('data-variant="primary"');
     expect(html).toContain("conversation-panel");
-    // Header + full empty-state chrome.
-    expect(html).toContain("panel-header");
+    // R43: the generic CONVERSACIÓN container label is dropped when the
+    // conversation IS the primary surface; the surface keeps its Spanish
+    // accessible name (and its identity is the hero / message list).
+    expect(html).not.toContain("panel-header");
+    expect(html).toContain('aria-label="Conversación"');
+    // Full empty-state chrome.
     expect(html).toContain("Di o escribe una petición");
     expect(html).toContain("suggestion-chip");
     expect(html).toContain("Abre un documento");
     // Composer contract preserved.
-    expect(html).toContain('aria-label="Request"');
+    expect(html).toContain('aria-label="Escribe una petición"');
     expect(html).toContain("send-button");
     expect(html).toContain("Enviar");
   });
@@ -101,7 +105,7 @@ describe("ConversationPanel variants", () => {
     expect(html).not.toContain("suggestion-chip");
     expect(html).not.toContain("empty-hint");
     // Composer contract preserved (density classes still apply from the slot).
-    expect(html).toContain('aria-label="Request"');
+    expect(html).toContain('aria-label="Escribe una petición"');
     expect(html).toContain("send-button");
   });
 
@@ -122,7 +126,7 @@ describe("ConversationPanel variants", () => {
     // No header chrome, composer still present.
     expect(html).not.toContain("panel-header");
     expect(html).not.toContain("conversation-subheader");
-    expect(html).toContain('aria-label="Request"');
+    expect(html).toContain('aria-label="Escribe una petición"');
     expect(html).toContain("send-button");
   });
 
@@ -130,7 +134,7 @@ describe("ConversationPanel variants", () => {
     for (const role of ["primary", "companion", "support"] as SurfaceRole[]) {
       const html = render(role);
       expect(html).toContain("composer");
-      expect(html).toContain('aria-label="Request"');
+      expect(html).toContain('aria-label="Escribe una petición"');
       expect(html).toContain("send-button");
     }
   });
@@ -188,7 +192,9 @@ describe("ConversationPanel legacy path", () => {
   it("renders the default primary variant without a SurfaceRoleProvider", () => {
     const html = renderToStaticMarkup(<ConversationPanel panelId={PANEL_ID} />);
     expect(html).toContain('data-variant="primary"');
-    expect(html).toContain("panel-header");
-    expect(html).toContain('aria-label="Request"');
+    // R43: primary never renders the container header, legacy path included.
+    expect(html).not.toContain("panel-header");
+    expect(html).toContain('aria-label="Conversación"');
+    expect(html).toContain('aria-label="Escribe una petición"');
   });
 });

@@ -27,6 +27,13 @@ const VOICE_LABELS: Record<string, string> = {
 };
 
 /**
+ * R43 — one canonical status vocabulary: the assistant state labels below
+ * are the ONLY place voice-state texts are defined. Mic controls use their
+ * own phase labels (recording/transcribing) and never duplicate these.
+ */
+export const STATUS_VOCABULARY: Readonly<Record<string, string>> = VOICE_LABELS;
+
+/**
  * UI-303 — assistant state is never communicated by color alone: every
  * voice state renders a recognizable icon alongside the Spanish label so
  * listening/thinking/speaking/waiting are semantically clear without
@@ -50,6 +57,16 @@ export const TEMPLATE_DEMO_LABELS: Record<AdaptiveTemplate, string> = {
   split: "Dividido",
   triple: "Triple",
 };
+
+/**
+ * R43 — the template demo combobox is shell demo tooling (screenshot
+ * workflow), NOT a production control. Module-level constant in foldable
+ * form: Vite's define() replaces import.meta.env.DEV with `false` in
+ * production builds, esbuild folds the constant, and the combobox is
+ * dead-code-eliminated from the shipped bundle (verified: no
+ * status-demo-select / "Plantilla" strings in dist assets).
+ */
+export const DEMO_TOGGLE_ENABLED = import.meta.env.DEV === true;
 
 /**
  * Global application top bar (UI-101 shell chrome).
@@ -80,11 +97,17 @@ export function StatusBar({
   const label = VOICE_LABELS[stateKey] ?? stateKey;
 
   return (
-    <div className="status-bar app-topbar" role="status">
+    <div className="status-bar app-topbar">
       <span className="status-brand">
         ARS<em>·</em>VOX
       </span>
-      <span className={`status-pill ${connected ? "on" : "off"}`} data-state={stateKey}>
+      {/* R43: the live region is the status pill ONLY — interactive controls
+          (STOP, dev demo select) must never sit inside role="status". */}
+      <span
+        className={`status-pill ${connected ? "on" : "off"}`}
+        data-state={stateKey}
+        role="status"
+      >
         <span className={`status-dot ${connected ? "connected" : "disconnected"}`} />
         <span className="status-state-icon" aria-hidden="true">
           {STATE_ICONS[stateKey] ?? <SparkleIcon size={13} />}
@@ -94,34 +117,32 @@ export function StatusBar({
       {activity ? <span className="status-activity">{activity}</span> : null}
       <StopButton />
       <span className="status-spacer" />
-      <label className="status-demo">
-        <span className="status-demo-label">Plantilla</span>
-        <select
-          className="status-demo-select"
-          value={demoValue ?? ""}
-          onChange={(e) => {
-            const value = e.target.value;
-            onDemoChange(
-              (ALL_TEMPLATES as readonly string[]).includes(value)
-                ? (value as AdaptiveTemplate)
-                : null,
-            );
-          }}
-          aria-label="Plantilla de demostración"
-          title="Demo del shell: plantillas adaptativas con superficies de marcador"
-        >
-          <option value="">Automática</option>
-          {ALL_TEMPLATES.map((t) => (
-            <option key={t} value={t}>
-              {TEMPLATE_DEMO_LABELS[t]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <span className="status-conn">
-        <span className={`conn-dot ${connected ? "on" : "off"}`} />
-        {connected ? "agente conectado" : "agente sin conexión"}
-      </span>
+      {DEMO_TOGGLE_ENABLED ? (
+        <label className="status-demo">
+          <span className="status-demo-label">Plantilla</span>
+          <select
+            className="status-demo-select"
+            value={demoValue ?? ""}
+            onChange={(e) => {
+              const value = e.target.value;
+              onDemoChange(
+                (ALL_TEMPLATES as readonly string[]).includes(value)
+                  ? (value as AdaptiveTemplate)
+                  : null,
+              );
+            }}
+            aria-label="Plantilla de demostración"
+            title="Demo del shell: plantillas adaptativas con superficies de marcador"
+          >
+            <option value="">Automática</option>
+            {ALL_TEMPLATES.map((t) => (
+              <option key={t} value={t}>
+                {TEMPLATE_DEMO_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
     </div>
   );
 }

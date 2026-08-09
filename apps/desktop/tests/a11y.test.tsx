@@ -222,7 +222,7 @@ describe("UI-303 status: text + icon, never color alone", () => {
       // Icon (aria-hidden) lives inside the pill, next to the label.
       expect(html).toMatch(
         new RegExp(
-          `<span class="status-pill[^"]*" data-state="${state}">[\\s\\S]*?<svg`,
+          `<span class="status-pill[^"]*" data-state="${state}"[^>]*>[\\s\\S]*?<svg`,
         ),
       );
       expect(html).toMatch(
@@ -250,7 +250,7 @@ describe("UI-303 tab order sanity", () => {
     const html = renderToStaticMarkup(
       <ConversationPanel panelId="conversation" />,
     );
-    const inputIdx = html.indexOf('aria-label="Request"');
+    const inputIdx = html.indexOf('aria-label="Escribe una petición"');
     const micIdx = html.indexOf('class="mic-button');
     const sendIdx = html.indexOf('class="send-button"');
     expect(inputIdx).toBeGreaterThan(-1);
