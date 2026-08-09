@@ -5,7 +5,7 @@ from pathlib import Path
 
 from arsvox_contracts import PanelType
 from arsvox_contracts.commands import PanelOpen
-from arsvox_contracts.events import UiCommandEvent
+from arsvox_contracts.events import DocumentChangedEvent, UiCommandEvent
 
 from arsvox_agent.tools.context import ToolContext
 
@@ -99,6 +99,14 @@ async def document_save(tctx: ToolContext, title: str, content: str) -> str:
         Path(doc["path"]).write_text(content, encoding="utf-8")
     tctx.deps.documents.update_content(doc["id"], content, saved=True)
     tctx.deps.audit.log("document", "saved", {"doc_id": doc["id"], "title": title})
+    await tctx.emit(
+        DocumentChangedEvent(
+            document_id=doc["id"],
+            title=doc["title"],
+            path=doc["path"],
+            content=content,
+        )
+    )
     return f"Documento '{title}' guardado."
 
 
@@ -111,6 +119,14 @@ async def document_insert_text(tctx: ToolContext, title: str, text: str) -> str:
     path.write_text(current + text, encoding="utf-8")
     tctx.deps.documents.update_content(doc["id"], current + text, saved=True)
     tctx.deps.audit.log("document", "insert_text", {"doc_id": doc["id"]})
+    await tctx.emit(
+        DocumentChangedEvent(
+            document_id=doc["id"],
+            title=doc["title"],
+            path=doc["path"],
+            content=current + text,
+        )
+    )
     return "Texto añadido al documento."
 
 
