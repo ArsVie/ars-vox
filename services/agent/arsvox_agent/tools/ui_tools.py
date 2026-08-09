@@ -44,8 +44,8 @@ from arsvox_agent.tools.context import ToolContext
 #: PRODUCT_SURFACES, owned by A4). Only these may be composed by the model;
 #: the frontend planner rejects anything else at apply time, so this set and
 #: the frontend registry MUST stay in sync (see test_layout_tools no-news /
-#: vocabulary guard). Persistent surfaces (media bar) are shell-owned and
-#: never assignable through layout.compose.
+#: vocabulary guard). media IS assignable (MediaDock renders per role);
+#: the shell keeps the persistent media bar independent of compositions.
 REGISTERED_SURFACES: frozenset[str] = frozenset(
     {"browser", "conversation", "document_editor", "tasks", "media"}
 )

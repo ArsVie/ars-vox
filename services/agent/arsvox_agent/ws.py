@@ -134,12 +134,13 @@ async def _handle_client_message(
         return
     if message.type == "confirm":
         # R38: NEVER block the receive loop on execution — a STOP frame
-        # must stay receivable while an approved action runs. The
-        # coordinator spawns a tracked execution task and resolves the
-        # lifecycle from there.
-        asyncio.create_task(
-            runtime.deps_base.confirmations.resolve(message.pending_id, approve=True)
-        )
+        # must stay receivable while an approved action runs. Awaiting
+        # resolve() only waits for the DB flip + task spawn (its only
+        # await is sleep(0)), so the non-blocking property is preserved.
+        # ADV-F1 (2026-08-09): settle AFTER resolve — settling before it
+        # published a stale WAITING_FOR_CONFIRMATION (row still pending)
+        # that nothing re-settled, disarming the silence timer.
+        await runtime.deps_base.confirmations.resolve(message.pending_id, approve=True)
         await _sync_state_after_resolve(runtime)
         return
     if message.type == "cancel":

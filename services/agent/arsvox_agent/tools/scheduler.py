@@ -102,6 +102,12 @@ class ReminderScheduler:
                 )
             )
         await self.confirmations.expire_all() if self.confirmations else None
+        # ADV-F2 (2026-08-09): refresh content.tasks after the fire loop —
+        # mark_fired moves one-shots out of list_active, but the renderer's
+        # tasks panel kept showing them (stale until the next snooze/dismiss).
+        # tasks-None-guarded: inert without the store, as _emit_tasks_update
+        # documents.
+        await self._emit_tasks_update()
 
     # ------------------------------------------------------------------ #
     async def _emit_tasks_update(self) -> None:
@@ -113,8 +119,6 @@ class ReminderScheduler:
         Only emits when the tasks store is wired: the renderer REPLACES
         content.tasks wholesale from this event, so a todos=[] payload
         would wipe the user's todo list.
-        TODO(g35r-reminders, app.py passes tasks=self.tasks to ReminderScheduler):
-        without the wiring this emission is inert and content.tasks stays stale.
         """
         if self.tasks is None:
             return

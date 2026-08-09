@@ -23,18 +23,10 @@ const KIND_LABELS: Record<string, string> = {
   error: "Error",
 };
 
-/**
- * W2: the dismiss seam. W2-STORE owns store.ts and is pre-authorized to
- * add `dismissNotification(notificationId: string)`; until it lands the
- * call is a no-op (optional chaining), so the region renders the button
- * without crashing. The TS test pins this seam.
- * TODO(g35r-reminders, store-dismiss): drop the cast once AppState gains
- * dismissNotification — call appStore.getState().dismissNotification(id).
- */
-type DismissSeam = AppState & { dismissNotification?: (notificationId: string) => void };
-
+/** ADV-F5 (2026-08-09): the W2 dismiss seam resolved — AppState owns
+ *  dismissNotification, so the optional chaining cast is dead weight. */
 function dismissNotification(notificationId: string): void {
-  (appStore.getState() as DismissSeam).dismissNotification?.(notificationId);
+  appStore.getState().dismissNotification(notificationId);
 }
 
 export function NotificationRegion() {

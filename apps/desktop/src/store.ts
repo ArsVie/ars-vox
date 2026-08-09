@@ -600,10 +600,25 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           surfaceRegistry.registeredIds(),
         );
       } catch (error) {
+        // ADV-F3 (2026-08-09): record the rejection instead of silently
+        // dropping — the agent's layout_compose validates only the frozen
+        // semantic gates (no viewport), so a small window can make a valid
+        // triple fail the px floors here and the agent was told "aplicada".
+        // Same structured code as the planner path (PlannerRejectionCode
+        // includes "geometry").
         console.warn(
           "[adaptive] rejecting unrenderable spec:",
           (error as Error).message,
         );
+        set({
+          adaptive: {
+            ...state.adaptive,
+            lastRejection: {
+              code: "geometry",
+              reason: (error as Error).message,
+            },
+          },
+        });
         return;
       }
       const baseOverrides = options.overrides ?? state.adaptive.overrides;
@@ -1103,6 +1118,10 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                     userInitiated: true,
                   },
                 );
+                // ADV-F4 (2026-08-09): a restored composition must latch the
+                // config-default guard too — without this, a later
+                // config_update could land the default over the restored desk.
+                layoutApplied = true;
               } catch {
                 // never crash the event path on an invalid composition
               }
