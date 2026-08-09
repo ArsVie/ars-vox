@@ -13,7 +13,7 @@ def test_read_only_no_approval():
 
 
 def test_reversible_no_approval():
-    d = PolicyEngine().decide("ui.apply_layout", {"template": "split"})
+    d = PolicyEngine().decide("layout.compose", {"template": "sidecar"})
     assert d.allowed
     assert not d.requires_approval
 

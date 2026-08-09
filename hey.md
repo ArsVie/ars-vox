@@ -9,11 +9,12 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
-### hermes-g35-a6 (GATE-3.5 Wave 1 — snapshot/reconnect authority, R28-R34)
-- timestamp: 2026-08-08T00:00:00Z
-- task: A6 snapshot + reconnect + event-sequence authority — SnapshotTracker continuous (R28), client sequence-gap resync (R29), authoritative null/empty clears (R30/R31), pipeline-derived voice (R32), adaptive composition in snapshot (R33), notifications render after restore (R34). Files: services/agent/arsvox_agent/{snapshot,events}.py, packages/contracts/arsvox_contracts/events.py, apps/desktop/src/{store,contracts,App,main}.ts(x), apps/desktop/src/ws/client.ts, apps/desktop/src/components/PersistentRegions.tsx, tests.
-- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a6-snapshot (branch wip/g35-a6-snapshot)
-- status: IN PROGRESS
+### hermes-g35-a3 (Wave 1 — native agent adaptive-layout contract, 2026-08-08)
+- timestamp: 2026-08-08T21:00:00Z
+- task: A3 — replace ui_apply_layout (focus/split/reading/dashboard + main/side/rail/dock) with native layout.compose (AdaptiveTemplate + surface/role assignments + proportion; no geometry); rewrite prompts/system.md layout section; drop news from model-visible vocab (ui_tools/demo/prompts); deterministic validation reusing frozen adaptive.py gates (R16-R18).
+- files/dirs: `packages/contracts/arsvox_contracts/{commands.py,__init__.py}`, `packages/contracts/schemas/ui-commands.schema.json` (regenerated), `services/agent/arsvox_agent/tools/{ui_tools.py,demo_tools.py}`, `services/agent/arsvox_agent/{policy.py,prompts/system.md}`, `tests/python/**` (tools_api/prompts/ws_e2e/reconnect_snapshot/demo_tools/policy + new layout_tools)
+- boundaries: will NOT touch apps/desktop/src/adaptive/* (A4), adaptive.py (frozen), events.py, enums.py; legacy wire layout.apply + client action stay (R23). Cross-owner note for A4 in handoff.
+- status: active
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
