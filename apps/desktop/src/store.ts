@@ -5,20 +5,22 @@
 
 import { createStore, type StoreApi } from "zustand/vanilla";
 
-import type {
-  ActionResultEvent,
-  AppConfigWire,
-  BrowserNavigateEvent,
-  ClientCommand,
-  DocumentKind,
-  MediaStateEvent,
-  ReminderItem,
-  ServerEvent,
-  StateSnapshotEvent,
-  TodoItem,
-  UiCommand,
-  VoiceState,
-  YoutubeVideoResult,
+import {
+  normalizeUiCommand,
+  type ActionResultEvent,
+  type AppConfigWire,
+  type BrowserNavigateEvent,
+  type ClientCommand,
+  type DocumentKind,
+  type MediaStateEvent,
+  type NormalizedUiCommand,
+  type ReminderItem,
+  type ServerEvent,
+  type StateSnapshotEvent,
+  type TodoItem,
+  type UiCommand,
+  type VoiceState,
+  type YoutubeVideoResult,
 } from "./contracts";
 import {
   computeLayout,
@@ -115,6 +117,11 @@ export interface AdaptiveState {
    *  fullscreen constraint is active (or when it arrived via a snapshot
    *  restore, where it is not carried). Plain JSON — snapshot-safe. */
   preFullscreen: AdaptiveLayoutSpec | null;
+  /** C5 (GATE-3.5, defect #2): the most recent UiCommand action that
+   *  applyUiCommand did NOT handle (unknown wire action — JSON.parse casts
+   *  bypass the exhaustive union). Latched diagnostic record: visible and
+   *  testable, never throws. Null until an unknown action arrives. */
+  lastUnhandledAction: string | null;
 }
 
 export const EMPTY_ADAPTIVE: AdaptiveState = {
@@ -123,6 +130,7 @@ export const EMPTY_ADAPTIVE: AdaptiveState = {
   lastRejection: null,
   overrides: EMPTY_OVERRIDES,
   preFullscreen: null,
+  lastUnhandledAction: null,
 };
 
 /**
@@ -272,7 +280,11 @@ export interface AppState {
   /** User-initiated command: optimistic local effect + send to the server. */
   dispatchCommand: (command: ClientCommand) => void;
 
-  applyUiCommand: (command: UiCommand) => void;
+  /** Server command application. C5/A3 (GATE-3.5): accepts the NORMALIZED
+   *  command — callers coming from the wire MUST pass through
+   *  normalizeUiCommand first (applyEvent's ui_command case is the single
+   *  boundary site; surface_id → surfaceId happens exactly there). */
+  applyUiCommand: (command: NormalizedUiCommand) => void;
 
   /**
    * GATE-3.5 (R26): the REAL player's callbacks (YouTube iframe
@@ -629,7 +641,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         }
         return;
       }
-      set({ adaptive: { spec: constrained, assignments, overrides, lastRejection: null, preFullscreen } });
+      set({
+        adaptive: {
+          ...state.adaptive,
+          spec: constrained,
+          assignments,
+          overrides,
+          lastRejection: null,
+          preFullscreen,
+        },
+      });
     };
 
     /**
@@ -679,7 +700,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       });
     };
 
-    const applyUiCommand = (command: UiCommand): void => {
+    const applyUiCommand = (command: NormalizedUiCommand): void => {
       const state = get();
       switch (command.action) {
         case "layout.apply": {
@@ -695,6 +716,27 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // through it either.
           applyLayoutIntent(command);
           layoutApplied = true;
+          return;
+        }
+        case "layout.compose": {
+          // C5/A3 (GATE-3.5): the adaptive-native composition command — the
+          // frozen LayoutSpec shape (template + surface-role assignments +
+          // optional proportion, NO geometry) routed STRAIGHT into the ONE
+          // choke (applyAdaptiveSpec). It does NOT touch the planner: the
+          // planner is the legacy layout.apply adapter (planner.ts — do
+          // NOT extend). Assignments arrive already normalized to
+          // surfaceId by normalizeUiCommand at the wire boundary.
+          // Agent-initiated (userInitiated: false): the UI-207 inertia
+          // guard stays active for agent compositions.
+          layoutApplied = true;
+          applyAdaptiveSpec(
+            {
+              template: command.template,
+              assignments: command.assignments,
+              proportion: command.proportion ?? null,
+            },
+            { userInitiated: false },
+          );
           return;
         }
         case "panel.open": {
@@ -889,6 +931,26 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           });
           return;
         }
+        default: {
+          // C5 (GATE-3.5, defect #2): an unknown action must NEVER be
+          // silently swallowed — the old exhaustive switch did exactly
+          // that, hiding unsupported commands through the whole gate. The
+          // union is exhaustive at compile time; this catches runtime
+          // frames that bypass the type (ws JSON.parse as ServerEvent).
+          // Records visibly (console + store) and NEVER throws.
+          const action = (command as { action?: unknown }).action;
+          console.warn(
+            `[store] unhandled UiCommand action: ${typeof action === "string" ? action : String(action)}`,
+          );
+          set({
+            adaptive: {
+              ...get().adaptive,
+              lastUnhandledAction:
+                typeof action === "string" ? action : String(action),
+            },
+          });
+          return;
+        }
       }
     };
 
@@ -948,7 +1010,12 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "ui_command":
-          applyUiCommand(event.command);
+          // C5/A3 (GATE-3.5): the SINGLE wire-boundary normalization site —
+          // every incoming ui_command frame passes through normalizeUiCommand
+          // exactly once here (surface_id → surfaceId for layout.compose)
+          // before applyUiCommand sees it. ws/client.ts hands the raw
+          // JSON.parse frame to applyEvent untouched.
+          applyUiCommand(normalizeUiCommand(event.command));
           return;
         case "confirmation_requested":
           set({

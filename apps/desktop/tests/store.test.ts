@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { ServerEvent } from "../src/contracts";
+import type { ServerEvent, UiCommand } from "../src/contracts";
 import { registerProductSurfaces } from "../src/adaptive/surfaces";
 import { createAppStore } from "../src/store";
 
@@ -951,5 +951,63 @@ describe("panel content events (content channel)", () => {
         created_at: expect.any(String),
       }),
     ]);
+  });
+});
+
+describe("layout.compose (adaptive-native, C5/A3)", () => {
+  it("composes straight into adaptive.spec, normalizing surface_id to surfaceId at the wire boundary", () => {
+    const store = createAppStore(() => {});
+    // registerProductSurfaces() runs at module scope — document_editor,
+    // conversation and browser are all registered product surfaces.
+    const legacyBefore = store.getState().spec;
+
+    // The exact python wire shape (commands.py LayoutCompose): assignments
+    // carry surface_id — normalized ONCE by normalizeUiCommand, never here.
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.compose",
+        template: "triple",
+        assignments: [
+          { surface_id: "document_editor", role: "primary", slot: "main" },
+          { surface_id: "conversation", role: "companion", slot: "side" },
+          { surface_id: "browser", role: "support", slot: "rail" },
+        ],
+        proportion: "wide",
+      },
+      created_at: ts(),
+    });
+
+    const state = store.getState();
+    expect(state.adaptive.spec).toMatchObject({
+      template: "triple",
+      proportion: "wide",
+      assignments: [
+        { surfaceId: "document_editor", role: "primary", slot: "main" },
+        { surfaceId: "conversation", role: "companion", slot: "side" },
+        { surfaceId: "browser", role: "support", slot: "rail" },
+      ],
+    });
+    // adaptive-native ONLY: the legacy engine spec is never written by
+    // layout.compose (Wave 2 will delete the legacy system — nothing here
+    // depends on it).
+    expect(state.spec).toBe(legacyBefore);
+    expect(state.adaptive.lastUnhandledAction).toBeNull();
+  });
+
+  it("records an unknown action in adaptive.lastUnhandledAction without throwing", () => {
+    const store = createAppStore(() => {});
+    expect(() =>
+      store.getState().applyEvent({
+        type: "ui_command",
+        command: { action: "bogus.unknown" } as unknown as UiCommand,
+        created_at: ts(),
+      }),
+    ).not.toThrow();
+    expect(store.getState().adaptive.lastUnhandledAction).toBe("bogus.unknown");
+    // layout state untouched by the unknown action
+    expect(store.getState().adaptive.spec).toBeNull();
+    expect(store.getState().adaptive.lastRejection).toBeNull();
+    expect(store.getState().adaptive.overrides.bySurface).toEqual({});
   });
 });
