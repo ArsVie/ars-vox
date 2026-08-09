@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useStore } from "zustand";
 
-import type { AdaptiveTemplate, LayoutSpec, SurfaceRole } from "./adaptive/contracts";
-import { TEMPLATE_FIXTURES } from "./adaptive/fixtures";
+import type { LayoutSpec, SurfaceRole } from "./adaptive/contracts";
 import { registerProductSurfaces } from "./adaptive/surfaces";
 import { ConfirmationPanel } from "./components/ConfirmationPanel";
 import { ErrorPanel } from "./components/ErrorPanel";
@@ -46,12 +45,6 @@ function resolvedSpecFrom(
 export default function App() {
   const largeText = useStore(appStore, (s) => s.largeText);
   const highContrast = useStore(appStore, (s) => s.highContrast);
-  // Shell demo toggle: renders the frozen template fixtures with placeholder
-  // children so the unified shell can be evaluated against all five adaptive
-  // templates before UI-102 geometry integration (GATE-1). null = normal mode.
-  const [demoTemplate, setDemoTemplate] = useState<AdaptiveTemplate | null>(null);
-
-  const demoSpec = demoTemplate ? TEMPLATE_FIXTURES[demoTemplate] : null;
 
   // GATE-3.5 (W2-STORE): the adaptive stage is the ONLY layout host — the
   // legacy PanelHost branch is deleted. The config-driven default lands the
@@ -128,7 +121,7 @@ export default function App() {
     }
   }, [resolvedSpec, adaptiveSpec, viewport]);
 
-  const persistentSurfaces: PersistentSurface[] = (demoSpec || adaptiveSpec)
+  const persistentSurfaces: PersistentSurface[] = adaptiveSpec
     ? [
         ...(mediaActive && !mediaInLayout
           ? [{ surfaceId: "placeholder.persistent", kind: "media" as const }]
@@ -146,7 +139,7 @@ export default function App() {
       data-large-text={largeText ? "" : undefined}
       data-high-contrast={highContrast ? "" : undefined}
     >
-      <StatusBar demoValue={demoTemplate} onDemoChange={setDemoTemplate} />
+      <StatusBar />
       {geometry ? (
         <AdaptiveStage
           geometry={geometry}

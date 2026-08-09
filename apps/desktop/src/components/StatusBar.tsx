@@ -2,8 +2,6 @@ import type { ReactNode } from "react";
 
 import { useStore } from "zustand";
 
-import type { AdaptiveTemplate } from "../adaptive/contracts";
-import { ALL_TEMPLATES } from "../adaptive/fixtures";
 import { appStore } from "../store";
 import {
   ChatIcon,
@@ -49,44 +47,29 @@ const STATE_ICONS: Record<string, ReactNode> = {
   error: <WarningIcon size={13} />,
 };
 
-/** Spanish demo labels for the five frozen templates (shell demo toggle). */
-export const TEMPLATE_DEMO_LABELS: Record<AdaptiveTemplate, string> = {
-  focus: "Enfoque",
-  sidecar: "Lateral",
-  stack: "Pila",
-  split: "Dividido",
-  triple: "Triple",
-};
-
 /**
- * R43 — the template demo combobox is shell demo tooling (screenshot
- * workflow), NOT a production control. Module-level constant in foldable
- * form: Vite's define() replaces import.meta.env.DEV with `false` in
- * production builds, esbuild folds the constant, and the combobox is
- * dead-code-eliminated from the shipped bundle (verified: no
- * status-demo-select / "Plantilla" strings in dist assets).
- */
-export const DEMO_TOGGLE_ENABLED = import.meta.env.DEV === true;
-
-/**
- * Global application top bar (UI-101 shell chrome).
+ * W0-DIRECTIVE (GATE-5) — the shell chrome is no longer a full-width
+ * status/header bar. It is a minimal floating cluster:
  *
- * Brand, assistant state, activity and the STOP control belong to Ars Vox,
- * not to any panel — this bar is a sibling of the activity stage and stays
- * visible in every template. The template select drives the shell's fixture
- * demo (placeholder children for the five frozen templates); it is shell
- * demo tooling, not agent layout selection.
+ *   [ ARS·VOX (home) ] [ voice-state pill ] [ STOP ]
+ *
+ * - The ARS·VOX wordmark is the persistent home affordance: it returns
+ *   to the central mic-hero view through the frozen C1 human-initiated
+ *   layout seam (layout.restore clears every persistent constraint —
+ *   fullscreen/close/left; panel.open guarantees conversation is in the
+ *   composition; panel.set_primary makes it the central primary). Each
+ *   command is user-initiated at the choke; the service re-emits the
+ *   UiCommand and the UI reconciles against the authoritative event.
+ * - The voice-state pill is the MINIMAL state presentation: icon + label
+ *   only (no activity line, no connection text), placed where the eyes
+ *   land (floating at the top-center of the stage) instead of a header
+ *   bar. role="status" stays on the pill and contains no controls.
+ * - STOP remains the always-reachable safety control.
  */
-export function StatusBar({
-  demoValue,
-  onDemoChange,
-}: {
-  demoValue: AdaptiveTemplate | null;
-  onDemoChange: (template: AdaptiveTemplate | null) => void;
-}) {
+export function StatusBar() {
   const voiceState = useStore(appStore, (s) => s.voiceState);
   const connected = useStore(appStore, (s) => s.connected);
-  const activity = useStore(appStore, (s) => s.activity);
+  const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
 
   // GATE-3.5 (R08): the canonical voice state IS physical playback —
   // the service only reaches SPEAKING on a tts.started ack and only
@@ -97,13 +80,27 @@ export function StatusBar({
   const stateKey = voiceState;
   const label = VOICE_LABELS[stateKey] ?? stateKey;
 
+  const goHome = () => {
+    dispatchCommand({ action: "layout.restore" });
+    dispatchCommand({ action: "panel.open", panel_type: "conversation" });
+    dispatchCommand({ action: "panel.set_primary", panel_type: "conversation" });
+  };
+
   return (
-    <div className="status-bar app-topbar">
-      <span className="status-brand">
-        ARS<em>·</em>VOX
-      </span>
+    <div className="shell-chrome">
+      <button
+        type="button"
+        className="home-button"
+        onClick={goHome}
+        aria-label="Inicio"
+        title="Volver al inicio"
+      >
+        <span className="home-brand">
+          ARS<em>·</em>VOX
+        </span>
+      </button>
       {/* R43: the live region is the status pill ONLY — interactive controls
-          (STOP, dev demo select) must never sit inside role="status". */}
+          (STOP, home) must never sit inside role="status". */}
       <span
         className={`status-pill ${connected ? "on" : "off"}`}
         data-state={stateKey}
@@ -115,35 +112,7 @@ export function StatusBar({
         </span>
         <span className="status-voice">{label}</span>
       </span>
-      {activity ? <span className="status-activity">{activity}</span> : null}
       <StopButton />
-      <span className="status-spacer" />
-      {DEMO_TOGGLE_ENABLED ? (
-        <label className="status-demo">
-          <span className="status-demo-label">Plantilla</span>
-          <select
-            className="status-demo-select"
-            value={demoValue ?? ""}
-            onChange={(e) => {
-              const value = e.target.value;
-              onDemoChange(
-                (ALL_TEMPLATES as readonly string[]).includes(value)
-                  ? (value as AdaptiveTemplate)
-                  : null,
-              );
-            }}
-            aria-label="Plantilla de demostración"
-            title="Demo del shell: plantillas adaptativas con superficies de marcador"
-          >
-            <option value="">Automática</option>
-            {ALL_TEMPLATES.map((t) => (
-              <option key={t} value={t}>
-                {TEMPLATE_DEMO_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
     </div>
   );
 }
