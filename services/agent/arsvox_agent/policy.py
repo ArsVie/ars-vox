@@ -61,11 +61,12 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     # telegram
     "telegram.prepare_message": PolicyKind.USER_VISIBLE,
     "telegram.send_pending": PolicyKind.EXTERNAL,
-    # memory
-    "memory.remember": PolicyKind.REVERSIBLE,
+    # memory (GATE-5 W1: k/v remember/recall retired; FTS search + explicit
+    # preference-setting replaced them)
+    "memory.search": PolicyKind.READ_ONLY,
+    "preferences.set": PolicyKind.REVERSIBLE,
     # demo (mock mode only — the handler guards itself)
     "demo_populate": PolicyKind.REVERSIBLE,
-    "memory.recall": PolicyKind.READ_ONLY,
 }
 
 # Tools that need explicit user confirmation even though their class is
