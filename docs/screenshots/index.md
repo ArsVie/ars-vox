@@ -35,6 +35,10 @@ are the page-originated triggers that transmit over the page's WS).
 * [Chat history restored](26-chat-history-live.png) — after the
   snapshot-history fix (H5 gap): reload no longer blanks the chat; the
   conversation shows the previous REAL turns (user + assistant).
+* [Video playing live](27-video-live.png) — user-captured: REAL Rick
+  Astley video playing in the main surface after "pon un video" (real
+  model, no mock). Note: the bottom dock (0:00/0:00, YOUTUBE) is the
+  app's own control bar — unrelated to the iframe progress (backlog).
 
 ## Wave 2 — adaptive surfaces + motion (GATE-2, merged 2026-08-08)
 
