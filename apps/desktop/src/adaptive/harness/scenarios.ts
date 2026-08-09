@@ -12,8 +12,8 @@
 
 import type { AdaptiveTemplate, LayoutSpec, Proportion } from "../contracts";
 import { ALL_TEMPLATES } from "../fixtures";
-import type { SlotRect, SlotGeometryMap } from "./geometry";
-import { assertGeometryCoversTemplate, stubGeometry, stubPersistentBar } from "./geometry";
+import type { SlotRect, SlotGeometryMap } from "../../../tests/harness/geometry";
+import { assertGeometryCoversTemplate, stubGeometry, stubPersistentBar } from "../../../tests/harness/geometry";
 import type { AppliedLayout } from "./driver";
 import { applyLayoutForTest } from "./driver";
 import {

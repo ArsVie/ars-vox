@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { TEMPLATE_SLOTS } from "../../src/adaptive/contracts";
 import type { LayoutSpec } from "../../src/adaptive/contracts";
 import { PLACEHOLDER_REGISTERED_IDS } from "../../src/adaptive/fixtures";
-import { STUB_CANVAS } from "../../src/adaptive/harness/geometry";
+import { STUB_CANVAS } from "./geometry";
 import { applyLayoutForTest, primaryInvariantViolation } from "../../src/adaptive/harness/driver";
 import { ALL_TEMPLATES, LAYOUT_FIXTURES } from "../../src/adaptive/harness/fixtures";
 
