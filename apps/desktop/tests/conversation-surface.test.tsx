@@ -188,13 +188,33 @@ describe("ConversationPanel shell-state non-duplication", () => {
   });
 });
 
-describe("ConversationPanel legacy path", () => {
-  it("renders the default primary variant without a SurfaceRoleProvider", () => {
-    const html = renderToStaticMarkup(<ConversationPanel panelId={PANEL_ID} />);
-    expect(html).toContain('data-variant="primary"');
-    // R43: primary never renders the container header, legacy path included.
-    expect(html).not.toContain("panel-header");
-    expect(html).toContain('aria-label="Conversación"');
-    expect(html).toContain('aria-label="Escribe una petición"');
+describe("ConversationPanel role source of truth", () => {
+  it("renders the RESOLVED role when the requested role was degraded (ladder output is authoritative)", () => {
+    seedMessages([
+      { role: "user", text: "Abre un documento" },
+      { role: "assistant", text: "Claro, abriendo el informe…" },
+    ]);
+    // A degraded request (requestedRole != role) must render the role the
+    // host RESOLVED — never a component-side default. Here the ladder
+    // resolved a support request down to companion.
+    const html = renderToStaticMarkup(
+      <SurfaceRoleProvider
+        value={{
+          surfaceId: "conversation",
+          role: "companion",
+          requestedRole: "support",
+          capabilities: ["primary", "companion", "support"],
+          degraded: true,
+        }}
+      >
+        <ConversationPanel panelId={PANEL_ID} />
+      </SurfaceRoleProvider>,
+    );
+    expect(html).toContain('data-variant="companion"');
+    // Companion chrome: subdued subheader, full message list, no hero.
+    expect(html).toContain("conversation-subheader");
+    expect(html).toContain("Abre un documento");
+    expect(html).toContain("Claro, abriendo el informe…");
+    expect(html).not.toContain("suggestion-chip");
   });
 });

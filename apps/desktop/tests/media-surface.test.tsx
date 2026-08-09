@@ -10,8 +10,9 @@
  *   4. THE key test: playback state (store.content.media via the real
  *      media.state event path) SURVIVES a primary -> persistent role
  *      transition — playing state, position and controls are all preserved.
- *   5. Legacy fallback: mounted without a provider, MediaDock keeps its
- *      classic full rendering (existing DOM contracts stay green).
+ *   5. Role source of truth: the provider's RESOLVED role is authoritative —
+ *      a degraded requestedRole renders the ladder output, never a
+ *      component-side default.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -145,13 +146,30 @@ describe("UI-205 MediaDock adaptive variants", () => {
     expect(html).not.toContain("media-player--compact");
   });
 
-  it("legacy mounts without a role provider keep the classic dock rendering", () => {
+  it("renders the RESOLVED role when the requested role was degraded (ladder output is authoritative)", () => {
     seedPlayingMedia();
-    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    // A degraded request (requestedRole != role) must render the role the
+    // host RESOLVED — never a component-side default. Here the ladder
+    // resolved a persistent request down to primary.
+    const html = renderToStaticMarkup(
+      <SurfaceRoleProvider
+        value={{
+          surfaceId: "media",
+          role: "primary",
+          requestedRole: "persistent",
+          capabilities: ["primary", "companion", "persistent"],
+          degraded: true,
+        }}
+      >
+        <MediaDock panelId="media" />
+      </SurfaceRoleProvider>,
+    );
     expect(html).toContain("media-dock");
     expect(html).toContain("media-player");
     expect(html).toContain('aria-label="Pausar"');
     expect(html).toContain("1:00 / 5:00");
+    // Resolved role is primary: full dock, NOT the compact persistent bar.
+    expect(html).toContain('data-media-variant="primary"');
     expect(html).not.toContain("media-player--compact");
   });
 });

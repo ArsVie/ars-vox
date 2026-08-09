@@ -126,12 +126,31 @@ describe("DocumentPanel role variants (UI-203)", () => {
     }
   });
 
-  it("defaults to primary when rendered outside the role host (legacy PanelHost)", () => {
+  it("renders the RESOLVED role when the requested role was degraded (ladder output is authoritative)", () => {
     seedEpub();
-    const html = renderToStaticMarkup(<DocumentPanel panelId="document_editor" />);
+    // A degraded request (requestedRole != role) must render the role the
+    // host RESOLVED — never a component-side default. Here the ladder
+    // resolved a support request down to primary.
+    const html = renderToStaticMarkup(
+      <SurfaceRoleProvider
+        value={{
+          surfaceId: "document_editor",
+          role: "primary",
+          requestedRole: "support",
+          capabilities: ["primary", "companion", "support"],
+          degraded: true,
+        }}
+      >
+        <DocumentPanel panelId="document_editor" />
+      </SurfaceRoleProvider>,
+    );
+    expect(html).toContain('data-surface-role="primary"');
     expect(html).toContain("reading-surface--primary");
     expect(html).toContain("reader-view--primary");
     expect(html).toContain("reader-stage");
+    // The degraded request must NOT leak into the presentation.
+    expect(html).not.toContain("reading-surface--support");
+    expect(html).not.toContain("reading-position-strip");
   });
 
   it("keeps the text/editor path working under every role", () => {
