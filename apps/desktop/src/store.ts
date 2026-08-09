@@ -371,12 +371,14 @@ function addSurfaceToSpec(
   return spec;
 }
 
-/** H5: raw transport send slot for the outbound buffer. Rebound by
+/** W3-TRANSPORT: raw transport send slot for the outbound buffer. Rebound by
  *  bindTransport (singleton) or left as the createAppStore argument for
- *  per-store instances; the store's `send` stays the buffering wrapper
- *  so reconnect sends are queued, never silently dropped. Declared
- *  before createAppStore so the singleton's module-load instantiation
- *  can register its rebind hook. */
+ *  per-store instances. Outbound buffering is owned by the TRANSPORT (the
+ *  renderer client.ts outbox in direct mode, the main-process wsclient.ts
+ *  queue in bridge mode) — the store's send is a pure pass-through (R11
+ *  exactly-once pre-connect delivery is guaranteed there; the old store-level
+ *  double buffer is gone). Declared before createAppStore so the singleton's
+ *  module-load instantiation can register its rebind hook. */
 let rebindRawSend: (send: SendFn) => void = () => {};
 
 /**
@@ -406,29 +408,17 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
     // to once per gap episode (cleared by the next snapshot).
     let lastSeq: number | null = null;
     let resyncRequested = false;
-    // H5 reconnect + GATE-3.5 R11 (A2): outbound buffering. The raw
-    // transport send is rebound by bindTransport (the singleton); per-store
-    // instances keep the send passed to createAppStore. While the store
-    // is disconnected — including BEFORE the first connection (R11: early
-    // user_text spoken/clicked during service startup must not be lost) —
-    // outgoing messages are queued and flushed in order on the next
-    // connect. The WebSocket client's send() silently drops frames when
-    // the socket is not OPEN, which is exactly the loss this buffer
-    // prevents; in Electron mode the main-process WS queue backs it up
-    // (exactly-once delivery).
+    // W3-TRANSPORT (GATE-3.5): outbound buffering is owned by the
+    // TRANSPORT — ONE outbox (renderer client.ts in direct mode, the
+    // main-process wsclient.ts queue in bridge mode). R11 exactly-once
+    // pre-connect delivery is guaranteed there, so the store's send is a
+    // pure pass-through; the old store-level outbox (double buffering,
+    // no shared backoff) is gone.
     let rawSend: SendFn = send;
-    let hasConnected = false;
-    const outbox: unknown[] = [];
-    const OUTBOX_CAP = 200;
     rebindRawSend = (next: SendFn): void => {
       rawSend = next;
     };
     const transportSend = (message: unknown): void => {
-      if (!get().connected) {
-        outbox.push(message);
-        if (outbox.length > OUTBOX_CAP) outbox.shift();
-        return;
-      }
       rawSend(message);
     };
 
@@ -1237,17 +1227,9 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
 
       send: transportSend,
       setConnected: (connected) => {
-        if (connected) {
-          // Flush the reconnect outbox in FIFO order; the socket is OPEN
-          // by the time the transport reports status (ws.onopen), so the
-          // raw sends pass through. Never re-buffer: flush via rawSend.
-          hasConnected = true;
-          const pending = outbox.splice(0);
-          set({ connected: true });
-          for (const message of pending) rawSend(message);
-        } else {
-          set({ connected: false });
-        }
+        // W3-TRANSPORT: no store-level flush — the transport owns the
+        // single outbox and flushes on its own open event.
+        set({ connected });
       },
       setReducedMotion: (value) => {
         set({ reducedMotion: value });

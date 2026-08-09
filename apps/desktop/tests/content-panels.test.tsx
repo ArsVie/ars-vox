@@ -137,8 +137,11 @@ describe("BrowserPanel", () => {
 
     const html = renderPrimary(<BrowserPanel />, "browser", STANDARD_ROLES);
     expect(html).toContain("browser-toolbar");
-    expect(html).toContain('aria-label="Atrás"');
-    expect(html).toContain('aria-label="Recargar"');
+    // W3-BROWSER (2026-08-09): back/forward/refresh controls were removed —
+    // the iframe sandbox cannot navigate cross-origin content, so dead
+    // buttons were honest. The address bar is the live navigation surface.
+    expect(html).not.toContain('aria-label="Atrás"');
+    expect(html).not.toContain('aria-label="Recargar"');
     expect(html).toContain('src="http://127.0.0.1:5173/demo-news.html"');
     expect(html).toContain('title="Página web"');
     expect(html).not.toContain("Pídeme que abra una página");

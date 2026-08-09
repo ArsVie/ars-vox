@@ -406,8 +406,15 @@ describe("GATE-3.5 A6: bus sequence authority (R29)", () => {
   });
 });
 
-describe("H5 outbound buffering across reconnect", () => {
-  it("buffers sends while disconnected and flushes them in order on reconnect", () => {
+describe("W3-TRANSPORT: store send is a pass-through (transport owns buffering)", () => {
+  // GATE-3.5 W3-TRANSPORT carve-out (2026-08-09): the store-level outbox
+  // is gone — ONE outbox lives in the transport (renderer client.ts in
+  // direct mode, main-process wsclient.ts in bridge mode). R11 exactly-once
+  // pre-connect delivery is verified by tests/ws-client.test.ts + electron
+  // wsclient tests; here we pin the store's new contract: nothing is
+  // buffered or swallowed at the store, every send reaches the transport
+  // immediately, connected or not.
+  it("passes sends straight to the transport while disconnected", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
 
@@ -415,45 +422,33 @@ describe("H5 outbound buffering across reconnect", () => {
     store.getState().setConnected(false); // socket dropped
     store.getState().sendText("uno");
     store.getState().stop();
-    expect(sent).toEqual([]); // nothing leaked to the dead socket
+    // pass-through: the transport queues while its socket is not OPEN
+    expect(sent).toEqual([
+      { type: "user_text", text: "uno" },
+      { type: "stop" },
+    ]);
 
-    store.getState().setConnected(true); // reconnected
+    store.getState().setConnected(true); // transport flushes on its own open
     expect(sent).toEqual([
       { type: "user_text", text: "uno" },
       { type: "stop" },
     ]);
   });
 
-  it("R11: buffers sends BEFORE the first connection and flushes them on the first connect", () => {
-    // R11 inverts the legacy startup behavior: early user_text spoken or
-    // clicked during service startup must not be lost (no message-loss
-    // window), so the buffer engages from the very first send.
+  it("R11: pre-first-connect sends reach the transport immediately", () => {
+    // R11 semantics preserved (no message-loss window): the transport's
+    // outbox engages from the very first send — the store must not hold
+    // anything back.
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
     store.getState().sendText("hola");
-    expect(sent).toEqual([]); // queued, not leaked
+    expect(sent).toEqual([{ type: "user_text", text: "hola" }]);
 
-    store.getState().setConnected(true); // first connect
+    store.getState().setConnected(true); // first connect — nothing to flush
     expect(sent).toEqual([{ type: "user_text", text: "hola" }]);
   });
 
-  it("does not re-buffer flushed messages and keeps live ordering", () => {
-    const sent: unknown[] = [];
-    const store = createAppStore((m) => sent.push(m));
-
-    store.getState().setConnected(true);
-    store.getState().setConnected(false);
-    store.getState().sendText("buffered");
-    store.getState().setConnected(true); // flush
-    store.getState().sendText("live"); // socket open again
-
-    expect(sent).toEqual([
-      { type: "user_text", text: "buffered" },
-      { type: "user_text", text: "live" },
-    ]);
-  });
-
-  it("buffers confirm/cancel while disconnected too (single choke point)", () => {
+  it("confirm/cancel pass through while disconnected too (single choke point)", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
 
@@ -469,7 +464,7 @@ describe("H5 outbound buffering across reconnect", () => {
       created_at: ts(),
     });
     store.getState().confirm(true);
-    expect(sent).toEqual([]);
+    expect(sent).toEqual([{ type: "confirm", pending_id: "p9" }]);
 
     store.getState().setConnected(true);
     expect(sent).toEqual([{ type: "confirm", pending_id: "p9" }]);

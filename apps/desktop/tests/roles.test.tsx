@@ -419,12 +419,22 @@ describe("store adaptive state (UI-103)", () => {
       ).not.toThrow();
       // the rejection is observable: warn-and-return
       expect(warn).toHaveBeenCalled();
-    } finally {
+      } finally {
       warn.mockRestore();
-    }
-    // layout state is exactly what it was before — no partial updates
-    expect(store.getState().adaptive).toEqual(before);
-  });
+      }
+      // layout composition state is exactly what it was before — no partial
+      // updates; only the rejection record changed (ADV-F3, GATE-4: the
+      // rejection is observable — the last invalid spec recorded a structured
+      // "geometry" code instead of vanishing silently).
+      const after = store.getState().adaptive;
+      expect(after.spec).toEqual(before.spec);
+      expect(after.assignments).toEqual(before.assignments);
+      expect(after.overrides).toEqual(before.overrides);
+      expect(after.preFullscreen).toEqual(before.preFullscreen);
+      expect(after.lastUnhandledAction).toEqual(before.lastUnhandledAction);
+      expect(after.lastRejection).not.toBeNull();
+      expect(after.lastRejection?.code).toBe("geometry");
+      });
 
   it("the registry module is usable by the store end-to-end", () => {
     const store = createAppStore(() => {});
