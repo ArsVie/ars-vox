@@ -814,7 +814,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // R19 (GATE-3.5): "restore layout" == the frozen restore intent —
           // clears the persistent constraint set through the ONE choke (the
           // explicit user reset; the unconstrained composition applies).
-          const base = state.adaptive.spec ?? bootDefaultSpec();
+          // GATE-2 fix (2026-08-09, packaged-verified): the restore base must
+          // be the pre-fullscreen composition when one exists — the fullscreen
+          // constraint REPLACES adaptive.spec with focus{target}, so restoring
+          // from adaptive.spec returns to fullscreen geometry and the
+          // pre-fullscreen desk is lost. preFullscreen was captured but never
+          // consumed (R19 incomplete).
+          const base =
+            state.adaptive.preFullscreen ??
+            state.adaptive.spec ??
+            bootDefaultSpec();
           if (!base) return;
           layoutApplied = true;
           applyAdaptiveSpec(base, {

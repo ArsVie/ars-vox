@@ -325,6 +325,51 @@ describe("panel close", () => {
         ?.role,
     ).toBe("primary");
   });
+
+  it("GATE-2 regression: layout.restore after fullscreen returns the pre-fullscreen composition", () => {
+    const store = createAppStore(() => {});
+    // compose a split (tasks main + conversation side)
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.compose",
+        template: "split",
+        assignments: [
+          { surface_id: "tasks", role: "primary", slot: "main" },
+          { surface_id: "conversation", role: "primary", slot: "side" },
+        ],
+        proportion: null,
+      },
+      created_at: ts(),
+    });
+    const splitSurfaceIds = () =>
+      store
+        .getState()
+        .adaptive.spec?.assignments.map((a) => a.surfaceId)
+        .sort() ?? [];
+    expect(splitSurfaceIds()).toEqual(["conversation", "tasks"]);
+
+    // fullscreen the conversation — the constraint replaces the composition
+    // with focus{conversation} and captures preFullscreen (the split)
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.fullscreen", panel_type: "conversation" },
+      created_at: ts(),
+    });
+    expect(splitSurfaceIds()).toEqual(["conversation"]);
+    expect(store.getState().adaptive.preFullscreen).not.toBeNull();
+
+    // restore — the desk must return to the split, not to fullscreen geometry
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "layout.restore" },
+      created_at: ts(),
+    });
+    const restored = store.getState();
+    expect(splitSurfaceIds()).toEqual(["conversation", "tasks"]);
+    expect(restored.adaptive.preFullscreen).toBeNull();
+    expect(restored.adaptive.overrides.bySurface).toEqual({});
+  });
 });
 
 describe("local panel fullscreen toggle", () => {
