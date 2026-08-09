@@ -62,8 +62,8 @@ _WIRE_SLOT_ROLE: dict[str, str] = {
 
 
 def adaptive_from_layout_command(command: dict[str, Any]) -> dict[str, Any] | None:
-    """Map a wire layout intent (ui_command/layout.apply payload) to the
-    adaptive composition shape carried by the snapshot.
+    """Map a wire layout intent (ui_command layout.apply/layout.compose
+    payload) to the adaptive composition shape carried by the snapshot.
 
     Mirrors the client planner's deterministic mapping (slots win over
     primary/secondary; main falls back to primary_panel; dock dropped).
@@ -82,7 +82,7 @@ def adaptive_from_layout_command(command: dict[str, Any]) -> dict[str, Any] | No
         for a in assignments:
             if not isinstance(a, dict):
                 continue
-            surface_id = a.get("surface_id") or a.get("surfaceId")
+            surface_id = a.get("surface_id")
             role = a.get("role")
             slot = a.get("slot")
             if isinstance(surface_id, str) and isinstance(role, str) and isinstance(slot, str):
@@ -156,7 +156,10 @@ class SnapshotTracker:
             self.last_voice = payload.get("voice_state") or self.last_voice
         elif kind == _UI_COMMAND_TYPE:
             command = payload.get("command")
-            if isinstance(command, dict) and command.get("action") == "layout.apply":
+            if isinstance(command, dict) and command.get("action") in (
+                "layout.apply",
+                "layout.compose",
+            ):
                 mapped = adaptive_from_layout_command(command)
                 if mapped is not None:
                     self.last_adaptive = mapped

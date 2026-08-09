@@ -132,7 +132,9 @@ describe("wire enum parity with the Python schemas", () => {
 
   it("every schema PanelType is accepted by the TS wire (layout + overlays)", () => {
     const schemaPanels = (uiDefs.PanelType?.enum ?? []) as WirePanelId[];
-    expect(schemaPanels.length).toBeGreaterThanOrEqual(14);
+    // 13 wire panels: 11 KNOWN_PANELS + confirmation/notification. The
+    // deprecated news panel is gone from the wire (panel-vision).
+    expect(schemaPanels.length).toBeGreaterThanOrEqual(13);
     for (const panel of schemaPanels) {
       expect(
         LAYOUT_PANELS.includes(panel) || OVERLAY_PANELS.includes(panel),
@@ -141,9 +143,18 @@ describe("wire enum parity with the Python schemas", () => {
     }
   });
 
-  it("KNOWN_PANELS contains no values outside the schema PanelType", () => {
-    const schemaPanels = uiDefs.PanelType?.enum ?? [];
-    for (const panel of LAYOUT_PANELS) {
+  it("schema PanelType and KNOWN_PANELS agree — news stays off the wire", () => {
+    const schemaPanels = (uiDefs.PanelType?.enum ?? []) as string[];
+    // Clean-state guard: the wire must never grow the deprecated news
+    // panel back (panel-vision: the browser covers news).
+    expect(schemaPanels).not.toContain("news");
+    // Every known/overlay panel is on the wire. KNOWN_PANELS still
+    // carries the legacy "news" entry in engine.ts.
+    // TODO(g35r-pycontract, engine.ts removed in Wave 2): drop the news
+    // carve-out — KNOWN_PANELS then equals the wire exactly.
+    const knownAndOverlays = [...KNOWN_PANELS, ...OVERLAY_PANELS];
+    for (const panel of knownAndOverlays) {
+      if (panel === "news") continue;
       expect(schemaPanels).toContain(panel);
     }
   });
