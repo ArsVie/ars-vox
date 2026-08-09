@@ -40,16 +40,18 @@ def test_layout_compose_signature_is_semantic_only():
     assert ann["proportion"].annotation == Proportion | None
 
 
-def test_model_visible_panel_vocabulary_excludes_news():
-    """R18: the panel_type enums exposed in the tool schemas never carry
-    the news value (panel-vision: the browser covers news)."""
+def test_model_visible_panel_vocabulary_matches_wire():
+    """R18: the model-visible panel vocabulary equals the wire PanelType.
+    news is gone from the wire entirely (panel-vision: the browser covers
+    it), so the tool schemas must never carry it either — clean equality,
+    no drift carve-outs."""
     from arsvox_contracts import PanelType
 
     from arsvox_agent.tools.ui_tools import ModelPanelType
 
     model_values = {p.value for p in ModelPanelType}
     wire_values = {p.value for p in PanelType}
-    assert model_values == wire_values - {"news"}
+    assert model_values == wire_values
 
 
 def test_unknown_tool_denied_by_gate():
