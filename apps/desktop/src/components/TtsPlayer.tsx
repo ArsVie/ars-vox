@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "zustand";
 
+import type { TtsAckMessage } from "../contracts";
 import { authHeaders, TTS_URL } from "../endpoints";
 import { appStore } from "../store";
 
@@ -9,8 +10,18 @@ import { appStore } from "../store";
  * (/tts, JSON body — never the text in a URL), plays the returned audio,
  * and advances. Playback rate follows the config-driven tts.speed. When
  * the queue is cleared (the stop button) the current playback is
- * interrupted immediately. Never touches the store's voice state — that
- * stays server-owned.
+ * interrupted immediately.
+ *
+ * GATE-3.5 (C4/R08): the renderer is the PHYSICAL playback authority.
+ * Every phrase reports its real lifecycle to the service:
+ *   - tts.started  when audio actually begins playing,
+ *   - tts.finished when it ends (or fails to play — either way no
+ *     speech is coming from this item),
+ *   - tts.cancelled when playback is interrupted by a queue clear
+ *     (STOP button or a spoken-stop state_update) while playing.
+ * The service's canonical voice state machine only reaches LISTENING
+ * after tts.finished, so the UI never claims to be listening while the
+ * speaker is still talking (R05/R06/R07/R08).
  */
 export function TtsPlayer() {
   const speakTexts = useStore(appStore, (s) => s.speakTexts);
@@ -26,44 +37,116 @@ export function TtsPlayer() {
       audioRef.current = null;
       return;
     }
-    let finished = false;
-    let objectUrl: string | null = null;
-    const audio = new Audio();
-    audio.playbackRate = ttsSpeed > 0 ? ttsSpeed : 1;
-    audioRef.current = audio;
-    const advance = () => {
-      if (finished) return;
-      finished = true;
-      ttsDone();
-    };
-    audio.onended = advance;
-    audio.onerror = advance; // never block the queue on a failed fetch
-    void (async () => {
-      try {
-        const res = await fetch(TTS_URL, {
-          method: "POST",
-          headers: { ...authHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
-        if (!res.ok) throw new Error(`tts ${res.status}`);
-        const blob = await res.blob();
-        if (finished) return; // queue advanced while we were fetching
-        objectUrl = URL.createObjectURL(blob);
-        audio.src = objectUrl;
-        await playWithFallback(audio);
-      } catch {
-        advance();
-      }
-    })();
+    const player = new PhrasePlayer({
+      text,
+      ttsSpeed,
+      send: (ack) => {
+        try {
+          appStore.getState().send(ack);
+        } catch {
+          // socket down: the service settles pending speech on disconnect
+        }
+      },
+      onDone: ttsDone,
+    });
+    audioRef.current = player.audio;
+    void player.start();
     return () => {
-      finished = true;
-      audio.pause();
+      player.dispose();
       audioRef.current = null;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [text, ttsDone, ttsSpeed]);
 
   return null;
+}
+
+/**
+ * One phrase of physical playback: fetch audio, play it, and report the
+ * real lifecycle (started/finished/cancelled) to the service. Lives
+ * outside the component so the ack contract is testable in a plain node
+ * env (repo convention — no jsdom), the same way MicCapture is.
+ */
+export class PhrasePlayer {
+  readonly audio: HTMLAudioElement;
+  private finished = false;
+  private started = false;
+  private objectUrl: string | null = null;
+
+  constructor(
+    private readonly opts: {
+      text: string;
+      ttsSpeed: number;
+      send: (ack: TtsAckMessage) => void;
+      onDone: () => void;
+    },
+  ) {
+    const audio = new Audio();
+    audio.playbackRate = opts.ttsSpeed > 0 ? opts.ttsSpeed : 1;
+    this.audio = audio;
+    audio.onended = () => {
+      if (this.started) opts.send({ type: "tts.finished" });
+      this.advance();
+    };
+    audio.onerror = () => {
+      // Decode/playback failure mid-phrase: no more speech from this
+      // item — ack finished so the machine settles.
+      if (this.started) opts.send({ type: "tts.finished" });
+      this.advance(); // never block the queue on a failed fetch
+    };
+  }
+
+  /** Fetch the audio and start playback. Resolves once play() settles. */
+  async start(): Promise<void> {
+    const { text, send } = this.opts;
+    try {
+      const res = await fetch(TTS_URL, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error(`tts ${res.status}`);
+      const blob = await res.blob();
+      if (this.finished) return; // queue advanced while we were fetching
+      this.objectUrl = URL.createObjectURL(blob);
+      this.audio.src = this.objectUrl;
+      this.audio.addEventListener(
+        "playing",
+        () => {
+          // Guard: dispose() during the play() await (queue cleared)
+          // must not let a stale started ack reach the service.
+          if (this.finished) return;
+          this.started = true;
+          send({ type: "tts.started" });
+        },
+        { once: true },
+      );
+      await playWithFallback(this.audio);
+    } catch {
+      if (!this.finished) {
+        // Fetch/play failed before anything played: no speech will come
+        // from this phrase — ack finished so the machine settles out of
+        // THINKING.
+        send({ type: "tts.finished" });
+      }
+      this.advance();
+    }
+  }
+
+  /** Interrupt: queue cleared / unmounted. Acks cancelled when playing. */
+  dispose(): void {
+    const wasPlaying = this.started && !this.finished;
+    this.finished = true;
+    this.audio.pause();
+    if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
+    this.objectUrl = null;
+    if (wasPlaying) this.opts.send({ type: "tts.cancelled" });
+  }
+
+  private advance(): void {
+    if (this.finished) return;
+    this.finished = true;
+    this.opts.onDone();
+  }
 }
 
 /**

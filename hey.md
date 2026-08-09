@@ -16,6 +16,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - files/dirs: apps/desktop/src/components/{StatusBar,ConversationPanel,ConfirmationPanel,PanelHeader}.tsx + styles.css + tests/ (a11y, conversation-surface, surfaces-wiring, panelhost)
 - status: ACTIVE
 
+### hermes-g35-a1 (Wave 1 A1 — voice lifecycle + STOP authority, GATE-3.5)
+- timestamp: 2026-08-08T21:10:00Z
+- task: R01-R08 (TTS started/finished/cancelled acks on the wire, LISTENING only after physical playback ends, silence timer anchored to speech end, one STOP primitive, generation guards). Owns: voice/session state machine, TTS lifecycle events, STOP cancellation path, renderer TTS cancellation, silence timer. Forbidden: confirmation redesign (A7).
+- files/dirs: packages/contracts/arsvox_contracts/{client_messages,__init__}.py + schemas/client-messages.schema.json, services/voice/arsvox_voice/pipeline.py, services/agent/arsvox_agent/{runtime,ws}.py, apps/desktop/src/{contracts.ts,store.ts,components/TtsPlayer.tsx,components/StatusBar.tsx}, tests/python/test_voice_tts_lifecycle.py (new), apps/desktop/tests/tts-player-acks.test.tsx (new), hey.md
+- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a1-voice, branch wip/g35-a1-voice
+- status: resolved (merged to main 2026-08-09, gate merge 2/9)
+
 ### g35-a7 (Wave 1 — confirmation semantics + client action contract, 2026-08-08)
 - timestamp: 2026-08-08T21:00:00Z
 - task: A7 — R35-R39 + C1. Spoken confirm/reject vocabulary wired to the frozen pending action; R36 conservative ignore outside confirmation mode; R38 STOP cancels an EXECUTING approved action (cancellation tokens + per-tool point of no return, telegram.send_pending first); R39/C1 ClientAction narrowed to the human-initiated set with authoritative-handler enumeration guard. Files: services/agent/arsvox_agent/{confirmations,runtime,local_intents,ws,actions}.py, tools/{__init__,context,telegram_tools}.py, packages/contracts/arsvox_contracts/client_messages.py, packages/contracts/fixtures/client_actions.json, apps/desktop/src/{contracts.ts,store.ts}, apps/desktop/tests/client-actions.test.ts, tests/python/*.

@@ -48,6 +48,11 @@ class AgentRuntime:
         self._agent = None
         self._active_task: asyncio.Task | None = None
         self._busy = False
+        # GATE-3.5 (C4): a turn that dispatches TTS stays in THINKING until
+        # the renderer acks physical playback (tts.started -> SPEAKING,
+        # tts.finished -> terminal). This flag tells _run_turn's finally
+        # to skip settling: LISTENING must never precede speech end (R05).
+        self._speech_pending = False
 
     # ------------------------------------------------------------------ #
     def set_config(self, config: AppConfig) -> None:
@@ -157,13 +162,23 @@ class AgentRuntime:
             )
         finally:
             self._busy = False
-            pending = self.deps_base.pending.list_pending()
-            state = (
-                VoiceState.WAITING_FOR_CONFIRMATION
-                if pending
-                else VoiceState.LISTENING
-            )
-            self._set_voice(state)
+            # GATE-3.5 (C4/R05): a turn that dispatched TTS must NOT settle
+            # to LISTENING here — playback is still ahead. The renderer's
+            # tts.finished ack settles it. Turns without TTS settle now.
+            if not self._speech_pending:
+                self._settle()
+
+    def _settle(self) -> None:
+        """Terminal state after a turn's speech is fully done: LISTENING,
+        or WAITING_FOR_CONFIRMATION when a pending confirmation exists
+        (H5). This is the ONLY place the machine may leave
+        THINKING/SPEAKING for the terminal states, and it is only
+        reached after physical playback ended (or no speech was
+        dispatched)."""
+        pending = self.deps_base.pending.list_pending()
+        self._set_voice(
+            VoiceState.WAITING_FOR_CONFIRMATION if pending else VoiceState.LISTENING
+        )
 
     async def _turn(self, text: str) -> None:
         self._set_voice(VoiceState.THINKING, activity=text[:80])
@@ -202,10 +217,65 @@ class AgentRuntime:
             if self.config.tts.auto_speak:
                 # The UI fetches the audio (GET /tts) and plays it; the
                 # stop path clears the UI queue and interrupts playback.
-                self._set_voice(VoiceState.SPEAKING)
+                # GATE-3.5 (C4): do NOT claim SPEAKING here — the machine
+                # stays THINKING until the renderer acks tts.started, and
+                # only tts.finished settles it to LISTENING (R05/R08).
+                self._speech_pending = True
                 await self.bus.publish(
                     UiCommandEvent(command=TtsSpeak(text=final, priority=False))
                 )
+
+    # ------------------------------------------------------------------ #
+    # GATE-3.5 (C4/R08): physical-playback acks from the renderer. The
+    # renderer is the playback authority; these are the only transitions
+    # that may move the machine into/out of SPEAKING. All handlers are
+    # guards against stale acks (R04): ack messages that arrive after a
+    # stop (STOPPING/SLEEPING) are consumed as no-ops and can never
+    # resurrect a cancelled turn.
+
+    def on_tts_started(self) -> None:
+        """Renderer reports physical playback began -> SPEAKING.
+
+        Allowed from THINKING (normal turn flow), LISTENING (a later
+        queued phrase of the same turn) and SLEEPING (speech dispatched
+        outside a turn, e.g. the telegram tool — the machine corrects to
+        the physical truth). Never from STOPPING: a mid-stop started ack
+        is stale and the imminent queue clear will ack cancellation."""
+        self._speech_pending = False
+        if self.pipeline is not None and self.pipeline.state == VoiceState.STOPPING:
+            return
+        self._set_voice(VoiceState.SPEAKING)
+
+    def on_tts_finished(self) -> None:
+        """Renderer reports a phrase ended without cancellation -> settle.
+
+        Settles only while speech is actually in flight or pending
+        (SPEAKING, or THINKING with a dispatched phrase that never
+        started — fetch/play failure). After a stop (STOPPING/SLEEPING)
+        the ack is a no-op: the stop path owns the terminal state."""
+        if self.pipeline is None:
+            self._speech_pending = False
+            self._settle()
+            return
+        if self.pipeline.state == VoiceState.SPEAKING or self._speech_pending:
+            self._speech_pending = False
+            self._settle()
+
+    def on_tts_cancelled(self) -> None:
+        """Renderer reports playback was interrupted (STOP / queue clear).
+
+        During the STOP path the machine is already STOPPING/SLEEPING —
+        the ack confirms physical playback stopped (R07) and is a no-op
+        here. Defensively, if speech vanished while SPEAKING without a
+        stop (e.g. renderer-side clear), settle so the machine never
+        hangs in SPEAKING."""
+        if self.pipeline is None:
+            self._speech_pending = False
+            self._settle()
+            return
+        if self.pipeline.state == VoiceState.SPEAKING or self._speech_pending:
+            self._speech_pending = False
+            self._settle()
 
     # ------------------------------------------------------------------ #
     async def cancel(self) -> None:
@@ -215,6 +285,9 @@ class AgentRuntime:
         involves the LLM."""
         task = self._active_task
         self._active_task = None
+        # A cancelled turn's dispatched speech is dead: late acks must
+        # not settle the machine out of the STOP path (R04/R07).
+        self._speech_pending = False
         if task and not task.done():
             task.cancel()
             try:

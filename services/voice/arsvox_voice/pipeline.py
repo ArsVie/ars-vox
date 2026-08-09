@@ -31,11 +31,15 @@ StopCallback = Callable[[], Coroutine[Any, Any, None]]
 StateCallback = Callable[[VoiceState, str | None], Coroutine[Any, Any, None]]
 
 # States where the silence timer must be disarmed: a request is in flight
-# (thinking), the user must act (waiting), or we are mid-stop — none of
-# them may be preempted into SLEEPING by the silence watcher.
+# (thinking), speech is physically playing (speaking — the timer is
+# anchored to speech END, never mid-playback, R06), the user must act
+# (waiting), or we are mid-stop — none of them may be preempted into
+# SLEEPING by the silence watcher. LISTENING is the only state that arms
+# the timer, and it is only reached after speech actually ends (R05).
 _TIMER_FREE_STATES = frozenset(
     {
         VoiceState.THINKING,
+        VoiceState.SPEAKING,
         VoiceState.STOPPING,
         VoiceState.WAITING_FOR_CONFIRMATION,
         VoiceState.ERROR,
@@ -102,10 +106,11 @@ class VoicePipeline:
     def set_state(self, state: VoiceState, activity: str | None = None) -> None:
         """THE canonical state entry — every publisher transitions here.
 
-        Owns the silence-timer policy: the timer stays armed while
-        listening/speaking (silence falls back to SLEEPING) and is
-        disarmed in _TIMER_FREE_STATES — a long model turn can never flip
-        the UI to sleeping while a request is in flight.
+        Owns the silence-timer policy: the timer is armed ONLY in
+        LISTENING (which is only entered after physical TTS playback
+        ends, R05) and disarmed in _TIMER_FREE_STATES — a long model
+        turn or a long TTS playback can never flip the UI to sleeping
+        while speech is still coming (R06).
         """
         if state in _TIMER_FREE_STATES:
             self._stop_silence_timer()

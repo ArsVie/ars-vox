@@ -425,3 +425,16 @@ export type ServerEvent =
   | PongEvent
   | ActionResultEvent
   | StateSnapshotEvent;
+
+/**
+ * GATE-3.5 (C4/R08): physical-playback acknowledgements the renderer
+ * sends to the service. The renderer is the playback authority: it
+ * reports when a phrase actually starts playing, ends, or is
+ * interrupted, so the canonical voice state machine only reaches
+ * LISTENING after speech physically ends. Sent as plain WS frames
+ * (client -> server), like user_text/stop.
+ */
+export type TtsAckMessage =
+  | { type: "tts.started" }
+  | { type: "tts.finished" }
+  | { type: "tts.cancelled" };
