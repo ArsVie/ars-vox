@@ -1,4 +1,20 @@
 /**
+ * ⛔ NON-AUTHORITATIVE (GATE-3.5, R22) — legacy layout engine.
+ *
+ * The adaptive contract (src/adaptive/contracts.ts + planner.ts + the
+ * store's applyAdaptiveSpec choke) is the SINGLE layout authority: every
+ * layout source (agent planner, manual UI, spoken override, reconnect,
+ * migration) enters the one choke. This module is RETIRED: the store no
+ * longer writes state.spec/state.layout from any layout command, and
+ * nothing here is consulted by the adaptive path. It survives ONLY as the
+ * pre-first-layout boot composition rendered by the legacy PanelHost.
+ *
+ * DELETION TASK (program rule 4): delete src/layout/engine.ts +
+ * PanelHost + state.spec/state.layout after the GATE-4 boot path renders
+ * through the adaptive stage (the config-driven default now lands an
+ * adaptive composition at connect, so the legacy boot path is already
+ * vestigial). Do NOT extend this file.
+ *
  * Deterministic layout engine — pure TypeScript, no DOM, no side effects.
  *
  * Fixed-template model: the model NEVER sends pixel coordinates. It selects

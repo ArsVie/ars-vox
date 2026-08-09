@@ -455,8 +455,10 @@ describe("store wire routing — ui_command/layout.apply flows through the plann
     // reading → sidecar; dock dropped; adaptive layer now holds the spec
     expect(adaptive.spec?.template).toBe("sidecar");
     expect(adaptive.lastRejection).toBeNull();
-    // the legacy engine path still worked (unchanged behavior)
-    expect(store.getState().layout.template).toBe("reading");
+    // R22 (GATE-3.5): the legacy engine is NON-AUTHORITATIVE — a layout
+    // command no longer writes state.spec/state.layout (boot focus stays).
+    expect(store.getState().layout.template).toBe("focus");
+    expect(store.getState().spec.template).toBe("focus");
   });
 
   it("rejects an invalid wire command without corrupting either layout layer", () => {

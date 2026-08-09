@@ -5,6 +5,8 @@
  */
 
 import type { AnyTemplate, PanelId, SlotName } from "./layout/engine";
+import type { LayoutSpec } from "./adaptive/contracts";
+import type { OverrideSet } from "./adaptive/overrides";
 
 /** Wire shape of layout.apply `slots` (mirror of LayoutSlots in Python). */
 export interface LayoutSlotsWire {
@@ -372,6 +374,17 @@ export interface StateSnapshotEvent {
    *  reload/reconnect does not blank the conversation (events are
    *  per-connection, turns are persisted). */
   history: { id: number; role: "user" | "assistant"; text: string; created_at: string }[];
+  /** R19/R33 (GATE-3.5): the adaptive composition (validated LayoutSpec +
+   *  the persistent user constraint set) — the reconnect source restores
+   *  the workspace through the ONE layout choke. FRONTEND HALF of the
+   *  seam: A6 lands the matching Python wire field (snapshot.py /
+   *  events.py). Absent on older services → the composition is simply
+   *  not restored (existing behavior). Both shapes are plain JSON
+   *  (serializable by construction). */
+  adaptive_composition?: {
+    spec: LayoutSpec;
+    overrides?: OverrideSet;
+  } | null;
   created_at: string;
 }
 

@@ -118,7 +118,13 @@ export interface PlannerRegistry {
   capabilitiesOf(surfaceId: string): readonly SurfaceRole[];
 }
 
-/** Deterministic legacy-wire template → adaptive template mapping. */
+/** Deterministic legacy-wire template → adaptive template mapping.
+ *  ⛔ NON-AUTHORITATIVE compatibility adapter (GATE-3.5, R22): it exists
+ *  ONLY to keep the legacy wire vocabulary (layout.apply, config
+ *  default_template) flowing through the planner into the ONE choke.
+ *  DELETION TASK (program rule 4): remove with the legacy wire vocabulary
+ *  once A3's native LayoutSpec tool is the only agent surface (GATE-3.5
+ *  merge) and config templates speak adaptive ids. Do NOT extend. */
 export const LEGACY_TEMPLATE_MAP: Record<string, AdaptiveTemplate> = {
   focus: "focus",
   split: "split",

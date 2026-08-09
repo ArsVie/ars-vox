@@ -7,7 +7,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { ServerEvent } from "../src/contracts";
+import { registerProductSurfaces } from "../src/adaptive/surfaces";
 import { createAppStore } from "../src/store";
+
+// GATE-3.5: layout commands now route through the adaptive choke, which
+// validates against the surface registry — register the real product
+// surfaces (idempotent, same call App.tsx makes at startup).
+registerProductSurfaces();
 
 function ts(): string {
   return new Date().toISOString();
@@ -82,18 +88,22 @@ describe("vertical slice: open a document", () => {
 
     const state = store.getState();
     expect(state.voiceState).toBe("listening");
-    expect(state.layout.template).toBe("split");
-
-    const doc = state.layout.panels.find((p) => p.panel === "document_editor");
-    const conv = state.layout.panels.find((p) => p.panel === "conversation");
+    // GATE-3.5 (R22): the agent layout lands in the adaptive layer — the
+    // single layout authority. The legacy engine (state.layout) is no
+    // longer written by layout commands.
+    expect(state.adaptive.spec?.template).toBe("split");
+    const doc = state.adaptive.spec?.assignments.find(
+      (a) => a.surfaceId === "document_editor",
+    );
+    const conv = state.adaptive.spec?.assignments.find(
+      (a) => a.surfaceId === "conversation",
+    );
     expect(doc).toBeDefined();
     expect(conv).toBeDefined();
     expect(doc!.role).toBe("primary");
-    expect(doc!.visible).toBe(true);
-    expect(conv!.role).toBe("secondary");
-    expect(conv!.visible).toBe(true);
-    expect(doc!.zIndex).toBeGreaterThan(conv!.zIndex);
-    expect(doc!.width).toBeGreaterThan(conv!.width);
+    expect(doc!.slot).toBe("main");
+    expect(conv!.role).toBe("companion");
+    expect(conv!.slot).toBe("side");
 
     const texts = state.messages.map((m) => m.text);
     expect(texts.some((t) => t.includes("Open a document."))).toBe(true);
@@ -183,7 +193,7 @@ describe("error surfacing", () => {
 });
 
 describe("layout restoration", () => {
-  it("layout.restore returns to the previous layout", () => {
+  it("layout.restore clears the user constraint set through the one choke", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent({
       type: "ui_command",
@@ -196,29 +206,43 @@ describe("layout restoration", () => {
       },
       created_at: ts(),
     });
-    expect(store.getState().layout.template).toBe("split");
+    expect(store.getState().adaptive.spec?.template).toBe("split");
 
+    // the user closes the primary — a persistent constraint
     store.getState().applyEvent({
       type: "ui_command",
-      command: {
-        action: "layout.apply",
-        template: "focus",
-        primary_panel: "conversation",
-        secondary_panel: null,
-        preserve: true,
-      },
+      command: { action: "panel.close", panel_type: "document_editor" },
       created_at: ts(),
     });
-    expect(store.getState().layout.template).toBe("focus");
+    expect(
+      store.getState().adaptive.overrides.bySurface["document_editor"],
+    ).toMatchObject({ remove: true });
 
+    // layout.restore == the frozen restore intent: constraints cleared
     store.getState().applyEvent({
       type: "ui_command",
       command: { action: "layout.restore" },
       created_at: ts(),
     });
-    expect(store.getState().layout.template).toBe("split");
-    // the original focus spec stays on the stack for one more restore
-    expect(store.getState().history).toHaveLength(1);
+    const state = store.getState();
+    expect(state.adaptive.overrides.bySurface).toEqual({});
+
+    // the agent may propose the surface again — nothing blocks it now
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "layout.apply",
+        template: "split",
+        primary_panel: "document_editor",
+        secondary_panel: "conversation",
+        preserve: true,
+      },
+      created_at: ts(),
+    });
+    const ids =
+      store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId) ?? [];
+    expect(ids).toContain("document_editor");
+    expect(ids).toContain("conversation");
   });
 });
 
@@ -252,7 +276,7 @@ describe("tts speak queue", () => {
 });
 
 describe("panel close", () => {
-  it("closing the primary panel falls back to the conversation panel", () => {
+  it("closing the primary panel degrades deterministically (user close constraint)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent({
       type: "ui_command",
@@ -274,8 +298,9 @@ describe("panel close", () => {
       },
       created_at: ts(),
     });
+    const before = store.getState().adaptive.spec;
     expect(
-      store.getState().layout.panels.find((p) => p.panel === "document_editor")?.role,
+      before?.assignments.find((a) => a.surfaceId === "document_editor")?.role,
     ).toBe("primary");
 
     store.getState().applyEvent({
@@ -284,11 +309,18 @@ describe("panel close", () => {
       created_at: ts(),
     });
     const state = store.getState();
-    const conv = state.layout.panels.find((p) => p.panel === "conversation");
-    expect(conv?.role).toBe("primary");
+    // R19/R20: a user close is a PERSISTENT constraint through the one
+    // choke — the surface leaves the composition and stays out.
+    expect(state.adaptive.overrides.bySurface["document_editor"]).toMatchObject(
+      { remove: true },
+    );
+    const ids = state.adaptive.spec?.assignments.map((a) => a.surfaceId) ?? [];
+    expect(ids).not.toContain("document_editor");
+    // the conversation anchor remains the composition's primary
     expect(
-      state.layout.panels.find((p) => p.panel === "document_editor"),
-    ).toBeUndefined();
+      state.adaptive.spec?.assignments.find((a) => a.surfaceId === "conversation")
+        ?.role,
+    ).toBe("primary");
   });
 });
 
@@ -318,23 +350,52 @@ describe("local panel fullscreen toggle", () => {
     });
 
     expect(store.getState().fullscreenPanel).toBeNull();
+    // R19: the manual fullscreen source enters the ONE choke — the
+    // composition becomes focus{target} and the legacy field mirrors it.
     store.getState().toggleFullscreen("document_editor");
+    expect(store.getState().adaptive.spec?.template).toBe("focus");
+    expect(
+      store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId),
+    ).toEqual(["document_editor"]);
+    expect(store.getState().adaptive.preFullscreen?.template).toBe("split");
     expect(store.getState().fullscreenPanel).toBe("document_editor");
     // local UI action: nothing sent to the server
     expect(sent).toHaveLength(0);
 
+    // toggle OFF restores the pre-fullscreen composition and clears the
+    // constraint (the constraint model has no memory — preFullscreen is it)
     store.getState().toggleFullscreen("document_editor");
-    expect(store.getState().fullscreenPanel).toBeNull();
+    const state = store.getState();
+    expect(state.adaptive.spec?.template).toBe("split");
+    expect(
+      state.adaptive.spec?.assignments.map((a) => a.surfaceId),
+    ).toEqual(["document_editor", "conversation"]);
+    expect(state.adaptive.overrides.bySurface).toEqual({});
+    expect(state.fullscreenPanel).toBeNull();
 
     // a different panel's toggle while one is fullscreen switches target
     store.getState().toggleFullscreen("document_editor");
     store.getState().toggleFullscreen("conversation");
+    expect(store.getState().adaptive.spec?.assignments).toEqual([
+      { surfaceId: "conversation", role: "primary", slot: "main" },
+    ]);
     expect(store.getState().fullscreenPanel).toBe("conversation");
+  });
+
+  it("keeps the legacy overlay behavior before the first composition", () => {
+    const store = createAppStore(() => {});
+    expect(store.getState().adaptive.spec).toBeNull();
+    store.getState().toggleFullscreen("conversation");
+    expect(store.getState().fullscreenPanel).toBe("conversation");
+    store.getState().toggleFullscreen("conversation");
+    expect(store.getState().fullscreenPanel).toBeNull();
+    // no composition was created by the boot-path toggle
+    expect(store.getState().adaptive.spec).toBeNull();
   });
 });
 
 describe("multi-zone layout via slots (A8)", () => {
-  it("slots-bearing layout.apply drives a 3-zone reading layout", () => {
+  it("slots-bearing layout.apply maps to the adaptive composition (dock → shell-owned)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent({
       type: "ui_command",
@@ -348,18 +409,15 @@ describe("multi-zone layout via slots (A8)", () => {
       },
       created_at: ts(),
     });
-    const state = store.getState();
-    expect(state.spec.slots).toEqual({
-      main: "document_editor",
-      side: "conversation",
-      dock: "media",
-    });
-    expect(state.layout.template).toBe("reading");
-    const slotOf = (p: string) =>
-      state.layout.panels.find((x) => x.panel === p)?.slot;
-    expect(slotOf("document_editor")).toBe("main");
-    expect(slotOf("conversation")).toBe("side");
-    expect(slotOf("media")).toBe("dock");
+    const { adaptive } = store.getState();
+    // reading → sidecar (planner's frozen wire map); dock is dropped —
+    // persistent surfaces are shell-owned (the media bar renders instead).
+    expect(adaptive.spec?.template).toBe("sidecar");
+    expect(adaptive.spec?.assignments).toEqual([
+      { surfaceId: "document_editor", role: "primary", slot: "main" },
+      { surfaceId: "conversation", role: "companion", slot: "side" },
+    ]);
+    expect(adaptive.lastRejection).toBeNull();
   });
 
   it("treats slots.main as the source of truth over primary_panel", () => {
@@ -376,16 +434,14 @@ describe("multi-zone layout via slots (A8)", () => {
       },
       created_at: ts(),
     });
-    const state = store.getState();
-    expect(
-      state.layout.panels.find((p) => p.panel === "document_editor")?.slot,
-    ).toBe("main");
-    expect(
-      state.layout.panels.find((p) => p.panel === "conversation")?.slot,
-    ).toBe("side");
+    const { adaptive } = store.getState();
+    const main = adaptive.spec?.assignments.find((a) => a.slot === "main");
+    expect(main?.surfaceId).toBe("document_editor");
+    const side = adaptive.spec?.assignments.find((a) => a.slot === "side");
+    expect(side?.surfaceId).toBe("conversation");
   });
 
-  it("legacy layout.apply without slots keeps working", () => {
+  it("legacy layout.apply without slots keeps working (mapped through the planner)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent({
       type: "ui_command",
@@ -398,18 +454,19 @@ describe("multi-zone layout via slots (A8)", () => {
       },
       created_at: ts(),
     });
-    const state = store.getState();
-    expect(state.spec.slots).toBeUndefined();
-    expect(state.layout.template).toBe("split");
+    const { adaptive } = store.getState();
+    expect(adaptive.spec?.template).toBe("split");
     expect(
-      state.layout.panels.find((p) => p.panel === "document_editor")?.slot,
+      adaptive.spec?.assignments.find((a) => a.surfaceId === "document_editor")
+        ?.slot,
     ).toBe("main");
     expect(
-      state.layout.panels.find((p) => p.panel === "conversation")?.slot,
+      adaptive.spec?.assignments.find((a) => a.surfaceId === "conversation")
+        ?.slot,
     ).toBe("side");
   });
 
-  it("viewport drives the px-floor degrade ladder", () => {
+  it("viewport changes never rewrite the adaptive composition (geometry is render-time)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent({
       type: "ui_command",
@@ -422,16 +479,15 @@ describe("multi-zone layout via slots (A8)", () => {
       },
       created_at: ts(),
     });
-    // default viewport 1280x800 drops the rail: dashboard -> reading
-    expect(store.getState().layout.template).toBe("reading");
-    expect(store.getState().layout.degradedFrom).toBe("dashboard");
+    // dashboard → triple (adaptive map); px-floor degrade is the geometry
+    // engine's render-time concern (adaptive-geometry tests), not state.
+    expect(store.getState().adaptive.spec?.template).toBe("triple");
 
     store.getState().setViewport({ width: 700, height: 800 });
-    expect(store.getState().layout.template).toBe("focus");
-    expect(store.getState().layout.degradedFrom).toBe("dashboard");
+    expect(store.getState().adaptive.spec?.template).toBe("triple");
   });
 
-  it("closing a slot panel clears its slot entry", () => {
+  it("closing a slot panel adds the user close constraint (surface already out)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent({
       type: "ui_command",
@@ -450,9 +506,13 @@ describe("multi-zone layout via slots (A8)", () => {
       command: { action: "panel.close", panel_type: "media" },
       created_at: ts(),
     });
-    const state = store.getState();
-    expect(state.spec.slots?.dock).toBeNull();
-    expect(state.layout.panels.find((p) => p.panel === "media")).toBeUndefined();
+    const { adaptive } = store.getState();
+    // media never entered the adaptive composition (dock is shell-owned) —
+    // the close still becomes a persistent constraint (R20 seam).
+    expect(adaptive.overrides.bySurface["media"]).toMatchObject({ remove: true });
+    expect(
+      adaptive.spec?.assignments.map((a) => a.surfaceId),
+    ).not.toContain("media");
   });
 });
 
@@ -488,12 +548,15 @@ describe("config-driven UI state (config_update)", () => {
     expect(state.ttsQueueMax).toBe(20);
   });
 
-  it("applies the config default layout only before any layout command", () => {
+  it("applies the config default layout only before any layout command (via the one choke)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent(configEvent({}));
     let state = store.getState();
-    expect(state.spec.template).toBe("split");
-    expect(state.spec.primaryPanel).toBe("news");
+    // R19 (migration source): the config default enters the ONE choke.
+    // "split" maps through the planner's wire map; "news" is NOT a
+    // registered surface → the fallback anchor (conversation) is used.
+    expect(state.adaptive.spec?.template).toBe("split");
+    expect(state.adaptive.spec?.assignments[0].surfaceId).toBe("conversation");
 
     // a server layout command takes over; a later reconnect config_update
     // must NOT clobber it back to the default
@@ -502,7 +565,7 @@ describe("config-driven UI state (config_update)", () => {
       command: {
         action: "layout.apply",
         template: "focus",
-        primary_panel: "youtube",
+        primary_panel: "browser",
         secondary_panel: null,
         preserve: true,
       },
@@ -510,8 +573,8 @@ describe("config-driven UI state (config_update)", () => {
     });
     store.getState().applyEvent(configEvent({}));
     state = store.getState();
-    expect(state.spec.template).toBe("focus");
-    expect(state.spec.primaryPanel).toBe("youtube");
+    expect(state.adaptive.spec?.template).toBe("focus");
+    expect(state.adaptive.spec?.assignments[0].surfaceId).toBe("browser");
   });
 
   it("honors the config TTS queue cap in the speak path", () => {
