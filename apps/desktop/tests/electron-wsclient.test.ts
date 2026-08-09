@@ -284,6 +284,36 @@ describe("WsClient (main process, RFC 6455 over net)", () => {
     client.close();
   });
 
+  it("W3-TRANSPORT: sends during the reconnect gap are queued by the ONE outbox and delivered exactly once", async () => {
+    // The server drops the socket 50ms after every handshake. The client
+    // must queue a send made while the socket is down and flush it on the
+    // next handshake — never dropped, never duplicated (single outbox).
+    const server = new MockWsServer({ closeAfterHandshake: true });
+    servers.push(server);
+    const port = await server.listen();
+
+    let closes = 0;
+    const client = new WsClient({
+      url: `ws://127.0.0.1:${port}/ws`,
+      reconnectMs: 40,
+      onOpen: () => undefined,
+      onMessage: () => undefined,
+      onClose: () => {
+        closes += 1;
+        if (closes === 1) client.send("mid-gap"); // socket is down -> queue
+      },
+    });
+    client.send("early"); // queued before the first connect (R11)
+    client.connect();
+
+    // First handshake flushes "early"; the server then destroys the
+    // socket, onClose queues "mid-gap" and the shared backoff reconnects.
+    await waitFor(() => server.handshakes >= 2, "second handshake");
+    await new Promise((r) => setTimeout(r, 150)); // settle window
+    expect(server.receivedMessages).toEqual(["early", "mid-gap"]);
+    client.close();
+  });
+
   it("responds to server pings with pongs", async () => {
     const server = new MockWsServer({ pingAfterHandshake: true });
     servers.push(server);

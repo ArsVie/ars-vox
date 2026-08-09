@@ -34,9 +34,10 @@ export interface BackoffScheduler {
 export function reconnectDelayMs(
   attempt: number,
   random: () => number = Math.random,
+  baseMs: number = RECONNECT_BASE_MS,
 ): number {
   const exponent = Math.min(attempt, 31); // keep 2**n within safe integers
-  const exponential = RECONNECT_BASE_MS * 2 ** exponent;
+  const exponential = baseMs * 2 ** exponent;
   const capped = Math.min(exponential, RECONNECT_CAP_MS);
   const jitter = JITTER_MIN + random() * JITTER_SPAN;
   return Math.round(capped * jitter);
@@ -83,7 +84,7 @@ export class ReconnectBackoff {
   }
 
   private nextDelayMs(): number {
-    const delay = reconnectDelayMs(this.attempt);
+    const delay = reconnectDelayMs(this.attempt, Math.random, this.baseMs);
     this.attempt += 1;
     return delay;
   }
