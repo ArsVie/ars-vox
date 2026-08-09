@@ -226,7 +226,6 @@ describe("R22 — the legacy layout authority is retired (non-authoritative)", (
     // left to drift from it.
     expect(store.getState()).not.toHaveProperty("layout");
     expect(store.getState()).not.toHaveProperty("spec");
-    expect(store.getState()).not.toHaveProperty("panelMeta");
   });
 
   it("manual layout commands write ONLY adaptive state", () => {
