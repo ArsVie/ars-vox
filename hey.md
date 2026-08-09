@@ -9,6 +9,12 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
+### hermes-g35-a1 (Wave 1 A1 — voice lifecycle + STOP authority, GATE-3.5)
+- timestamp: 2026-08-08T21:10:00Z
+- task: R01-R08 (TTS started/finished/cancelled acks on the wire, LISTENING only after physical playback ends, silence timer anchored to speech end, one STOP primitive, generation guards). Owns: voice/session state machine, TTS lifecycle events, STOP cancellation path, renderer TTS cancellation, silence timer. Forbidden: confirmation redesign (A7).
+- files/dirs: packages/contracts/arsvox_contracts/{client_messages,__init__}.py + schemas/client-messages.schema.json, services/voice/arsvox_voice/pipeline.py, services/agent/arsvox_agent/{runtime,ws}.py, apps/desktop/src/{contracts.ts,store.ts,components/TtsPlayer.tsx,components/StatusBar.tsx}, tests/python/test_voice_tts_lifecycle.py (new), apps/desktop/tests/tts-player-acks.test.tsx (new), hey.md
+- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a1-voice, branch wip/g35-a1-voice
+- status: IN PROGRESS (announced, pre-edit)
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
