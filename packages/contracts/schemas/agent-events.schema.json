@@ -43,6 +43,85 @@
       "title": "ActionResultEvent",
       "type": "object"
     },
+    "AdaptiveAssignmentSnapshot": {
+      "description": "One surface placed in one role at one semantic slot (mirror of the\nfrozen adaptive LayoutAssignment; snake_case on the wire).",
+      "properties": {
+        "surface_id": {
+          "title": "Surface Id",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "slot": {
+          "title": "Slot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface_id",
+        "role",
+        "slot"
+      ],
+      "title": "AdaptiveAssignmentSnapshot",
+      "type": "object"
+    },
+    "AdaptiveSnapshot": {
+      "description": "GATE-3.5 (A6/R33): adaptive composition reconstructed on reconnect.\n\nCarries the last adaptive composition the SERVICE knows (template,\nrole/slot assignments, proportion) plus the user constraint set\n(overrides) when one is reported. A renderer reload re-applies this\nthrough the same adaptive choke the live events use, so the workspace\nsurvives a reload \u2014 not just a socket reconnect. Empty means no\ncomposition (fresh desk).",
+      "properties": {
+        "template": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Template"
+        },
+        "assignments": {
+          "items": {
+            "$ref": "#/$defs/AdaptiveAssignmentSnapshot"
+          },
+          "title": "Assignments",
+          "type": "array"
+        },
+        "proportion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proportion"
+        },
+        "overrides": {
+          "additionalProperties": true,
+          "title": "Overrides",
+          "type": "object"
+        }
+      },
+      "title": "AdaptiveSnapshot",
+      "type": "object"
+    },
+    "AdaptiveTemplate": {
+      "description": "Allowed adaptive compositions. Geometry is owned by the layout\nimplementation (UI-102), never by the agent.",
+      "enum": [
+        "focus",
+        "sidecar",
+        "stack",
+        "split",
+        "triple"
+      ],
+      "title": "AdaptiveTemplate",
+      "type": "string"
+    },
     "AgentMessageEvent": {
       "properties": {
         "type": {
@@ -498,6 +577,70 @@
         "primary_panel"
       ],
       "title": "LayoutApply",
+      "type": "object"
+    },
+    "LayoutAssignment": {
+      "description": "One surface placed in one role at one semantic slot.",
+      "properties": {
+        "surface_id": {
+          "minLength": 1,
+          "title": "Surface Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/SurfaceRole"
+        },
+        "slot": {
+          "minLength": 1,
+          "title": "Slot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface_id",
+        "role",
+        "slot"
+      ],
+      "title": "LayoutAssignment",
+      "type": "object"
+    },
+    "LayoutCompose": {
+      "description": "Native adaptive layout composition (GATE-3.5 C5, A3).\n\nCarries the frozen LayoutSpec semantics \u2014 template, surface-role\nassignments, optional proportion. NO geometry: no pixels, CSS, or\ncoordinates anywhere in this shape. Slot names are derived by the\nemitting tool from roles (primary\u2192main, companion\u2192side, support\u2192rail)\nand validated here against the frozen adaptive.py invariants.",
+      "properties": {
+        "action": {
+          "const": "layout.compose",
+          "default": "layout.compose",
+          "title": "Action",
+          "type": "string"
+        },
+        "template": {
+          "$ref": "#/$defs/AdaptiveTemplate"
+        },
+        "assignments": {
+          "items": {
+            "$ref": "#/$defs/LayoutAssignment"
+          },
+          "minItems": 1,
+          "title": "Assignments",
+          "type": "array"
+        },
+        "proportion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Proportion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "template",
+        "assignments"
+      ],
+      "title": "LayoutCompose",
       "type": "object"
     },
     "LayoutRestore": {
@@ -980,7 +1123,6 @@
         "media",
         "book_reader",
         "document_editor",
-        "news",
         "notes",
         "tasks",
         "reminders",
@@ -1046,6 +1188,16 @@
       },
       "title": "PongEvent",
       "type": "object"
+    },
+    "Proportion": {
+      "description": "Allowed relative size of the primary region.",
+      "enum": [
+        "narrow",
+        "balanced",
+        "wide"
+      ],
+      "title": "Proportion",
+      "type": "string"
     },
     "ReminderItem": {
       "properties": {
@@ -1145,6 +1297,9 @@
           "title": "History",
           "type": "array"
         },
+        "adaptive": {
+          "$ref": "#/$defs/AdaptiveSnapshot"
+        },
         "created_at": {
           "format": "date-time",
           "title": "Created At",
@@ -1194,6 +1349,17 @@
       ],
       "title": "StateUpdateEvent",
       "type": "object"
+    },
+    "SurfaceRole": {
+      "description": "Semantic role a surface may occupy at a given moment.",
+      "enum": [
+        "primary",
+        "companion",
+        "support",
+        "persistent"
+      ],
+      "title": "SurfaceRole",
+      "type": "string"
     },
     "TasksToggle": {
       "properties": {
@@ -1390,6 +1556,7 @@
               "browser.refresh": "#/$defs/BrowserRefresh",
               "document.save": "#/$defs/DocumentSave",
               "layout.apply": "#/$defs/LayoutApply",
+              "layout.compose": "#/$defs/LayoutCompose",
               "layout.restore": "#/$defs/LayoutRestore",
               "media.play_pause": "#/$defs/MediaPlayPause",
               "media.seek": "#/$defs/MediaSeek",
@@ -1409,6 +1576,9 @@
           "oneOf": [
             {
               "$ref": "#/$defs/LayoutApply"
+            },
+            {
+              "$ref": "#/$defs/LayoutCompose"
             },
             {
               "$ref": "#/$defs/PanelOpen"

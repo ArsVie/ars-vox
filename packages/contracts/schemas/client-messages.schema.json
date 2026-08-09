@@ -1,24 +1,5 @@
 {
   "$defs": {
-    "AudioPlay": {
-      "properties": {
-        "action": {
-          "const": "audio.play",
-          "default": "audio.play",
-          "title": "Action",
-          "type": "string"
-        },
-        "asset": {
-          "title": "Asset",
-          "type": "string"
-        }
-      },
-      "required": [
-        "asset"
-      ],
-      "title": "AudioPlay",
-      "type": "object"
-    },
     "BrowserBack": {
       "properties": {
         "action": {
@@ -286,122 +267,6 @@
       "title": "MediaSeek",
       "type": "object"
     },
-    "MediaState": {
-      "enum": [
-        "playing",
-        "paused",
-        "stopped"
-      ],
-      "title": "MediaState",
-      "type": "string"
-    },
-    "MediaStateChange": {
-      "properties": {
-        "action": {
-          "const": "media.state",
-          "default": "media.state",
-          "title": "Action",
-          "type": "string"
-        },
-        "state": {
-          "$ref": "#/$defs/MediaState"
-        },
-        "title": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Title"
-        },
-        "url": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Url"
-        },
-        "volume": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Volume"
-        }
-      },
-      "required": [
-        "state"
-      ],
-      "title": "MediaStateChange",
-      "type": "object"
-    },
-    "NotificationKind": {
-      "enum": [
-        "reminder",
-        "alarm",
-        "info",
-        "error"
-      ],
-      "title": "NotificationKind",
-      "type": "string"
-    },
-    "NotificationShow": {
-      "properties": {
-        "action": {
-          "const": "notification.show",
-          "default": "notification.show",
-          "title": "Action",
-          "type": "string"
-        },
-        "notification_id": {
-          "title": "Notification Id",
-          "type": "string"
-        },
-        "kind": {
-          "$ref": "#/$defs/NotificationKind"
-        },
-        "title": {
-          "title": "Title",
-          "type": "string"
-        },
-        "text": {
-          "title": "Text",
-          "type": "string"
-        },
-        "sound": {
-          "default": false,
-          "title": "Sound",
-          "type": "boolean"
-        },
-        "snoozable": {
-          "default": true,
-          "title": "Snoozable",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "notification_id",
-        "kind",
-        "title",
-        "text"
-      ],
-      "title": "NotificationShow",
-      "type": "object"
-    },
     "PanelClose": {
       "properties": {
         "action": {
@@ -523,7 +388,6 @@
         "media",
         "book_reader",
         "document_editor",
-        "news",
         "notes",
         "tasks",
         "reminders",
@@ -612,30 +476,6 @@
       "title": "TtsFinished",
       "type": "object"
     },
-    "TtsSpeak": {
-      "properties": {
-        "action": {
-          "const": "tts.speak",
-          "default": "tts.speak",
-          "title": "Action",
-          "type": "string"
-        },
-        "text": {
-          "title": "Text",
-          "type": "string"
-        },
-        "priority": {
-          "default": false,
-          "title": "Priority",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TtsSpeak",
-      "type": "object"
-    },
     "TtsStarted": {
       "description": "Renderer ack: physical playback of a queued phrase actually began.\n\nThe renderer is the physical-playback authority: it reports\nstarted/finished/cancelled so the canonical voice state machine\n(pipeline) only leaves THINKING for SPEAKING when audio is really\nplaying, and only returns to LISTENING after speech ends (R05/R08).",
       "properties": {
@@ -661,7 +501,6 @@
         "command": {
           "discriminator": {
             "mapping": {
-              "audio.play": "#/$defs/AudioPlay",
               "browser.back": "#/$defs/BrowserBack",
               "browser.forward": "#/$defs/BrowserForward",
               "browser.navigate": "#/$defs/BrowserNavigate",
@@ -671,14 +510,11 @@
               "layout.restore": "#/$defs/LayoutRestore",
               "media.play_pause": "#/$defs/MediaPlayPause",
               "media.seek": "#/$defs/MediaSeek",
-              "media.state": "#/$defs/MediaStateChange",
-              "notification.show": "#/$defs/NotificationShow",
               "panel.close": "#/$defs/PanelClose",
               "panel.fullscreen": "#/$defs/PanelFullscreen",
               "panel.open": "#/$defs/PanelOpen",
               "panel.set_primary": "#/$defs/PanelSetPrimary",
               "tasks.toggle": "#/$defs/TasksToggle",
-              "tts.speak": "#/$defs/TtsSpeak",
               "youtube.play": "#/$defs/YoutubePlay",
               "youtube.search": "#/$defs/YoutubeSearch"
             },
@@ -702,18 +538,6 @@
             },
             {
               "$ref": "#/$defs/LayoutRestore"
-            },
-            {
-              "$ref": "#/$defs/NotificationShow"
-            },
-            {
-              "$ref": "#/$defs/MediaStateChange"
-            },
-            {
-              "$ref": "#/$defs/TtsSpeak"
-            },
-            {
-              "$ref": "#/$defs/AudioPlay"
             },
             {
               "$ref": "#/$defs/MediaPlayPause"
