@@ -15,10 +15,9 @@ from arsvox_contracts import (
     NotificationEvent,
     NotificationKind,
     NotificationStatus,
-    UiCommandEvent,
 )
-from arsvox_contracts.commands import NotificationShow
-from arsvox_memory import NotificationStore, ReminderStore
+from arsvox_contracts.events import ReminderItem, TasksUpdateEvent, TodoItem
+from arsvox_memory import NotificationStore, ReminderStore, TaskStore
 
 from arsvox_agent.confirmations import ConfirmationCoordinator
 from arsvox_agent.events import EventBus
@@ -38,12 +37,17 @@ class ReminderScheduler:
         notifications: NotificationStore,
         bus: EventBus,
         confirmations: ConfirmationCoordinator,
+        tasks: TaskStore | None = None,
     ):
         self.interval_s = interval_s
         self.reminders = reminders
         self.notifications = notifications
         self.bus = bus
         self.confirmations = confirmations
+        # Optional tasks store: when wired, snooze/dismiss emit the same
+        # TasksUpdateEvent the agent actions emit (W2), so the renderer's
+        # content.tasks stays fresh. The app wires it; tests may omit it.
+        self.tasks = tasks
         self._task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------ #
@@ -80,6 +84,14 @@ class ReminderScheduler:
                 reminder["id"],
             )
             log.info("reminder %s fired", reminder["id"])
+            # W2 (GATE-3.5): publish ONE event per reminder. The
+            # `notification` event is the authoritative channel — it
+            # carries due_at, feeds the reconnect snapshot, and the
+            # renderer appends exactly one chat line for it. The old
+            # second publish (UiCommandEvent/NotificationShow) made the
+            # renderer append a SECOND identical chat line (fresh id),
+            # because pushNotification dedupes by id but the chat line
+            # does not.
             await self.bus.publish(
                 NotificationEvent(
                     notification_id=str(nid),
@@ -89,21 +101,44 @@ class ReminderScheduler:
                     due_at=reminder["due_at"],
                 )
             )
-            await self.bus.publish(
-                UiCommandEvent(
-                    command=NotificationShow(
-                        notification_id=str(nid),
-                        kind=NotificationKind.REMINDER,
-                        title="Recordatorio",
-                        text=reminder["text"],
-                        sound=True,
-                        snoozable=True,
-                    )
-                )
-            )
         await self.confirmations.expire_all() if self.confirmations else None
 
     # ------------------------------------------------------------------ #
+    async def _emit_tasks_update(self) -> None:
+        """Mirror of the agent actions' TasksUpdateEvent (W2): both stores
+        (reminders and notifications) changed, so the renderer's
+        content.tasks must refresh — publishing only the AgentMessageEvent
+        left it stale until something else triggered the update.
+
+        Only emits when the tasks store is wired: the renderer REPLACES
+        content.tasks wholesale from this event, so a todos=[] payload
+        would wipe the user's todo list.
+        TODO(g35r-reminders, app.py passes tasks=self.tasks to ReminderScheduler):
+        without the wiring this emission is inert and content.tasks stays stale.
+        """
+        if self.tasks is None:
+            return
+        reminders = [
+            ReminderItem(
+                id=str(r["id"]),
+                title=r["text"],
+                cadence=r.get("repeat_rule") or "none",
+                next_fire=r.get("due_at") or "",
+            )
+            for r in self.reminders.list_active()
+        ]
+        todos = [
+            TodoItem(
+                id=str(t["id"]),
+                title=t["title"],
+                done=t["status"] == "done",
+                priority=t.get("priority") or "normal",
+                due=t.get("due_at"),
+            )
+            for t in self.tasks.list()
+        ]
+        await self.bus.publish(TasksUpdateEvent(todos=todos, reminders=reminders))
+
     async def snooze_top(self, seconds: int) -> str:
         n = self.notifications.latest_active()
         if not n or not n["reminder_id"]:
@@ -113,6 +148,7 @@ class ReminderScheduler:
             return "No pude posponer el recordatorio."
         self.notifications.resolve(n["id"], NotificationStatus.SNOOZED.value)
         minutes = seconds // 60
+        await self._emit_tasks_update()
         await self.bus.publish(
             AgentMessageEvent(text=f"Recordatorio pospuesto {minutes} minutos.", delta=False)
         )
@@ -125,6 +161,7 @@ class ReminderScheduler:
         if n["reminder_id"]:
             self.reminders.dismiss(n["reminder_id"])
         self.notifications.resolve(n["id"], NotificationStatus.DISMISSED.value)
+        await self._emit_tasks_update()
         await self.bus.publish(AgentMessageEvent(text="Recordatorio descartado.", delta=False))
         return "Recordatorio descartado."
 
