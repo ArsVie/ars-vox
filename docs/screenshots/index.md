@@ -1,9 +1,32 @@
 # UI Screenshots — current state
 
-Current UI screenshots, captured 2026-08-07/08 from the live mock-mode app
-(vite 5173 + mock agent on 8765, Edge CDP). Standing rule (owner, 2026-08-08):
-refresh this folder after EVERY redesign wave — new wave shots get the next
-free numbers, and the wave list below stays current.
+Current UI screenshots, captured 2026-08-07/09 from the live app
+(vite 5173 + agent on 8765, Edge CDP / built-in browser tool). Standing rule
+(owner, 2026-08-08): refresh this folder after EVERY redesign wave — new
+wave shots get the next free numbers, and the wave list below stays current.
+
+## GATE-3.5 consolidation (closed 2026-08-09)
+
+Post-consolidation state: R43 status bar (brand + ONE status pill
+"En espera" + DETENER + dev-gated plantilla selector + connection dot),
+conversation restored from the snapshot (A6 history carry), real model
+connected (no mock).
+
+* [Home / default](28-gate35-home-default.png) — live capture, real model,
+  no mock: R43 status bar, restored conversation (real turns from the
+  session DB), composer with "Escribe una petición…".
+
+NOTE (tooling finding, 2026-08-09): the template fixture shots
+(focus/sidecar/stack/split/triple via the demo combobox) could NOT be
+recaptured this gate from the built-in browser tool — the tool's eval/click
+routing split across two engine targets (Lightpanda DOM vs Chrome render),
+so select changes never reached React. ALSO (real, from App.tsx): the demo
+combobox is INERT whenever an adaptive spec exists in the store — which is
+the normal post-GATE-3.5 state (snapshot restores the composition). Future
+template shots: drive the store directly from ONE engine
+(applyAdaptiveSpec with TEMPLATE_FIXTURES shapes) or run the Edge CDP +
+agent-browser recipe (references/wave-screenshots-2026-08.md) with the
+service NOT carrying a restored adaptive composition.
 
 ## Wave 3 — planner/overrides/a11y (merged 2026-08-08)
 
