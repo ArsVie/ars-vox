@@ -65,6 +65,9 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     # preference-setting replaced them)
     "memory.search": PolicyKind.READ_ONLY,
     "preferences.set": PolicyKind.REVERSIBLE,
+    # media (GATE-5 W1)
+    "media.search_local": PolicyKind.READ_ONLY,
+    "media.play_local": PolicyKind.REVERSIBLE,
     # demo (mock mode only — the handler guards itself)
     "demo_populate": PolicyKind.REVERSIBLE,
 }

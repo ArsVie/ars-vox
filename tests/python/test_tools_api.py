@@ -9,7 +9,7 @@ from arsvox_agent.tools.register import register_all
 def test_registry_registers_all_tools():
     registry = ToolRegistry()
     n = register_all(registry)
-    assert n == 44
+    assert n == 46
     assert registry.get("layout.compose") is not None
     assert registry.get("shell.exec") is None
 

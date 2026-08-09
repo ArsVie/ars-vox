@@ -36,7 +36,7 @@ def main(record_dir: Path) -> int:
     ensure_worktree_paths()
     checks: list[dict] = []
 
-    app, _ = make_app()
+    app, tmp_root = make_app()
 
     # c1 — creating a document opens the editor (agent produces docs)
     create_events = run_scripted_turn(
@@ -59,6 +59,10 @@ def main(record_dir: Path) -> int:
     )
 
     # c2 — an agent edit reaches the open editor (document.changed emission)
+    # Fresh app on the SAME tmp_root: the first TestClient exit ran lifespan
+    # shutdown (services.db.close()), so a second boot needs a new app
+    # object; the shared tmp_root keeps the document created in c1.
+    app, _ = make_app(tmp_root)
     edit_events = run_scripted_turn(
         app,
         "document_insert_text",

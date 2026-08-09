@@ -701,10 +701,13 @@ describe("panel content events (content channel)", () => {
         {
           id: "v1",
           title: "Gatos jugando",
+          source: "youtube",
+          kind: "video",
           channel: "Canal Mascotas",
           duration_s: 95,
           published: "2026-01-01",
           thumbnail_url: null,
+          local_path: null,
         },
       ],
     });
