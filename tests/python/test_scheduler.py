@@ -163,6 +163,39 @@ def test_dismiss_emits_tasks_update(tmp_path):
     assert reminders.get(rid)["occ_status"] == "dismissed"
 
 
+def test_tick_emits_tasks_update_after_fire(tmp_path):
+    """W1 (GATE-5): a fired reminder reaches BOTH surfaces through the
+    wire — exactly ONE notification event AND one tasks.update (ADV-F2:
+    mark_fired moves one-shots out of list_active, so content.tasks must
+    refresh at fire time, not only on snooze/dismiss)."""
+    db, reminders, notifications, bus, scheduler = _setup(tmp_path)
+    tasks = TaskStore(db)
+    scheduler.tasks = tasks
+    tasks.add("Comprar pan")
+
+    async def run():
+        now = datetime.now(timezone.utc)
+        reminders.create(
+            "Tomar medicina",
+            (now - timedelta(seconds=1)).isoformat(timespec="seconds"),
+            "none",
+        )
+        q = bus.subscribe()
+        await scheduler.tick()
+        return _drain(q)
+
+    events = asyncio_run(run())
+    notif_events = [e for e in events if e["type"] == "notification"]
+    assert len(notif_events) == 1, events
+    updates = [e for e in events if e["type"] == "tasks.update"]
+    assert len(updates) == 1, events
+    payload = updates[0]
+    # todos come from the wired tasks store (never wiped by a partial event)
+    assert [t["title"] for t in payload["todos"]] == ["Comprar pan"]
+    # the one-shot fired -> exhausted, no longer in the active list
+    assert payload["reminders"] == []
+
+
 def test_snooze_without_tasks_store_does_not_emit(tmp_path):
     """Unwired scheduler (tasks=None) must NOT publish a todos=[] update —
     the renderer replaces content.tasks wholesale, so a partial event would
