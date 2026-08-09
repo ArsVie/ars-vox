@@ -54,20 +54,53 @@ export function youtubeCommandMessage(func: string, args: unknown[] = []): strin
 }
 
 export type YoutubePlayerEvent =
-  | { kind: "ready" }
-  | { kind: "state"; state: MediaState }
+  | { kind: "ready"; currentTime?: number; duration?: number }
+  | { kind: "state"; state: MediaState; currentTime?: number; duration?: number }
+  | { kind: "time"; currentTime?: number; duration?: number }
   | { kind: "unknown" };
 
-/** Parse an IFrame Player API postMessage payload (pure, unit-testable). */
+/**
+ * Parse an IFrame Player API postMessage payload (pure, unit-testable).
+ *
+ * GATE-3.5 (R26): infoDelivery carries REAL player data — currentTime and
+ * duration (videoData) — which the controller consumes so the progress
+ * bar reflects the actual iframe. Keys are only present when the payload
+ * carries them (undefined keys are never emitted).
+ */
 export function parseYoutubePlayerEvent(data: unknown): YoutubePlayerEvent {
   if (!data || typeof data !== "object") return { kind: "unknown" };
   const ev = data as Record<string, unknown>;
-  if (ev.event === "onReady" || ev.event === "initialDelivery") return { kind: "ready" };
-  if (ev.event === "infoDelivery" && ev.info && typeof ev.info === "object") {
-    const info = ev.info as Record<string, unknown>;
-    if (info.playerState === 1) return { kind: "state", state: "playing" };
-    if (info.playerState === 2) return { kind: "state", state: "paused" };
-    if (info.playerState === 0) return { kind: "state", state: "stopped" };
+  const info = ev.info && typeof ev.info === "object" ? (ev.info as Record<string, unknown>) : null;
+
+  const timeInfo = (): { currentTime?: number; duration?: number } => {
+    if (!info) return {};
+    const out: { currentTime?: number; duration?: number } = {};
+    if (typeof info.currentTime === "number") out.currentTime = info.currentTime;
+    const rawDuration =
+      typeof info.duration === "number" ? info.duration : undefined;
+    const videoData =
+      info.videoData && typeof info.videoData === "object"
+        ? (info.videoData as Record<string, unknown>)
+        : null;
+    const videoDuration =
+      videoData && typeof videoData.duration === "number" ? videoData.duration : undefined;
+    const duration = rawDuration ?? videoDuration;
+    if (typeof duration === "number" && duration > 0) out.duration = duration;
+    return out;
+  };
+
+  if (ev.event === "onReady") return { kind: "ready" };
+  if (ev.event === "initialDelivery") {
+    return { kind: "ready", ...timeInfo() };
+  }
+  if (ev.event === "infoDelivery" && info) {
+    if (info.playerState === 1) return { kind: "state", state: "playing", ...timeInfo() };
+    if (info.playerState === 2) return { kind: "state", state: "paused", ...timeInfo() };
+    if (info.playerState === 0) return { kind: "state", state: "stopped", ...timeInfo() };
+    const t = timeInfo();
+    if (t.currentTime !== undefined || t.duration !== undefined) {
+      return { kind: "time", ...t };
+    }
   }
   return { kind: "unknown" };
 }
@@ -136,12 +169,27 @@ function useYoutubePlayer(
       const parsed = parseYoutubePlayerEvent(data);
       if (parsed.kind === "ready") {
         markReady();
+        if (parsed.currentTime !== undefined || parsed.duration !== undefined) {
+          appStore.getState().applyPlayerMediaEvent({
+            currentTime: parsed.currentTime,
+            duration: parsed.duration,
+          });
+        }
         return;
       }
-      if (parsed.kind === "state" && parsed.state !== stateRef.current) {
-        // The player's own controls changed playback — mirror it into the
-        // store so every surface (dock, persistent bar) stays in sync.
-        appStore.getState().applyUiCommand({ action: "media.state", state: parsed.state });
+      if (parsed.kind === "state" || parsed.kind === "time") {
+        // GATE-3.5 (R26): the player's REAL callbacks feed the single
+        // MediaController — playback state (the player's own controls)
+        // and currentTime/duration (progress bar) both come from the
+        // iframe. No React-only simulated playback state anywhere.
+        appStore.getState().applyPlayerMediaEvent({
+          state:
+            parsed.kind === "state" && parsed.state !== stateRef.current
+              ? parsed.state
+              : undefined,
+          currentTime: parsed.currentTime,
+          duration: parsed.duration,
+        });
       }
     };
 
@@ -150,9 +198,21 @@ function useYoutubePlayer(
       // NETWORK-FALLBACK: no readiness signal -> legacy URL-swap mode.
       if (!readyRef.current) setControlMode("urlswap");
     }, YT_PLAYER_READY_GRACE_MS);
+
+    // GATE-3.5 (R26): while the player is ready and playing, poll the
+    // real currentTime/duration so the progress bar tracks the iframe
+    // even without user interaction. Responses arrive as infoDelivery
+    // messages parsed above.
+    const poller = window.setInterval(() => {
+      if (!readyRef.current || stateRef.current !== "playing") return;
+      postCommand(iframe, "getCurrentTime");
+      postCommand(iframe, "getDuration");
+    }, 1000);
+
     return () => {
       window.removeEventListener("message", onMessage);
       window.clearTimeout(timer);
+      window.clearInterval(poller);
     };
   }, [videoId]);
 

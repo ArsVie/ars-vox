@@ -11,7 +11,6 @@ from arsvox_contracts.commands import LayoutCompose, PanelOpen
 from arsvox_contracts.events import (
     BrowserNavigateEvent,
     DocumentLoadEvent,
-    MediaStateEvent,
     ReminderItem,
     TasksUpdateEvent,
     TodoItem,
@@ -20,6 +19,7 @@ from arsvox_contracts.events import (
     YoutubeVideoResult,
 )
 
+from arsvox_agent.media import media_controller
 from arsvox_agent.tools import ToolSpec
 from arsvox_agent.tools.context import ToolContext
 
@@ -146,17 +146,18 @@ async def demo_populate(tctx: ToolContext) -> str:
     )
 
     # Media: local audio playing (the same player chrome shows YouTube).
-    await tctx.emit(
-        MediaStateEvent(
-            state="playing",
-            source="local",
-            kind="audio",
-            title="Sinfonía Nº 5 — Adagietto",
-            url=None,
-            position_s=142,
-            duration_s=642,
-            volume=0.8,
-        )
+    # Routed through the single MediaController (GATE-3.5) so the demo
+    # never bypasses the media authority.
+    await media_controller.load(
+        tctx.bus,
+        state="playing",
+        source="local",
+        kind="audio",
+        title="Sinfonía Nº 5 — Adagietto",
+        url=None,
+        position_s=142,
+        duration_s=642,
+        volume=0.8,
     )
 
     deps.panels.touch("browser")

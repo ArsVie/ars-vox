@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { appStore } from "../src/store";
+import { resetMediaController } from "../src/media/controller";
 import {
   MediaDock,
   parseYoutubePlayerEvent,
@@ -40,6 +41,10 @@ beforeEach(() => {
   (appStore as unknown as { getServerState: () => unknown }).getServerState =
     () => appStore.getState();
   appStore.setState({ content: {} });
+  // GATE-3.5: the media controller is the single authority — a test that
+  // clears the store mirror must clear it too, or stale controller state
+  // leaks into the next test.
+  resetMediaController();
 });
 
 describe("H7: applyUiCommand media.state wires the media surface", () => {
@@ -251,5 +256,29 @@ describe("H7: real YouTube player control (no URL swap)", () => {
     expect(parseYoutubePlayerEvent("not json")).toEqual({ kind: "unknown" });
     expect(parseYoutubePlayerEvent(null)).toEqual({ kind: "unknown" });
     expect(parseYoutubePlayerEvent({ event: "onError" })).toEqual({ kind: "unknown" });
+  });
+
+  it("R26: infoDelivery carries REAL currentTime/duration for the controller", () => {
+    expect(
+      parseYoutubePlayerEvent({
+        event: "infoDelivery",
+        info: { playerState: 1, currentTime: 12.5, videoData: { duration: 742 } },
+      }),
+    ).toEqual({ kind: "state", state: "playing", currentTime: 12.5, duration: 742 });
+    // Time-only deliveries (poll responses) become kind "time".
+    expect(
+      parseYoutubePlayerEvent({ event: "infoDelivery", info: { currentTime: 33.25 } }),
+    ).toEqual({ kind: "time", currentTime: 33.25 });
+    // getDuration responses carry info.duration.
+    expect(
+      parseYoutubePlayerEvent({ event: "infoDelivery", info: { duration: 495 } }),
+    ).toEqual({ kind: "time", duration: 495 });
+    // initialDelivery seeds position + duration on load.
+    expect(
+      parseYoutubePlayerEvent({
+        event: "initialDelivery",
+        info: { currentTime: 1.5, videoData: { duration: 300 } },
+      }),
+    ).toEqual({ kind: "ready", currentTime: 1.5, duration: 300 });
   });
 });

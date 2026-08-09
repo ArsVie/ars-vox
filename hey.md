@@ -9,23 +9,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
-### hermes A4 (GATE-3.5 Wave 1 — frontend layout authority, 2026-08-08)
-- timestamp: 2026-08-08T08:30:00Z
-- task: A4 single frontend layout authority + user override wiring (R19-R23).
-  One applyAdaptiveSpec choke for ALL layout sources (agent/manual/spoken/
-  reconnect/migration); spoken override phrases → deterministic
-  OverrideIntents (renderer-side, before user_text); legacy engine retired
-  non-authoritative w/ deletion task. NO Python touched (A3 boundary);
-  constraint model stays plain-JSON (A6 snapshot serializability).
-- files/dirs: apps/desktop/src/store.ts, apps/desktop/src/adaptive/
-  (spokenOverrides.ts new), apps/desktop/src/voice/micHub.ts,
-  apps/desktop/src/contracts.ts (snapshot adaptive_composition TS mirror),
-  apps/desktop/src/layout/engine.ts (non-authoritative banner),
-  apps/desktop/tests/{spoken-overrides,one-choke}.test.ts new,
-  tests/overrides-store.test.ts (R20 family), store/planner/reconnect tests
-- boundaries: NO packages/contracts/** (A3), NO services/agent tools (A3),
-  no components/ chrome changes (A9), no snapshot Python (A6 — TS seam only).
-- status: IN PROGRESS
+### g35-a5 (media authority — GATE-3.5 consolidation, Wave 1)
+- timestamp: 2026-08-08 (Wave 1 kickoff)
+- task: Single media authority (R24-R27): one MediaController shared by agent tools (media_tools.py), client actions (actions.py) and player callbacks; real seek (position emitted + iframe seekTo); duration/currentTime synced from the YouTube iframe into the controller (no React-only simulated state); primary<->persistent no-remount preserved.
+- files/dirs: services/agent/arsvox_agent/{media.py (new), actions.py, tools/media_tools.py, tools/demo_tools.py}, apps/desktop/src/{media/controller.ts (new), store.ts, components/MediaDock.tsx}, tests/python/{test_media_controller.py (new), test_media_tools.py, test_client_actions.py}, apps/desktop/tests/{media-controller.test.ts (new), media-wiring.test.tsx}, hey.md
+- boundaries: will NOT touch snapshot.py (A6), layout reducer/adaptive (A4), contracts command types (A7), reconnect tests (A6). CROSS-OWNER note for A6 in handoff.
+- status: resolved (commit 4fea57d — pytest 216/216, vitest 455/455, typecheck+build clean; R24-R27 covered; CROSS-OWNER note for A6 snapshot.py in handoff)
+
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)

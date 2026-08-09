@@ -11,9 +11,6 @@ import type {
   BrowserNavigateEvent,
   ClientCommand,
   DocumentKind,
-  MediaKind,
-  MediaSource,
-  MediaState,
   MediaStateEvent,
   ReminderItem,
   ServerEvent,
@@ -65,6 +62,21 @@ import {
   type PlannerInput,
   type PlannerRejection,
 } from "./adaptive/planner";
+import {
+  EMPTY_MEDIA,
+  mediaController,
+  type MediaState,
+  type PlayerMediaUpdate,
+} from "./media/controller";
+
+/**
+ * The media surface state the UI renders. GATE-3.5 (R24-R27): the shape
+ * IS the MediaController's state — every media mutation (server events,
+ * user commands, player callbacks) routes through the controller and is
+ * mirrored here. `MediaContent` is re-exported for the legacy name.
+ */
+export type { MediaState as MediaContent } from "./media/controller";
+export { EMPTY_MEDIA } from "./media/controller";
 
 /** Default content viewport used until the renderer reports real size. */
 export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 800 };
@@ -182,37 +194,13 @@ export interface TasksContent {
   reminders: ReminderItem[];
 }
 
-export interface MediaContent {
-  state: MediaState;
-  source: MediaSource;
-  kind: MediaKind;
-  title: string;
-  videoId: string | null;
-  url: string | null;
-  positionS: number;
-  durationS: number;
-  volume: number;
-}
-
 export interface PanelContent {
   youtube?: YoutubeContent;
   browser?: BrowserContent;
   document_editor?: DocumentContent;
   tasks?: TasksContent;
-  media?: MediaContent;
+  media?: MediaState;
 }
-
-export const EMPTY_MEDIA: MediaContent = {
-  state: "stopped",
-  source: "local",
-  kind: "audio",
-  title: "",
-  videoId: null,
-  url: null,
-  positionS: 0,
-  durationS: 0,
-  volume: 1,
-};
 
 /**
  * GATE-3.5 (A6/R34): a rendered notification. Populated by live
@@ -282,6 +270,13 @@ export interface AppState {
   dispatchCommand: (command: ClientCommand) => void;
 
   applyUiCommand: (command: UiCommand) => void;
+
+  /**
+   * GATE-3.5 (R26): the REAL player's callbacks (YouTube iframe
+   * infoDelivery — playerState / currentTime / duration) feed the single
+   * MediaController; there is no React-only simulated playback state.
+   */
+  applyPlayerMediaEvent: (update: PlayerMediaUpdate) => void;
   /** UI-103: validate + apply an adaptive LayoutSpec (registry + fallback
    *  ladder). Throws on invalid specs; state is never partially updated.
    *  UI-302: options carry the user-initiated signal (bypasses UI-207's
@@ -317,96 +312,11 @@ function nextMessageId(prefix: string): string {
 }
 
 /**
- * H7 (GATE-2.5): extract a YouTube video id from a watch/embed/short URL so
- * the media.state COMMAND path (UiCommandEvent media.state carries only
- * url/title/volume — no video_id field) can drive the real YouTube iframe
- * surface. Non-YouTube or unparseable urls yield null.
+ * GATE-3.5 (R24-R27): the H7 media-command merge helpers moved into
+ * src/media/controller.ts — ALL media mutations (server events, server
+ * commands, user commands, player callbacks) now route through the one
+ * MediaController; this file only mirrors its state into content.media.
  */
-function mediaVideoIdFromUrl(url: string | null): string | null {
-  if (!url) return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null; // local path or bare name — not a YouTube URL
-  }
-  const host = parsed.hostname.replace(/^www\./, "");
-  if (host === "youtu.be") {
-    const id = parsed.pathname.slice(1);
-    return id.length > 0 ? id : null;
-  }
-  if (host === "youtube.com" || host === "m.youtube.com") {
-    const v = parsed.searchParams.get("v");
-    if (v) return v;
-    const embed = parsed.pathname.match(/^\/embed\/([\w-]+)/);
-    if (embed) return embed[1];
-  }
-  return null;
-}
-
-/**
- * H7 (GATE-2.5): the media.state COMMAND payload (MediaStateChange) is a
- * partial update — it carries state/title/url/volume but no source/kind/
- * video_id/position. Merge it over the current media surface state (the
- * same surface the MediaStateEvent path populates), deriving the youtube
- * source/kind/videoId from the url when one is provided.
- */
-function applyMediaStateCommand(
-  state: AppState,
-  command: Extract<UiCommand, { action: "media.state" }>,
-): Partial<AppState> {
-  const m = state.content.media ?? EMPTY_MEDIA;
-  const url = command.url ?? m.url;
-  const videoId =
-    command.url != null ? (mediaVideoIdFromUrl(command.url) ?? m.videoId) : m.videoId;
-  const isYoutube = videoId !== null;
-  return {
-    content: {
-      ...state.content,
-      media: {
-        ...m,
-        state: command.state,
-        title: command.title ?? m.title,
-        url,
-        videoId,
-        source: command.url != null ? (isYoutube ? "youtube" : "local") : m.source,
-        kind: command.url != null ? (isYoutube ? "video" : "audio") : m.kind,
-        volume: command.volume ?? m.volume,
-      },
-    },
-  };
-}
-
-/**
- * H7 (GATE-2.5): the audio.play COMMAND payload names an asset (url, path or
- * bare name). Treat it as a fresh local audio track on the media surface —
- * the same state the MediaStateEvent path would carry for local audio.
- */
-function applyAudioPlayCommand(
-  state: AppState,
-  command: Extract<UiCommand, { action: "audio.play" }>,
-): Partial<AppState> {
-  const m = state.content.media ?? EMPTY_MEDIA;
-  const asset = command.asset;
-  const isUrl =
-    /^(https?:)?\/\//.test(asset) || asset.startsWith("/") || asset.startsWith(".");
-  const title = m.title || asset.split(/[\\/]/).pop() || asset;
-  return {
-    content: {
-      ...state.content,
-      media: {
-        ...m,
-        state: "playing",
-        source: "local",
-        kind: "audio",
-        title,
-        url: isUrl ? asset : m.url,
-        videoId: null,
-        positionS: 0,
-      },
-    },
-  };
-}
 
 function initialSpec(): LayoutSpec {
   return {
@@ -957,15 +867,21 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "media.state": {
-          // H7 (GATE-2.5): the media surface exists — merge the backend
-          // command into the surface state (same state MediaStateEvent
-          // populates) instead of dropping it.
-          set(applyMediaStateCommand(state, command));
+          // GATE-3.5 (R24-R27): defensive server-command path — routed
+          // through the single MediaController like every other media
+          // input; the controller merges the partial command and the
+          // store mirrors the authoritative result.
+          mediaController.applyServerCommand(command);
+          set({
+            content: { ...state.content, media: mediaController.getState() },
+          });
           return;
         }
         case "audio.play": {
-          // H7 (GATE-2.5): surface the named asset as a local audio track.
-          set(applyAudioPlayCommand(state, command));
+          mediaController.applyServerCommand(command);
+          set({
+            content: { ...state.content, media: mediaController.getState() },
+          });
           return;
         }
       }
@@ -1103,24 +1019,19 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                   expiresInS: snap.pending_confirmation.expires_in_s,
                 }
               : null,
-            // R30: media=null is authoritative absence — the stale player
-            // is CLEARED, never preserved.
-            content: {
-              ...state.content,
-              media: snap.media
-                ? {
-                    state: snap.media.state,
-                    source: snap.media.source,
-                    kind: snap.media.kind,
-                    title: snap.media.title,
-                    videoId: snap.media.video_id,
-                    url: snap.media.url,
-                    positionS: snap.media.position_s,
-                    durationS: snap.media.duration_s,
-                    volume: snap.media.volume,
-                  }
-                : EMPTY_MEDIA,
-            },
+            // R30 (A6): media=null is authoritative absence — the stale
+            // player is CLEARED, never preserved. The restore routes
+            // through the SAME MediaController (A5 — single authority),
+            // then the store mirrors the controller state.
+            content: (() => {
+              if (snap.media) {
+                // A5: snapshot restore is another server-state input.
+                mediaController.applyServerEvent(snap.media);
+              } else {
+                mediaController.reset();
+              }
+              return { ...state.content, media: mediaController.getState() };
+            })(),
             // R31/R34: history and notifications are authoritative —
             // empty lists CLEAR stale chat/notification state.
             messages: snap.history.map((h) => ({
@@ -1245,21 +1156,11 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         }
         case "media.state": {
           const ev = event as MediaStateEvent;
+          // GATE-3.5 (R24-R27): the authoritative server state (agent
+          // tool / client action verdict) feeds the single controller.
+          mediaController.applyServerEvent(ev);
           set({
-            content: {
-              ...state.content,
-              media: {
-                state: ev.state,
-                source: ev.source,
-                kind: ev.kind,
-                title: ev.title,
-                videoId: ev.video_id,
-                url: ev.url,
-                positionS: ev.position_s,
-                durationS: ev.duration_s,
-                volume: ev.volume,
-              },
-            },
+            content: { ...state.content, media: mediaController.getState() },
           });
           return;
         }
@@ -1399,20 +1300,13 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             break;
           }
           case "youtube.play": {
+            // GATE-3.5: user pick -> the controller (optimistic; the
+            // server ack/verdict reconciles afterwards).
+            mediaController.userPlayYoutube(command.video_id, command.title);
             set({
               content: {
                 ...state.content,
-                media: {
-                  state: "playing",
-                  source: "youtube",
-                  kind: "video",
-                  title: command.title,
-                  videoId: command.video_id,
-                  url: `https://www.youtube.com/embed/${command.video_id}`,
-                  positionS: 0,
-                  durationS: 0,
-                  volume: state.content.media?.volume ?? 1,
-                },
+                media: mediaController.getState(),
               },
             });
             break;
@@ -1460,22 +1354,26 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             break;
           }
           case "media.play_pause": {
-            const m = state.content.media;
-            if (m && m.state !== "stopped") {
+            // Optimistic toggle through the controller; mirror only when
+            // the controller state actually changed (no track = no-op =
+            // no fake media surface created).
+            const before = mediaController.getState();
+            mediaController.userPlayPause();
+            const after = mediaController.getState();
+            if (after !== before) {
               set({
-                content: {
-                  ...state.content,
-                  media: { ...m, state: m.state === "playing" ? "paused" : "playing" },
-                },
+                content: { ...state.content, media: after },
               });
             }
             break;
           }
           case "media.seek": {
-            const m = state.content.media;
-            if (m) {
+            const before = mediaController.getState();
+            mediaController.userSeek(command.position_s);
+            const after = mediaController.getState();
+            if (after !== before) {
               set({
-                content: { ...state.content, media: { ...m, positionS: command.position_s } },
+                content: { ...state.content, media: after },
               });
             }
             break;
@@ -1505,6 +1403,23 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       dismissError: () => set({ error: null }),
 
       applyUiCommand,
+      /**
+       * GATE-3.5 (R26): player callbacks -> the one controller -> store.
+       * No React-only simulated playback state: what the iframe reports
+       * IS what the progress bar shows.
+       */
+      applyPlayerMediaEvent: (update) => {
+        const before = mediaController.getState();
+        mediaController.applyPlayerUpdate(update);
+        const after = mediaController.getState();
+        if (after === before) return; // no real change — skip the mirror
+        set({
+          content: {
+            ...get().content,
+            media: after,
+          },
+        });
+      },
       applyAdaptiveSpec,
       applyLayoutIntent,
       handleSpokenText: (text) => {
