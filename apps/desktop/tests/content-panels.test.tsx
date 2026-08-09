@@ -121,6 +121,63 @@ describe("YoutubePanel", () => {
     expect(html).toContain("Pídeme que busque un vídeo o escribe aquí arriba.");
     expect(html).not.toContain("youtube-card");
   });
+
+  it("renders selectable cards from the unified media.search_results bag (GATE-5 wire)", () => {
+    appStore.setState({
+      content: {
+        youtube: {
+          query: "guitarra",
+          loading: false,
+          results: [
+            {
+              id: "v1",
+              title: "Clases de guitarra",
+              source: "youtube",
+              kind: "video",
+              channel: "Marta",
+              duration_s: 600,
+              published: "hace 2 días",
+              thumbnail_url: null,
+              local_path: null,
+            },
+            {
+              id: "v2",
+              title: "Concierto de piano",
+              source: "youtube",
+              kind: "video",
+              channel: "Música Viva",
+              duration_s: 95,
+              published: "hace 1 mes",
+              thumbnail_url: "https://example.com/thumb.jpg",
+              local_path: null,
+            },
+          ],
+        },
+      },
+    });
+
+    const html = renderPrimary(<YoutubePanel />, "youtube", STANDARD_ROLES);
+    expect(html).toContain("Clases de guitarra");
+    expect(html).toContain("Marta");
+    expect(html).toContain("Concierto de piano");
+    expect(html).toContain("Música Viva");
+    expect(html).toContain("10:00"); // 600s
+    expect(html).toContain("1:35"); // 95s
+    // Every card is a selectable option (click -> media.select_result).
+    expect(html).toContain('aria-label="Seleccionar: Clases de guitarra"');
+    expect(html).toContain('aria-label="Seleccionar: Concierto de piano"');
+    expect(html).not.toContain("Pídeme que busque un vídeo");
+  });
+
+  it("shows the honest 'no encontré nada' after a performed search with zero results", () => {
+    appStore.setState({
+      content: { youtube: { query: "xyz no existe", loading: false, results: [] } },
+    });
+
+    const html = renderPrimary(<YoutubePanel />, "youtube", STANDARD_ROLES);
+    expect(html).toContain("No encontré nada para «xyz no existe».");
+    expect(html).not.toContain("youtube-card");
+  });
 });
 
 describe("BrowserPanel", () => {
