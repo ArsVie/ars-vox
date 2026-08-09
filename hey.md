@@ -12,7 +12,7 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 ### hermes (GATE-3.5 Wave 1 — A2 secure launch, wip/g35-a2-launch, 2026-08-08)
 - task: R09-R15 process/auth lifecycle owner — Electron generates one per-launch token, spawns Python service, authenticated health handshake; renderer loses token access (R14); pre-first-connect buffering (R11); visible startup failure (R12); child kill on exit (R13); PATCH auth guards (R15).
 - files: apps/desktop/electron/{main,preload,service,wsclient}.ts, apps/desktop/src/{endpoints,store,main.tsx,ws/client.ts,arsvox-bridge.d.ts}, TtsPlayer.tsx, mic.ts, packages/contracts/arsvox_contracts/config.py, services/agent/arsvox_agent/app.py, tests (python + desktop).
-- status: IN PROGRESS — no merges; orchestrator gates.
+- status: RESOLVED 2026-08-08 — R09-R15 complete; desktop 468 tests (incl. launch-integration real-spawn suite), pytest 212, typecheck+build clean. Committed wip/g35-a2-launch.
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
