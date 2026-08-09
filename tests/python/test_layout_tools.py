@@ -149,6 +149,30 @@ class TestR16ValidTemplates:
             spec, REGISTERED_SURFACES
         )  # no raise
 
+    def test_split_two_primaries_derive_main_and_side_slots(self):
+        """GATE-1 regression (2026-08-09): a split with two primaries must
+        derive main + side (equal 50/50), never two surfaces in one slot —
+        the renderer's geometry engine rejects one-surface-per-slot, and an
+        invalid spec reaching state white-screened the packaged app at boot
+        (via the snapshot restore)."""
+        tctx, bus = _make_context()
+        result = _run(
+            tctx,
+            template=AdaptiveTemplate.SPLIT,
+            assignments=VALID_SPECS[AdaptiveTemplate.SPLIT],
+        )
+        assert result == "Disposición split aplicada."
+        cmd = [
+            e.command
+            for e in bus.events
+            if isinstance(e, UiCommandEvent)
+        ][0]
+        assert isinstance(cmd, LayoutCompose)
+        slots = [a.slot for a in cmd.assignments]
+        assert slots == ["main", "side"], f"expected main+side, got {slots}"
+        # geometry-level invariant: one surface per slot
+        assert len(slots) == len(set(slots))
+
     def test_proportion_is_optional_and_roundtrips(self):
         tctx, bus = _make_context()
         _run(

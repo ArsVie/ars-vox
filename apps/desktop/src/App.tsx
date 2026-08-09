@@ -109,6 +109,28 @@ export default function App() {
     [adaptiveSpec, adaptiveAssignments],
   );
 
+  // GATE-1 (2026-08-09): final net under the choke guard — a geometry bug
+  // must never white-screen the app. With applyAdaptiveSpec rejecting
+  // unrenderable specs this branch is unreachable; it degrades to the
+  // legacy fallback instead of crashing React.
+  const geometry = useMemo(() => {
+    const spec = resolvedSpec ?? adaptiveSpec;
+    if (!spec) return null;
+    try {
+      return computeAdaptiveGeometry(
+        spec,
+        viewport,
+        surfaceRegistry.registeredIds(),
+      );
+    } catch (error) {
+      console.warn(
+        "[adaptive] geometry failed — legacy fallback:",
+        (error as Error).message,
+      );
+      return null;
+    }
+  }, [resolvedSpec, adaptiveSpec, viewport]);
+
   const persistentSurfaces: PersistentSurface[] = (demoSpec || adaptiveSpec)
     ? [
         ...(mediaActive && !mediaInLayout
@@ -128,13 +150,9 @@ export default function App() {
       data-high-contrast={highContrast ? "" : undefined}
     >
       <StatusBar demoValue={demoTemplate} onDemoChange={setDemoTemplate} />
-      {adaptiveSpec ? (
+      {adaptiveSpec && geometry ? (
         <AdaptiveStage
-          geometry={computeAdaptiveGeometry(
-            resolvedSpec ?? adaptiveSpec,
-            viewport,
-            surfaceRegistry.registeredIds(),
-          )}
+          geometry={geometry}
           assignments={adaptiveAssignments}
         />
       ) : (

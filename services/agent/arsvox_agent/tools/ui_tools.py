@@ -163,16 +163,24 @@ async def layout_compose(
     and never reach the UI.
     """
     try:
+        primary_index = 0
+        derived: list[LayoutAssignment] = []
+        for a in assignments:
+            if a.role == "primary":
+                primary_index += 1
+                # Equal split: the SECOND primary tiles the side slot
+                # (split = main | side; frozen 50/50 when two primaries).
+                # ROLE_SLOT would put both in "main" — the renderer's
+                # geometry engine rejects one-surface-per-slot duplicates.
+                slot = "main" if primary_index == 1 else "side"
+            else:
+                slot = ROLE_SLOT[a.role]
+            derived.append(
+                LayoutAssignment(surface_id=a.surface, role=a.role, slot=slot)
+            )
         spec = LayoutSpec(
             template=template,
-            assignments=[
-                LayoutAssignment(
-                    surface_id=a.surface,
-                    role=a.role,
-                    slot=ROLE_SLOT[a.role],
-                )
-                for a in assignments
-            ],
+            assignments=derived,
             proportion=proportion,
         )
         validate_layout_spec(spec, REGISTERED_SURFACES)

@@ -35,6 +35,7 @@ import {
   type Viewport,
 } from "./layout/engine";
 import { surfaceRegistry } from "./roles/registry";
+import { computeAdaptiveGeometry } from "./layout/adaptiveEngine";
 import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
 import type {
   AdaptiveTemplate,
@@ -602,6 +603,27 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       options: ApplyAdaptiveSpecOptions = {},
     ): void => {
       const state = get();
+      // UI-102 geometry guard (GATE-1, 2026-08-09): an unrenderable spec
+      // (duplicate slot assignment, template that cannot fit the stage)
+      // must NEVER reach layout state — the engine throws at render
+      // otherwise and the whole app white-screens (found in the packaged
+      // build: a split compose with both primaries in "main" passed the
+      // frozen validator and crashed boot via the snapshot restore). The
+      // frozen validateLayoutSpec deliberately does not cover slot
+      // uniqueness — geometry-level validation is the choke's job.
+      try {
+        computeAdaptiveGeometry(
+          spec,
+          state.viewport,
+          surfaceRegistry.registeredIds(),
+        );
+      } catch (error) {
+        console.warn(
+          "[adaptive] rejecting unrenderable spec:",
+          (error as Error).message,
+        );
+        return;
+      }
       const baseOverrides = options.overrides ?? state.adaptive.overrides;
       const overrides = options.overrideIntent
         ? mergeOverrideIntent(baseOverrides, options.overrideIntent, spec)
