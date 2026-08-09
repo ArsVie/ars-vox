@@ -117,7 +117,13 @@ async def _handle_client_message(
         await runtime.deps_base.bus.publish(verdict)
         return
     if message.type == "confirm":
-        await runtime.deps_base.confirmations.resolve(message.pending_id, approve=True)
+        # R38: NEVER block the receive loop on execution — a STOP frame
+        # must stay receivable while an approved action runs. The
+        # coordinator spawns a tracked execution task and resolves the
+        # lifecycle from there.
+        asyncio.create_task(
+            runtime.deps_base.confirmations.resolve(message.pending_id, approve=True)
+        )
         await _sync_state_after_resolve(ws, runtime)
         return
     if message.type == "cancel":

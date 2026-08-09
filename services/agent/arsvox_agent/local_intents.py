@@ -57,6 +57,33 @@ LIST_REMINDER_PATTERNS = [
     r"list reminders",
 ]
 
+# R35 (GATE-3.5): spoken confirmation vocabulary. Same discipline as STOP:
+# whole-utterance, accent-stripped, optional politeness filler. These
+# entries are post-_normalize forms (lowercased, accent-stripped — "sí"
+# normalizes to "si"). A confirmation utterance only ever resolves the
+# single global pending confirmation; with none pending it is IGNORED
+# (R36 — conservative: never approve random things, never start a turn
+# on a bare sí/no).
+CONFIRM_UTTERANCES = {
+    "confirmar",
+    "confirmo",
+    "si",
+    "si enviar",
+    "aprobar",
+}
+
+REJECT_UTTERANCES = {
+    "cancelar",
+    "rechazar",
+    "no",
+    "no enviar",
+}
+
+# Note: "sí enviar" / "no enviar" deliberately mirror the telegram
+# confirmation copy ("confirmar envío"). Longer phrasings ("sí, envíalo",
+# "cancelar la acción") are NOT in the frozen vocabulary — they fall
+# through to the normal model turn, exactly like STOP's word-boundary rule.
+
 
 @dataclass(frozen=True)
 class LocalIntent:
@@ -84,6 +111,35 @@ def _is_stop_utterance(norm: str) -> bool:
             if core in STOP_UTTERANCES:
                 return True
     return False
+
+
+def _is_confirmation_utterance(norm: str, vocabulary: set[str]) -> bool:
+    """Whole-utterance match against a confirmation vocabulary, with the
+    same politeness-filler rule as STOP. Never a word inside a sentence:
+    'sí, quiero' or 'no sé' must not resolve a confirmation (R36)."""
+    if norm in vocabulary:
+        return True
+    for suffix in STOP_POLITENESS_SUFFIXES:
+        if norm.endswith(suffix):
+            core = norm[: -len(suffix)].rstrip(" ,")
+            if core in vocabulary:
+                return True
+    return False
+
+
+def match_confirmation_utterance(text: str) -> str | None:
+    """R35/R36: 'approve' | 'reject' | None for a spoken/typed
+    confirmation utterance (whole-utterance, accent-stripped).
+
+    Returning a decision does NOT approve anything — the caller must
+    resolve the currently pending confirmation; with none pending the
+    utterance is ignored (R36)."""
+    norm = _normalize(text)
+    if _is_confirmation_utterance(norm, CONFIRM_UTTERANCES):
+        return "approve"
+    if _is_confirmation_utterance(norm, REJECT_UTTERANCES):
+        return "reject"
+    return None
 
 
 def match_intent(text: str) -> LocalIntent | None:

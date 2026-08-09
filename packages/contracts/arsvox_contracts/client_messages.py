@@ -9,7 +9,6 @@ from typing import Annotated, Literal, Union
 from pydantic import BaseModel, Field
 
 from arsvox_contracts.commands import (
-    AudioPlay,
     BrowserBack,
     BrowserForward,
     BrowserNavigate,
@@ -19,14 +18,11 @@ from arsvox_contracts.commands import (
     LayoutRestore,
     MediaPlayPause,
     MediaSeek,
-    MediaStateChange,
-    NotificationShow,
     PanelClose,
     PanelFullscreen,
     PanelOpen,
     PanelSetPrimary,
     TasksToggle,
-    TtsSpeak,
     YoutubePlay,
     YoutubeSearch,
 )
@@ -56,14 +52,20 @@ class PingMessage(BaseModel):
 
 
 # --------------------------------------------------------------------- #
-# H1: client-initiated actions.
+# C1 (GATE-3.5): client-initiated actions — NARROWED union.
 #
-# ClientAction mirrors the TS UiCommand union (apps/desktop/src/contracts.ts)
-# action-for-action — the variant classes are shared with the server->client
-# channel (arsvox_contracts.commands) so the two can never drift. The wire
-# frame the UI sends is {type: "ui_command", command: <ClientAction>}.
-# Unknown action strings fail parse (strict union) and the service replies
-# action_result failed instead of the generic "Mensaje no válido".
+# ClientAction is ONLY the actions the human client is allowed to
+# initiate: media play/pause/seek, browser navigation, document.save,
+# tasks.toggle, layout/panel overrides. Server-originated commands
+# (notification.show, media.state, tts.speak, audio.play) are NOT here —
+# they travel server->client via the full UiCommand union
+# (arsvox_contracts.commands), never as client frames. Every declared
+# ClientAction MUST have an authoritative handler
+# (services/agent/arsvox_agent/actions.py); tests/python/
+# test_client_actions.py fails on drift (R39). The wire frame the UI
+# sends is {type: "ui_command", command: <ClientAction>}. Unknown action
+# strings fail parse (strict union) and the service replies action_result
+# failed instead of the generic "Mensaje no válido".
 # --------------------------------------------------------------------- #
 ClientAction = Annotated[
     Union[
@@ -73,10 +75,6 @@ ClientAction = Annotated[
         PanelSetPrimary,
         PanelFullscreen,
         LayoutRestore,
-        NotificationShow,
-        MediaStateChange,
-        TtsSpeak,
-        AudioPlay,
         MediaPlayPause,
         MediaSeek,
         YoutubeSearch,

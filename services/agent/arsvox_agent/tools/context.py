@@ -4,12 +4,15 @@ handlers can run through the approval executor (execute_direct) without
 faking a RunContext."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from arsvox_agent.deps import Deps
 from arsvox_agent.events import EventBus
+
+if TYPE_CHECKING:
+    from arsvox_agent.confirmations import CancellationToken
 
 
 @dataclass
@@ -18,6 +21,10 @@ class ToolContext:
     run_id: str
     session_id: str
     bus: EventBus
+    # R38: cooperative cancellation token for approved-action execution.
+    # Tool handlers check it before their side effect and mark the
+    # point of no return (see confirmations.CancellationToken).
+    cancel_token: "CancellationToken | None" = None
 
     async def emit(self, event: BaseModel) -> None:
         await self.bus.publish(event)

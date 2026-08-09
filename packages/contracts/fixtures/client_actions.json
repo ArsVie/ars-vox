@@ -1,5 +1,5 @@
 {
-  "_comment": "H1 shared fixture: one real client frame per UiCommand action. Source of truth for the action strings is apps/desktop/src/contracts.ts (UiCommand union); shapes are what apps/desktop/src/store.ts dispatchCommand emits. Both sides must stay in sync: tests/python/test_client_actions.py parses every frame through parse_client_message; apps/desktop/tests/client-actions.test.ts asserts every TS action string has an entry here. Never regenerate by hand on one side only.",
+  "_comment": "C1 shared fixture: one real client frame per ClientAction (the NARROWED human-initiated set). Source of truth for the action strings is apps/desktop/src/contracts.ts (ClientCommand union — the client-sendable subset of UiCommand); shapes are what apps/desktop/src/store.ts dispatchCommand emits. Server-originated commands (notification.show, media.state, tts.speak, audio.play) are NOT client frames — they stay in the full UiCommand union for the server->client channel only. Both sides must stay in sync: tests/python/test_client_actions.py parses every frame through parse_client_message and fails if any declared ClientAction lacks an authoritative handler (R39); apps/desktop/tests/client-actions.test.ts asserts every TS ClientCommand action string has an entry here. Never regenerate by hand on one side only.",
   "layout.apply": {
     "type": "ui_command",
     "command": {
@@ -43,25 +43,6 @@
     "type": "ui_command",
     "command": {
       "action": "layout.restore"
-    }
-  },
-  "notification.show": {
-    "type": "ui_command",
-    "command": {
-      "action": "notification.show",
-      "notification_id": "n-1",
-      "kind": "info",
-      "title": "Recordatorio",
-      "text": "Es hora de regar las plantas"
-    }
-  },
-  "media.state": {
-    "type": "ui_command",
-    "command": {
-      "action": "media.state",
-      "state": "playing",
-      "title": "Sinfonía Nº 5",
-      "volume": 0.8
     }
   },
   "media.play_pause": {
@@ -130,21 +111,6 @@
     "command": {
       "action": "tasks.toggle",
       "task_id": "1"
-    }
-  },
-  "tts.speak": {
-    "type": "ui_command",
-    "command": {
-      "action": "tts.speak",
-      "text": "Hola, esto es una prueba",
-      "priority": false
-    }
-  },
-  "audio.play": {
-    "type": "ui_command",
-    "command": {
-      "action": "audio.play",
-      "asset": "chime.wav"
     }
   }
 }

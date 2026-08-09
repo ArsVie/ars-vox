@@ -19,6 +19,10 @@ Backend capabilities implemented here:
   * media.play_pause / media.seek / audio.play -> authoritative
                           media.state events from the service-side
                           media controller
+  * layout.apply / panel.open / panel.close / panel.set_primary /
+    panel.fullscreen / layout.restore (C1 human-initiated layout
+    surface) -> service panel registry updated + the matching
+    UiCommand re-emitted as the authoritative event
   * everything else    -> unsupported (server-originated commands or
                           capabilities that do not exist yet)
 """
@@ -28,7 +32,15 @@ import logging
 from typing import Any
 
 from arsvox_contracts import ActionResultEvent
-from arsvox_contracts.commands import UiCommand
+from arsvox_contracts.commands import (
+    LayoutApply,
+    LayoutRestore,
+    PanelClose,
+    PanelFullscreen,
+    PanelOpen,
+    PanelSetPrimary,
+    UiCommand,
+)
 from arsvox_contracts.enums import MediaKind, MediaSource, MediaState
 from arsvox_contracts.events import (
     BrowserNavigateEvent,
@@ -36,6 +48,7 @@ from arsvox_contracts.events import (
     ReminderItem,
     TasksUpdateEvent,
     TodoItem,
+    UiCommandEvent,
     YoutubeSearchEvent,
     YoutubeVideoResult,
 )
@@ -117,6 +130,15 @@ async def handle_ui_command(
             return _acknowledge_local(action)
         if action in ("media.play_pause", "media.seek", "audio.play"):
             return await _media_action(deps, action, command)
+        if action in (
+            "layout.apply",
+            "panel.open",
+            "panel.close",
+            "panel.set_primary",
+            "panel.fullscreen",
+            "layout.restore",
+        ):
+            return await _panel_action(deps, action, command)
     except Exception as exc:  # noqa: BLE001 — never crash the ws loop
         log.exception("client action %s failed", action)
         deps.audit.log("action", "failed", {"action": action, "error": str(exc)})
@@ -275,6 +297,86 @@ def _acknowledge_local(action: str) -> ActionResultEvent:
         action=action,
         status="done",
         detail="client-local operation (no backend browser)",
+    )
+
+
+async def _panel_action(deps: Deps, action: str, command: UiCommand) -> ActionResultEvent:
+    """Authoritative handlers for the C1 human-initiated layout/panel
+    surface. Mirror the agent-side ui_*_panel tools: the service panel
+    registry is updated and the matching UiCommand is re-emitted, so the
+    UI reconciles against the authoritative event rather than its own
+    optimistic copy."""
+    if action == "panel.open":
+        panel_type = command.panel_type  # type: ignore[attr-defined]
+        title = command.title  # type: ignore[attr-defined]
+        content_reference = command.content_reference  # type: ignore[attr-defined]
+        deps.panels.upsert(panel_type.value, title, content_reference)
+        deps.audit.log("action", "panel.open", {"panel_type": panel_type.value})
+        await deps.bus.publish(
+            UiCommandEvent(
+                command=PanelOpen(
+                    panel_type=panel_type, title=title, content_reference=content_reference
+                )
+            )
+        )
+        return ActionResultEvent(action="panel.open", status="done", detail=panel_type.value)
+    if action == "panel.close":
+        panel_type = command.panel_type  # type: ignore[attr-defined]
+        panel_id = command.panel_id  # type: ignore[attr-defined]
+        target = panel_id or (panel_type.value if panel_type else None)
+        if not target:
+            return ActionResultEvent(
+                action="panel.close", status="failed", detail="panel_type or panel_id required"
+            )
+        deps.panels.remove(target)
+        deps.audit.log("action", "panel.close", {"target": target})
+        await deps.bus.publish(
+            UiCommandEvent(command=PanelClose(panel_type=panel_type, panel_id=panel_id))
+        )
+        return ActionResultEvent(action="panel.close", status="done", detail=target)
+    if action == "panel.set_primary":
+        panel_type = command.panel_type  # type: ignore[attr-defined]
+        deps.panels.touch(panel_type.value)
+        deps.audit.log("action", "panel.set_primary", {"panel_type": panel_type.value})
+        await deps.bus.publish(UiCommandEvent(command=PanelSetPrimary(panel_type=panel_type)))
+        return ActionResultEvent(action="panel.set_primary", status="done", detail=panel_type.value)
+    if action == "panel.fullscreen":
+        panel_type = command.panel_type  # type: ignore[attr-defined]
+        deps.audit.log("action", "panel.fullscreen", {"panel_type": panel_type.value})
+        await deps.bus.publish(UiCommandEvent(command=PanelFullscreen(panel_type=panel_type)))
+        return ActionResultEvent(action="panel.fullscreen", status="done", detail=panel_type.value)
+    if action == "layout.apply":
+        template = command.template  # type: ignore[attr-defined]
+        primary_panel = command.primary_panel  # type: ignore[attr-defined]
+        secondary_panel = command.secondary_panel  # type: ignore[attr-defined]
+        slots = command.slots  # type: ignore[attr-defined]
+        preserve = command.preserve  # type: ignore[attr-defined]
+        deps.panels.upsert(primary_panel.value)
+        deps.audit.log(
+            "action", "layout.apply",
+            {"template": template.value, "primary_panel": primary_panel.value},
+        )
+        await deps.bus.publish(
+            UiCommandEvent(
+                command=LayoutApply(
+                    template=template,
+                    primary_panel=primary_panel,
+                    secondary_panel=secondary_panel,
+                    slots=slots,
+                    preserve=preserve,
+                )
+            )
+        )
+        return ActionResultEvent(action="layout.apply", status="done", detail=template.value)
+    if action == "layout.restore":
+        deps.audit.log("action", "layout.restore", {})
+        await deps.bus.publish(UiCommandEvent(command=LayoutRestore()))
+        return ActionResultEvent(action="layout.restore", status="done")
+    # unreachable — every ClientAction member has a branch above (R39).
+    return ActionResultEvent(
+        action=action,
+        status="unsupported",
+        detail="no backend capability for this action",
     )
 
 

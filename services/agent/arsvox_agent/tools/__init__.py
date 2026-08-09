@@ -104,15 +104,32 @@ class ToolRegistry:
             )
         return await self._run_handler(spec, tctx, args)
 
-    async def execute_direct(self, tool: str, args: dict, run_id: str = "") -> str:
-        """Executes a stored approved snapshot (gate bypassed on purpose)."""
+    async def execute_direct(
+        self,
+        tool: str,
+        args: dict,
+        run_id: str = "",
+        cancel_token: Any | None = None,
+    ) -> str:
+        """Executes a stored approved snapshot (gate bypassed on purpose).
+
+        ``cancel_token`` (R38) is the cooperative CancellationToken from
+        the confirmation executor; tool handlers consult it before side
+        effects and mark their point of no return.
+        """
         spec = self.get(tool)
         if spec is None or self.base_deps is None:
             return f"Error: tool {tool} not available."
         deps = dataclasses.replace(
             self.base_deps, run_id=run_id or "approved", session_id=""
         )
-        tctx = ToolContext(deps=deps, run_id=run_id or "approved", session_id="", bus=deps.bus)
+        tctx = ToolContext(
+            deps=deps,
+            run_id=run_id or "approved",
+            session_id="",
+            bus=deps.bus,
+            cancel_token=cancel_token,
+        )
         await self._emit_tool(tctx, spec, args, "running")
         return await self._run_handler(spec, tctx, args)
 

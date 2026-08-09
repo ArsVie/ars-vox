@@ -9,6 +9,7 @@ import type {
   ActionResultEvent,
   AppConfigWire,
   BrowserNavigateEvent,
+  ClientCommand,
   DocumentKind,
   MediaKind,
   MediaSource,
@@ -237,7 +238,7 @@ export interface AppState {
   toggleFullscreen: (panel: PanelId) => void;
 
   /** User-initiated command: optimistic local effect + send to the server. */
-  dispatchCommand: (command: UiCommand) => void;
+  dispatchCommand: (command: ClientCommand) => void;
 
   applyUiCommand: (command: UiCommand) => void;
   /** UI-103: validate + apply an adaptive LayoutSpec (registry + fallback

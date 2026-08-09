@@ -16,6 +16,14 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - files/dirs: apps/desktop/src/components/{StatusBar,ConversationPanel,ConfirmationPanel,PanelHeader}.tsx + styles.css + tests/ (a11y, conversation-surface, surfaces-wiring, panelhost)
 - status: ACTIVE
 
+### g35-a7 (Wave 1 — confirmation semantics + client action contract, 2026-08-08)
+- timestamp: 2026-08-08T21:00:00Z
+- task: A7 — R35-R39 + C1. Spoken confirm/reject vocabulary wired to the frozen pending action; R36 conservative ignore outside confirmation mode; R38 STOP cancels an EXECUTING approved action (cancellation tokens + per-tool point of no return, telegram.send_pending first); R39/C1 ClientAction narrowed to the human-initiated set with authoritative-handler enumeration guard. Files: services/agent/arsvox_agent/{confirmations,runtime,local_intents,ws,actions}.py, tools/{__init__,context,telegram_tools}.py, packages/contracts/arsvox_contracts/client_messages.py, packages/contracts/fixtures/client_actions.json, apps/desktop/src/{contracts.ts,store.ts}, apps/desktop/tests/client-actions.test.ts, tests/python/*.
+- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a7-confirm (branch wip/g35-a7-confirm)
+- boundaries: will NOT touch the STOP voice paths (A1), confirmation popup visuals (A9), or widen the confirmation gate surface (telegram.prepare_message stays the only USER_VISIBLE tool).
+- status: resolved (merged to main 2026-08-09, gate merge 1/9)
+
+### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
 - worktrees: /mnt/c/dev/ars-vox-worktrees/h{1..7}-*, branches wip/h{1..7}-* (briefs /tmp/gate25-briefs/)
