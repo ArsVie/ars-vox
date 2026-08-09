@@ -81,13 +81,13 @@ async def websocket_endpoint(
             pass
     finally:
         bus.unsubscribe(queue)
-        # GATE-3.5 (C4): if the renderer (the only playback authority)
-        # disconnects while a turn's speech is pending, no physical
-        # playback can ever ack it — settle so the machine never hangs
-        # in THINKING with the silence timer disarmed.
-        if runtime._speech_pending:  # noqa: SLF001 — same package, ws owns the wire lifecycle
-            runtime._speech_pending = False
-            runtime._settle()
+        # GATE-3.5 (C4/R05): if the renderer (the only playback
+        # authority) disconnects while speech is pending or physically
+        # playing, no physical ack can ever arrive — force-settle so the
+        # machine never hangs in THINKING/SPEAKING with the silence
+        # timer disarmed.
+        if runtime.is_speech_pending():
+            runtime.settle_to_terminal(force=True)
 
 
 async def _pump_outgoing(ws: WebSocket, queue: asyncio.Queue) -> None:
@@ -140,11 +140,11 @@ async def _handle_client_message(
         asyncio.create_task(
             runtime.deps_base.confirmations.resolve(message.pending_id, approve=True)
         )
-        await _sync_state_after_resolve(ws, runtime)
+        await _sync_state_after_resolve(runtime)
         return
     if message.type == "cancel":
         await runtime.deps_base.confirmations.resolve(message.pending_id, approve=False)
-        await _sync_state_after_resolve(ws, runtime)
+        await _sync_state_after_resolve(runtime)
         return
     # user_text
     intent = match_intent(message.text)
@@ -173,24 +173,15 @@ async def _handle_local_intent(
         await runtime.cancel()
 
 
-async def _sync_state_after_resolve(ws: WebSocket, runtime: AgentRuntime) -> None:
-    if runtime.pipeline is not None:
-        # GATE-3.5 (R05): NEVER settle to LISTENING while speech is
-        # physically playing or pending — the tts.finished ack settles
-        # with the fresh pending state instead. (The voice machine owns
-        # this transition; confirmation resolution itself is A7's.)
-        if (
-            runtime._speech_pending  # noqa: SLF001 — ws owns the wire lifecycle
-            or runtime.pipeline.state == VoiceState.SPEAKING
-        ):
-            return
-    pending = runtime.deps_base.pending.list_pending()
-    state = VoiceState.WAITING_FOR_CONFIRMATION if pending else VoiceState.LISTENING
-    if runtime.pipeline is not None:
-        # publish into the canonical state machine; the bus carries it back
-        runtime.pipeline.set_state(state)
-    else:
-        await ws.send_text(StateUpdateEvent(voice_state=state).model_dump_json())
+async def _sync_state_after_resolve(runtime: AgentRuntime) -> None:
+    """Re-derive the terminal voice state after a button confirm/cancel.
+
+    GATE-3.5 (R05): routes through the runtime's single terminal-state
+    derivation, whose speech guard refuses to settle while speech is
+    pending or physically playing — the tts.finished ack settles with
+    the fresh pending state instead. (The voice machine owns this
+    transition; confirmation resolution itself is A7's.)"""
+    runtime.settle_to_terminal()
 
 
 async def _reply_unparsable(
