@@ -9,15 +9,14 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
-### hermes (GATE-3.5 wave 1 — A8 Electron security / browser foundation spike, 2026-08-08)
-- timestamp: 2026-08-08T21:00:00Z
-- task: R40-R42 — new browser/security module: hardened WebContentsView (deny-by-default permissions, navigation filter, window-open denial, persist:remote-content partition, no privileged preload), custom local-doc protocol, IPC sender validation (R41), Electron upgrade migration note (R42) + YouTube embed origins enumeration
-- files/dirs: `apps/desktop/electron/{security-policy.ts,hardened-view.ts}` (new), `apps/desktop/electron/main.ts` (small A8-marked integration patch incl. get-token sender validation), `apps/desktop/tests/electron-{security-policy,hardened-view}.test.ts` (new), `docs/migration-note-electron-upgrade-2026-08-08.md` (new), `docs/threat-model/browser-and-tools.md` (T3/T9 spike-status note)
-- boundaries: will NOT touch A2's spawn/token flow beyond the marked get-token sender check; no UI (A9); no configs/contracts changes (allowlist youtube-nocookie gap flagged, not edited)
-- status: resolved 2026-08-08 — module shipped (security-policy.ts + hardened-view.ts), 41 new unit tests, full suite 485/485, typecheck + build clean, migration note + threat-model updated; commit on wip/g35-a8-electron-sec
+### g35-a10 (adversarial integration tests — GATE-3.5 Wave 1)
+- timestamp: 2026-08-08 (Wave 1 dispatch)
+- task: A10 adversarial seam tests for R44-R47 (reminder snooze full path, voice-disabled reconnect, media=null + notification reconnect) + seam coverage of R01/R16/R17/R18/R20/R24/R25/R28/R29/R30/R32/R34/R35/R36/R39 — TEST FILES ONLY (apps/desktop/tests/, tests/python/), no feature fixes; expected-fails marked with owner.
+- files/dirs: tests/python/test_adversarial_*.py (new, 5 files), apps/desktop/tests/adversarial-reconnect.test.ts (new), apps/desktop/tests/overrides-store.test.ts (append R20 seam block), hey.md
+- boundaries: will NOT touch src/, services/, packages/ (feature code) — any needed code change goes to the handoff as a CROSS-OWNER note. node_modules junction — never npm install / git add -A.
+- status: resolved (commits 48b0e97, 2066e91 — 26 python tests: 13 pass / 13 expected-fail with owners A3/A5/A6/A7; desktop: 19 pass / 3 expected-fail A6; typecheck clean. Gate rerun + integration is the orchestrator's.)
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
-- tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
 - worktrees: /mnt/c/dev/ars-vox-worktrees/h{1..7}-*, branches wip/h{1..7}-* (briefs /tmp/gate25-briefs/)
 - status: DONE 2026-08-08 ~05:50Z (CST) — UI-301/302/303 merged --no-ff
   (store.ts applyAdaptiveSpec conflict resolved deliberately: planner
