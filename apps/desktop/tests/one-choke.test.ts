@@ -38,11 +38,6 @@ function layoutApply(store: ReturnType<typeof createAppStore>): void {
   });
 }
 
-/** The legacy boot composition — the only legacy state a fresh store has. */
-function legacyBootTemplate(store: ReturnType<typeof createAppStore>): string {
-  return store.getState().layout.template;
-}
-
 describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", () => {
   it("agent source: wire layout.apply lands in adaptive.spec", () => {
     const store = createAppStore(() => {});
@@ -222,14 +217,16 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
 });
 
 describe("R22 — the legacy layout authority is retired (non-authoritative)", () => {
-  it("wire layout.apply writes ONLY adaptive state, never legacy state", () => {
+  it("wire layout.apply writes ONLY adaptive state — the legacy mirror is gone", () => {
     const store = createAppStore(() => {});
-    const boot = legacyBootTemplate(store);
     layoutApply(store);
     expect(store.getState().adaptive.spec?.template).toBe("split");
-    // legacy state untouched (still the boot focus composition)
-    expect(store.getState().layout.template).toBe(boot);
-    expect(store.getState().spec.template).toBe(boot);
+    // W2-STORE: state.layout / state.spec / state.panelMeta are DELETED —
+    // adaptive is the only layout state, so there is no legacy mirror
+    // left to drift from it.
+    expect(store.getState()).not.toHaveProperty("layout");
+    expect(store.getState()).not.toHaveProperty("spec");
+    expect(store.getState()).not.toHaveProperty("panelMeta");
   });
 
   it("manual layout commands write ONLY adaptive state", () => {
@@ -246,11 +243,15 @@ describe("R22 — the legacy layout authority is retired (non-authoritative)", (
       created_at: ts(),
     });
     store.getState().toggleFullscreen("conversation");
-    expect(store.getState().layout.template).toBe("focus");
-    expect(store.getState().spec.primaryPanel).toBe("conversation");
+    // the fullscreen constraint keeps focus pinned on conversation
+    const spec = store.getState().adaptive.spec!;
+    expect(spec.template).toBe("focus");
+    expect(spec.assignments.map((a) => a.surfaceId)).toEqual(["conversation"]);
+    expect(store.getState()).not.toHaveProperty("layout");
+    expect(store.getState()).not.toHaveProperty("spec");
   });
 
-  it("an invalid agent intent leaves BOTH layers untouched", () => {
+  it("an invalid agent intent leaves the adaptive layer untouched", () => {
     const store = createAppStore(() => {});
     layoutApply(store);
     const beforeSpec = store.getState().adaptive.spec;
@@ -267,6 +268,6 @@ describe("R22 — the legacy layout authority is retired (non-authoritative)", (
     });
     expect(store.getState().adaptive.spec).toEqual(beforeSpec);
     expect(store.getState().adaptive.lastRejection?.code).toBe("invalid_template");
-    expect(store.getState().layout.template).toBe("focus");
+    expect(store.getState()).not.toHaveProperty("layout");
   });
 });
