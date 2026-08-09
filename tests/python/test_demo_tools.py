@@ -117,7 +117,7 @@ def test_demo_populate_emits_full_event_sequence_in_order():
     ]
 
 
-def test_first_five_events_are_panel_opens_then_dashboard_layout():
+def test_first_five_events_are_panel_opens_then_native_compose():
     tctx, bus, _ = _make_context(mock=True)
 
     _run(tctx)
@@ -133,9 +133,18 @@ def test_first_five_events_are_panel_opens_then_dashboard_layout():
         PanelType.TASKS,
     ]
     layout = ui[4].command
-    assert layout.action == "layout.apply"
-    assert layout.template == "dashboard"
-    assert layout.primary_panel == PanelType.BROWSER
+    # C5: the demo speaks the native adaptive vocabulary — no dashboard
+    # template, no dock slot (media is shell-owned persistent).
+    assert layout.action == "layout.compose"
+    assert layout.template == "triple"
+    assert layout.proportion.value == "wide"
+    assert [
+        (a.surface_id, a.role.value, a.slot) for a in layout.assignments
+    ] == [
+        ("browser", "primary", "main"),
+        ("conversation", "companion", "side"),
+        ("tasks", "support", "rail"),
+    ]
 
 
 def test_youtube_search_event_carries_query_and_three_results():

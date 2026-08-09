@@ -7,7 +7,7 @@ checks; the module itself is inert otherwise).
 """
 
 from arsvox_contracts import PanelType, PolicyKind
-from arsvox_contracts.commands import LayoutApply, LayoutSlots, PanelOpen
+from arsvox_contracts.commands import LayoutCompose, PanelOpen
 from arsvox_contracts.events import (
     BrowserNavigateEvent,
     DocumentLoadEvent,
@@ -51,16 +51,14 @@ async def demo_populate(tctx: ToolContext) -> str:
     )
     await tctx.emit(
         UiCommandEvent(
-            command=LayoutApply(
-                template="dashboard",
-                primary_panel=PanelType.BROWSER,
-                secondary_panel=PanelType.CONVERSATION,
-                slots=LayoutSlots(
-                    main=PanelType.BROWSER,
-                    side=PanelType.CONVERSATION,
-                    rail=PanelType.TASKS,
-                    dock=PanelType.MEDIA,
-                ),
+            command=LayoutCompose(
+                template="triple",
+                assignments=[
+                    {"surface_id": "browser", "role": "primary", "slot": "main"},
+                    {"surface_id": "conversation", "role": "companion", "slot": "side"},
+                    {"surface_id": "tasks", "role": "support", "slot": "rail"},
+                ],
+                proportion="wide",
             )
         )
     )

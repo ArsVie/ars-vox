@@ -13,6 +13,12 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, model_validator
 
+from arsvox_contracts.adaptive import (
+    AdaptiveTemplate,
+    LayoutAssignment,
+    LayoutSpec,
+    Proportion,
+)
 from arsvox_contracts.enums import LayoutTemplate, MediaState, NotificationKind, PanelType
 
 
@@ -49,6 +55,34 @@ class LayoutApply(BaseModel):
     def _slots_main_matches_primary(self) -> "LayoutApply":
         if self.slots is not None and self.slots.main != self.primary_panel:
             raise ValueError("slots.main must equal primary_panel when both are present")
+        return self
+
+
+class LayoutCompose(BaseModel):
+    """Native adaptive layout composition (GATE-3.5 C5, A3).
+
+    Carries the frozen LayoutSpec semantics — template, surface-role
+    assignments, optional proportion. NO geometry: no pixels, CSS, or
+    coordinates anywhere in this shape. Slot names are derived by the
+    emitting tool from roles (primary→main, companion→side, support→rail)
+    and validated here against the frozen adaptive.py invariants.
+    """
+
+    action: Literal["layout.compose"] = "layout.compose"
+    template: AdaptiveTemplate
+    assignments: list[LayoutAssignment] = Field(min_length=1)
+    proportion: Proportion | None = None
+
+    @model_validator(mode="after")
+    def _reuse_frozen_layout_invariants(self) -> "LayoutCompose":
+        # Single source of truth: constructing LayoutSpec runs the frozen
+        # adaptive.py gates (exactly-one-primary / equal split, no
+        # duplicate surfaces, assignable roles only, slots match template).
+        LayoutSpec(
+            template=self.template,
+            assignments=self.assignments,
+            proportion=self.proportion,
+        )
         return self
 
 
@@ -159,6 +193,7 @@ class TasksToggle(BaseModel):
 UiCommand = Annotated[
     Union[
         LayoutApply,
+        LayoutCompose,
         PanelOpen,
         PanelClose,
         PanelSetPrimary,

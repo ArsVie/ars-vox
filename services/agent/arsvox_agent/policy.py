@@ -18,7 +18,7 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     "ui.open_panel": PolicyKind.REVERSIBLE,
     "ui.close_panel": PolicyKind.REVERSIBLE,
     "ui.set_primary_panel": PolicyKind.REVERSIBLE,
-    "ui.apply_layout": PolicyKind.REVERSIBLE,
+    "layout.compose": PolicyKind.REVERSIBLE,
     "ui.set_fullscreen": PolicyKind.REVERSIBLE,
     "ui.restore_layout": PolicyKind.REVERSIBLE,
     # media

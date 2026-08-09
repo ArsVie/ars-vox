@@ -40,7 +40,18 @@ def script_client(client, monkeypatch):
 
 
 def test_turn_emits_typed_ui_command(script_client):
-    c = script_client(_scripted("ui_apply_layout", {"template": "split", "primary_panel": "document_editor"}))
+    c = script_client(
+        _scripted(
+            "layout_compose",
+            {
+                "template": "sidecar",
+                "assignments": [
+                    {"surface": "document_editor", "role": "primary"},
+                    {"surface": "conversation", "role": "companion"},
+                ],
+            },
+        )
+    )
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
@@ -61,9 +72,13 @@ def test_turn_emits_typed_ui_command(script_client):
         assert not errors, f"error events received: {errors}"
         commands = [e["command"] for e in events if e["type"] == "ui_command"]
         assert commands, "expected a ui_command event"
-        assert commands[0]["action"] == "layout.apply"
-        assert commands[0]["template"] == "split"
-        assert commands[0]["primary_panel"] == "document_editor"
+        assert commands[0]["action"] == "layout.compose"
+        assert commands[0]["template"] == "sidecar"
+        assignments = commands[0]["assignments"]
+        assert assignments == [
+            {"surface_id": "document_editor", "role": "primary", "slot": "main"},
+            {"surface_id": "conversation", "role": "companion", "slot": "side"},
+        ]
         # the run ends listening (no pending confirmations)
         states = [e for e in events if e["type"] == "state_update"]
         assert states[-1]["voice_state"] == "listening"
@@ -73,16 +88,20 @@ def test_turn_emits_typed_ui_command(script_client):
 
 
 def test_slots_bearing_layout_survives_wire(script_client):
-    """Joint gate (Phase 2, backend half): a slots-bearing ui_apply_layout
-    call emits a layout.apply command with the full slots map over the WS."""
+    """A3: a native layout.compose call emits the layout.compose command
+    with the full derived assignments over the WS (triple template:
+    primary + companion + support)."""
     c = script_client(
         _scripted(
-            "ui_apply_layout",
+            "layout_compose",
             {
-                "template": "reading",
-                "primary_panel": "document_editor",
-                "side": "conversation",
-                "dock": "media",
+                "template": "triple",
+                "assignments": [
+                    {"surface": "document_editor", "role": "primary"},
+                    {"surface": "conversation", "role": "companion"},
+                    {"surface": "tasks", "role": "support"},
+                ],
+                "proportion": "wide",
             },
         )
     )
@@ -101,15 +120,16 @@ def test_slots_bearing_layout_survives_wire(script_client):
         events = ws_collect(client=c, ws=ws, expected_break=_break)
         assert not [e for e in events if e["type"] == "error"], "error events received"
         commands = [e["command"] for e in events if e["type"] == "ui_command"]
-        assert commands and commands[0]["action"] == "layout.apply"
+        assert commands and commands[0]["action"] == "layout.compose"
         cmd = commands[0]
-        assert cmd["template"] == "reading"
-        slots = cmd["slots"]
-        assert slots["main"] == "document_editor"
-        assert slots["side"] == "conversation"
-        assert slots["dock"] == "media"
-        assert slots["rail"] is None
-        assert cmd["primary_panel"] == slots["main"]
+        assert cmd["template"] == "triple"
+        assert cmd["proportion"] == "wide"
+        assignments = cmd["assignments"]
+        assert assignments == [
+            {"surface_id": "document_editor", "role": "primary", "slot": "main"},
+            {"surface_id": "conversation", "role": "companion", "slot": "side"},
+            {"surface_id": "tasks", "role": "support", "slot": "rail"},
+        ]
 
 
 def test_telegram_confirmation_flow(script_client):

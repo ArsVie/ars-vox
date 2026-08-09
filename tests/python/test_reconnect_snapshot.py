@@ -154,12 +154,43 @@ def test_reconnect_recovers_pending_confirmation(script_client):
 
 
 def test_reconnect_snapshot_includes_layout_panels(script_client):
-    c = script_client(
-        _scripted(
-            "ui_apply_layout",
-            {"template": "split", "primary_panel": "document_editor", "side": "conversation"},
-        )
-    )
+    """The model opens panels explicitly (ui.open_panel) and composes the
+    layout (layout.compose) — the service-side panel registry (snapshot
+    source) is fed by panel.open, exactly like the demo flow."""
+    state = {"step": 0}
+
+    def handler(messages, info):
+        from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
+
+        if state["step"] == 0:
+            state["step"] += 1
+            return ModelResponse(
+                parts=[
+                    ToolCallPart(
+                        tool_name="ui_open_panel",
+                        args={"panel_type": "document_editor"},
+                    )
+                ]
+            )
+        if state["step"] == 1:
+            state["step"] += 1
+            return ModelResponse(
+                parts=[
+                    ToolCallPart(
+                        tool_name="layout_compose",
+                        args={
+                            "template": "sidecar",
+                            "assignments": [
+                                {"surface": "document_editor", "role": "primary"},
+                                {"surface": "conversation", "role": "companion"},
+                            ],
+                        },
+                    )
+                ]
+            )
+        return ModelResponse(parts=[TextPart(content="Listo.")])
+
+    c = script_client(FunctionModel(handler))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()

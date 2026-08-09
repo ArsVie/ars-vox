@@ -37,6 +37,7 @@ from arsvox_contracts.client_messages import (
 from arsvox_contracts.commands import (
     AudioPlay,
     LayoutApply,
+    LayoutCompose,
     LayoutRestore,
     LayoutSlots,
     MediaStateChange,
@@ -116,6 +117,7 @@ __all__ = [
     "EventType",
     "LayoutApply",
     "LayoutAssignment",
+    "LayoutCompose",
     "LayoutRestore",
     "LayoutRole",
     "LayoutSlots",

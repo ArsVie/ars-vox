@@ -19,6 +19,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
+from pydantic import BaseModel
+
 from arsvox_contracts import (
     ConfirmationRequestedEvent,
     PolicyKind,
@@ -32,6 +34,25 @@ from arsvox_agent.tools.context import ToolContext
 log = logging.getLogger(__name__)
 
 Handler = Callable[..., Awaitable[str]]
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively convert pydantic model instances to plain JSON-safe
+    values (model_dump) for recording/emission on the wire.
+
+    Tools with nested model parameters (e.g. layout.compose's
+    assignments) receive validated model instances in ``args``; the
+    tool-call store, audit log, and bus events all JSON-serialize args,
+    so the executor normalizes them at the boundary. The handler itself
+    still receives the validated instances.
+    """
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 @dataclass
@@ -82,22 +103,23 @@ class ToolRegistry:
 
     # ------------------------------------------------------------------ #
     async def execute_gated(self, spec: ToolSpec, tctx: ToolContext, args: dict) -> str:
+        safe_args = _json_safe(args)
         tc = tctx.deps.tool_calls
-        decision = tctx.deps.policy.decide(spec.name, args)
+        decision = tctx.deps.policy.decide(spec.name, safe_args)
         if not decision.allowed:
-            await self._emit_tool(tctx, spec, args, "rejected", decision.reason)
+            await self._emit_tool(tctx, spec, safe_args, "rejected", decision.reason)
             tctx.deps.audit.log("policy", "denied", {"tool": spec.name, "reason": decision.reason})
             if tc:
-                tc.record(tctx.session_id, tctx.run_id, spec.name, args, "rejected")
+                tc.record(tctx.session_id, tctx.run_id, spec.name, safe_args, "rejected")
             return f"Acción no permitida: {decision.reason}."
-        await self._emit_tool(tctx, spec, args, "running")
+        await self._emit_tool(tctx, spec, safe_args, "running")
         if decision.requires_approval or spec.approval:
-            title, detail = _approval_text(spec.name, args)
+            title, detail = _approval_text(spec.name, safe_args)
             pending_id = await tctx.deps.confirmations.request(
-                tctx.run_id, spec.name, args, title, detail
+                tctx.run_id, spec.name, safe_args, title, detail
             )
             if tc:
-                tc.record(tctx.session_id, tctx.run_id, spec.name, args, "pending")
+                tc.record(tctx.session_id, tctx.run_id, spec.name, safe_args, "pending")
             return (
                 f"PENDING_APPROVAL:{pending_id} — {title}. "
                 "The user must confirm. End your turn and wait."
@@ -118,23 +140,24 @@ class ToolRegistry:
 
     # ------------------------------------------------------------------ #
     async def _run_handler(self, spec: ToolSpec, tctx: ToolContext, args: dict) -> str:
+        safe_args = _json_safe(args)
         tc = tctx.deps.tool_calls
-        call_id = tc.record(tctx.session_id, tctx.run_id, spec.name, args, "running") if tc else 0
+        call_id = tc.record(tctx.session_id, tctx.run_id, spec.name, safe_args, "running") if tc else 0
         try:
             result = await spec.handler(tctx, **args)
-            await self._emit_tool(tctx, spec, args, "done", result)
+            await self._emit_tool(tctx, spec, safe_args, "done", result)
             if tc:
                 tc.finish(call_id, "done", result)
             return result
         except asyncio.CancelledError:
-            await self._emit_tool(tctx, spec, args, "error", "cancelled")
+            await self._emit_tool(tctx, spec, safe_args, "error", "cancelled")
             if tc:
                 tc.finish(call_id, "cancelled", "cancelled")
             raise
         except Exception as exc:  # noqa: BLE001 — tools must never crash the run
             log.exception("tool %s failed", spec.name)
             tctx.deps.audit.log("tool", "error", {"tool": spec.name, "error": str(exc)})
-            await self._emit_tool(tctx, spec, args, "error", str(exc))
+            await self._emit_tool(tctx, spec, safe_args, "error", str(exc))
             if tc:
                 tc.finish(call_id, "error", str(exc))
             return f"Error ejecutando {spec.name}: {exc}"

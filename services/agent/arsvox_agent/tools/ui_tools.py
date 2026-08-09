@@ -1,12 +1,35 @@
 """Interface tools: panels and layouts. Every tool emits a typed UiCommand
 that the UI validates before applying — the model never controls the
-interface through free text."""
+interface through free text.
 
-from arsvox_contracts import LayoutTemplate, PanelType
+Layout authority (GATE-3.5 C5, A3): the ONLY model-visible layout surface
+is ``layout.compose`` — semantic composition (template + surface-role
+assignments + proportion), never geometry. Slot names are derived from
+roles (primary→main, companion→side, support→rail) and the frozen
+adaptive.py invariants (LayoutSpec + validate_layout_spec) gate every
+emitted spec; invalid specs are rejected deterministically and never
+reach the wire.
+"""
+
+from enum import Enum
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from arsvox_contracts import (
+    AdaptiveTemplate,
+    LayoutAssignment,
+    LayoutSpec,
+    PanelType,
+    PolicyKind,
+    Proportion,
+    SurfaceRole,
+    validate_layout_spec,
+)
 from arsvox_contracts.commands import (
-    LayoutApply,
+    LayoutCompose,
     LayoutRestore,
-    LayoutSlots,
     PanelClose,
     PanelFullscreen,
     PanelOpen,
@@ -14,12 +37,71 @@ from arsvox_contracts.commands import (
 )
 from arsvox_contracts.events import UiCommandEvent
 
+from arsvox_agent.tools import ToolSpec
 from arsvox_agent.tools.context import ToolContext
+
+#: Registered product surfaces (mirror of apps/desktop/src/adaptive/surfaces.ts
+#: PRODUCT_SURFACES, owned by A4). Only these may be composed by the model;
+#: the frontend planner rejects anything else at apply time, so this set and
+#: the frontend registry MUST stay in sync (see test_layout_tools no-news /
+#: vocabulary guard). Persistent surfaces (media bar) are shell-owned and
+#: never assignable through layout.compose.
+REGISTERED_SURFACES: frozenset[str] = frozenset(
+    {"browser", "conversation", "document_editor", "tasks", "media"}
+)
+
+#: Deterministic role → semantic slot mapping (contract: each template
+#: offers exactly one slot per role; slots are implementation vocabulary,
+#: so the model never sees them).
+ROLE_SLOT: dict[SurfaceRole, str] = {
+    SurfaceRole.PRIMARY: "main",
+    SurfaceRole.COMPANION: "side",
+    SurfaceRole.SUPPORT: "rail",
+}
+
+
+class ModelPanelType(str, Enum):
+    """Panel types the model may open — the model-visible vocabulary.
+
+    Same values as the wire PanelType minus the deprecated legacy
+    surface (the browser covers that activity; the model must never see
+    it as a surface). The tool JSON schemas derive from this enum, so
+    that value can never reach the model. Drift guard:
+    tests/python/test_tools_api.py.
+    """
+
+    CONVERSATION = "conversation"
+    BROWSER = "browser"
+    YOUTUBE = "youtube"
+    MEDIA = "media"
+    BOOK_READER = "book_reader"
+    DOCUMENT_EDITOR = "document_editor"
+    NOTES = "notes"
+    TASKS = "tasks"
+    REMINDERS = "reminders"
+    TELEGRAM_PREVIEW = "telegram_preview"
+    SETTINGS = "settings"
+    CONFIRMATION = "confirmation"
+    NOTIFICATION = "notification"
+
+
+class LayoutAssignmentInput(BaseModel):
+    """One surface placed in one semantic role (model-visible shape).
+
+    ``surface`` is a registered surface id (browser, conversation,
+    document_editor, tasks, media). ``role`` is one of the assignable
+    roles — persistent is shell-owned and never assignable. The slot is
+    derived deterministically from the role by the application; the
+    model never sends slots, sizes, pixels, or coordinates.
+    """
+
+    surface: str = Field(min_length=1)
+    role: Literal["primary", "companion", "support"]
 
 
 async def ui_open_panel(
     tctx: ToolContext,
-    panel_type: PanelType,
+    panel_type: ModelPanelType,
     title: str | None = None,
     content_reference: str | None = None,
 ) -> str:
@@ -27,7 +109,9 @@ async def ui_open_panel(
     await tctx.emit(
         UiCommandEvent(
             command=PanelOpen(
-                panel_type=panel_type, title=title, content_reference=content_reference
+                panel_type=PanelType(panel_type.value),
+                title=title,
+                content_reference=content_reference,
             )
         )
     )
@@ -36,7 +120,7 @@ async def ui_open_panel(
 
 async def ui_close_panel(
     tctx: ToolContext,
-    panel_type: PanelType | None = None,
+    panel_type: ModelPanelType | None = None,
     panel_id: str | None = None,
 ) -> str:
     target = panel_id or (panel_type.value if panel_type else None)
@@ -44,55 +128,71 @@ async def ui_close_panel(
         return "Especifica qué panel cerrar."
     tctx.deps.panels.remove(target)
     await tctx.emit(
-        UiCommandEvent(command=PanelClose(panel_type=panel_type, panel_id=panel_id))
+        UiCommandEvent(
+            command=PanelClose(
+                panel_type=PanelType(panel_type.value) if panel_type else None,
+                panel_id=panel_id,
+            )
+        )
     )
     return f"Panel {target} cerrado."
 
 
-async def ui_set_primary_panel(tctx: ToolContext, panel_type: PanelType) -> str:
+async def ui_set_primary_panel(tctx: ToolContext, panel_type: ModelPanelType) -> str:
     tctx.deps.panels.touch(panel_type.value)
     await tctx.emit(
-        UiCommandEvent(command=PanelSetPrimary(panel_type=panel_type))
+        UiCommandEvent(
+            command=PanelSetPrimary(panel_type=PanelType(panel_type.value))
+        )
     )
     return f"{panel_type.value} es ahora el panel principal."
 
 
-async def ui_apply_layout(
+async def layout_compose(
     tctx: ToolContext,
-    template: LayoutTemplate,
-    primary_panel: PanelType,
-    secondary_panel: PanelType | None = None,
-    side: PanelType | None = None,
-    rail: PanelType | None = None,
-    dock: PanelType | None = None,
+    template: AdaptiveTemplate,
+    assignments: list[LayoutAssignmentInput],
+    proportion: Proportion | None = None,
 ) -> str:
-    """Apply a fixed layout template.
+    """Compose the adaptive workspace layout (semantic only — never geometry).
 
-    Flat slot kwargs (side/rail/dock) are the 3/4-zone expressiveness —
-    the derived JSON schema comes from the flat typed parameters, so the
-    model never nests objects. ``primary_panel`` is always the ``main``
-    slot. 2-zone calls (focus/split) may keep using primary/secondary.
+    The application computes all geometry from the template, the
+    surface-role assignments, and the optional proportion. Invalid specs
+    (duplicate surfaces, unsupported roles, unregistered surfaces,
+    slots the template does not offer) are rejected deterministically
+    and never reach the UI.
     """
-    tctx.deps.panels.upsert(primary_panel.value)
-    slots: LayoutSlots | None = None
-    if any(v is not None for v in (side, rail, dock)):
-        slots = LayoutSlots(main=primary_panel, side=side, rail=rail, dock=dock)
+    try:
+        spec = LayoutSpec(
+            template=template,
+            assignments=[
+                LayoutAssignment(
+                    surface_id=a.surface,
+                    role=a.role,
+                    slot=ROLE_SLOT[a.role],
+                )
+                for a in assignments
+            ],
+            proportion=proportion,
+        )
+        validate_layout_spec(spec, REGISTERED_SURFACES)
+    except ValueError as exc:
+        return f"Disposición rechazada: {exc}"
     await tctx.emit(
         UiCommandEvent(
-            command=LayoutApply(
+            command=LayoutCompose(
                 template=template,
-                primary_panel=primary_panel,
-                secondary_panel=secondary_panel,
-                slots=slots,
+                assignments=spec.assignments,
+                proportion=proportion,
             )
         )
     )
     return f"Disposición {template.value} aplicada."
 
 
-async def ui_set_fullscreen(tctx: ToolContext, panel_type: PanelType) -> str:
+async def ui_set_fullscreen(tctx: ToolContext, panel_type: ModelPanelType) -> str:
     await tctx.emit(
-        UiCommandEvent(command=PanelFullscreen(panel_type=panel_type))
+        UiCommandEvent(command=PanelFullscreen(panel_type=PanelType(panel_type.value)))
     )
     return f"Pantalla completa en {panel_type.value}."
 
@@ -103,15 +203,11 @@ async def ui_restore_layout(tctx: ToolContext) -> str:
 
 
 # --------------------------------------------------------------------- #
-from arsvox_contracts import PolicyKind
-
-from arsvox_agent.tools import ToolSpec
-
 SPECS = [
     ToolSpec(
         "ui.open_panel",
         "Open a panel. panel_type is one of: conversation, browser, youtube, media,"
-        " book_reader, document_editor, news, notes, tasks, reminders,"
+        " book_reader, document_editor, notes, tasks, reminders,"
         " telegram_preview, settings. title and content_reference are optional context.",
         ui_open_panel,
         PolicyKind.REVERSIBLE,
@@ -129,14 +225,18 @@ SPECS = [
         PolicyKind.REVERSIBLE,
     ),
     ToolSpec(
-        "ui.apply_layout",
-        "Apply one of the four fixed layout templates: focus (single main"
-        " slot), split (main + side), reading (main + side + dock),"
-        " dashboard (rail + main + side + dock). Assign panels to slots"
-        " with the flat side/rail/dock arguments for 3-4 zone layouts;"
-        " primary_panel is always the main slot. Call only when the user's"
-        " primary task changes. Never invent coordinates.",
-        ui_apply_layout,
+        "layout.compose",
+        "Compose the adaptive workspace layout. template is one of: focus (single"
+        " main region), sidecar (primary + companion), stack (primary + stacked"
+        " companion), split (primary + companion; equal split allows TWO primaries),"
+        " triple (primary + companion + support). Assign each surface exactly once"
+        " with a role: primary (the main activity), companion (visible secondary"
+        " activity), support (compact contextual representation). Registered"
+        " surfaces: browser, conversation, document_editor, tasks, media. proportion"
+        " (optional): narrow, balanced, wide. The application computes all geometry"
+        " from these choices — never send coordinates, sizes, or CSS. Call only"
+        " when the user's primary task changes.",
+        layout_compose,
         PolicyKind.REVERSIBLE,
     ),
     ToolSpec(

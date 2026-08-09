@@ -2,8 +2,6 @@
 
 import pytest
 
-from arsvox_contracts import PanelType
-
 from arsvox_agent.tools import ToolRegistry
 from arsvox_agent.tools.register import register_all
 
@@ -12,32 +10,46 @@ def test_registry_registers_all_tools():
     registry = ToolRegistry()
     n = register_all(registry)
     assert n == 44
-    assert registry.get("ui.apply_layout") is not None
+    assert registry.get("layout.compose") is not None
     assert registry.get("shell.exec") is None
 
 
-def test_ui_apply_layout_flat_slot_kwargs():
-    """B3: the tool signature is FLAT side/rail/dock kwargs (pydantic-ai
-    derives the JSON schema from flat typed params; no nested object)."""
+def test_legacy_ui_apply_layout_tool_removed():
+    """C5: the old model-visible layout tool is gone — layout.compose is
+    the ONLY model-visible layout surface (legacy wire layout.apply stays
+    as a UiCommand/client action for the frontend planner, R23)."""
+    registry = ToolRegistry()
+    register_all(registry)
+    assert registry.get("ui.apply_layout") is None
+
+
+def test_layout_compose_signature_is_semantic_only():
+    """A3: the native tool takes template + surface/role assignments +
+    optional proportion — never slots, geometry, or CSS."""
     import inspect
+
+    from arsvox_contracts import AdaptiveTemplate, Proportion
 
     registry = ToolRegistry()
     register_all(registry)
-    spec = registry.get("ui.apply_layout")
+    spec = registry.get("layout.compose")
     params = list(inspect.signature(spec.handler).parameters)
-    assert params == [
-        "tctx",
-        "template",
-        "primary_panel",
-        "secondary_panel",
-        "side",
-        "rail",
-        "dock",
-    ]
-    # secondary stays optional; slots kwargs are PanelType|None
+    assert params == ["tctx", "template", "assignments", "proportion"]
     ann = inspect.signature(spec.handler).parameters
-    assert ann["side"].annotation == PanelType | None
-    assert ann["dock"].annotation == PanelType | None
+    assert ann["template"].annotation is AdaptiveTemplate
+    assert ann["proportion"].annotation == Proportion | None
+
+
+def test_model_visible_panel_vocabulary_excludes_news():
+    """R18: the panel_type enums exposed in the tool schemas never carry
+    the news value (panel-vision: the browser covers news)."""
+    from arsvox_contracts import PanelType
+
+    from arsvox_agent.tools.ui_tools import ModelPanelType
+
+    model_values = {p.value for p in ModelPanelType}
+    wire_values = {p.value for p in PanelType}
+    assert model_values == wire_values - {"news"}
 
 
 def test_unknown_tool_denied_by_gate():
