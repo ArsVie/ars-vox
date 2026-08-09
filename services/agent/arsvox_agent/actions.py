@@ -366,9 +366,12 @@ async def _panel_action(
             )
             return ActionResultEvent(action="panel.open", status="done", detail=panel_type.value)
         case PanelClose():
-            panel_type = command.panel_type
-            panel_id = command.panel_id
-            target = panel_id or (panel_type.value if panel_type else None)
+            # Distinct local names: mypy types each name once per
+            # function scope, and PanelClose's panel_type is optional
+            # while PanelOpen's is not.
+            close_type = command.panel_type
+            close_id = command.panel_id
+            target = close_id or (close_type.value if close_type else None)
             if not target:
                 return ActionResultEvent(
                     action="panel.close", status="failed", detail="panel_type or panel_id required"
@@ -376,14 +379,23 @@ async def _panel_action(
             deps.panels.remove(target)
             deps.audit.log("action", "panel.close", {"target": target})
             await deps.bus.publish(
-                UiCommandEvent(command=PanelClose(panel_type=panel_type, panel_id=panel_id))
+                UiCommandEvent(command=PanelClose(panel_type=close_type, panel_id=close_id))
             )
             return ActionResultEvent(action="panel.close", status="done", detail=target)
         case PanelSetPrimary():
             panel_type = command.panel_type
             deps.panels.touch(panel_type.value)
             deps.audit.log("action", "panel.set_primary", {"panel_type": panel_type.value})
-            await deps.bus.publish(UiCommandEvent(command=PanelSetPrimary(panel_type=panel_type)))
+            # PanelSetPrimary is the one union member whose `action`
+            # literal has no default — pass it explicitly or the
+            # re-emitted command fails pydantic validation (latent bug
+            # surfaced by the W1 narrowing: the old type-ignore made
+            # this call Any, so the missing arg was silent).
+            await deps.bus.publish(
+                UiCommandEvent(
+                    command=PanelSetPrimary(action="panel.set_primary", panel_type=panel_type)
+                )
+            )
             return ActionResultEvent(action="panel.set_primary", status="done", detail=panel_type.value)
         case PanelFullscreen():
             panel_type = command.panel_type
@@ -434,7 +446,7 @@ async def _compose_layout(deps: Deps, command: LayoutCompose) -> ActionResultEve
             assignments=command.assignments,
             proportion=command.proportion,
         )
-        validate_layout_spec(spec, REGISTERED_SURFACES)
+        validate_layout_spec(spec, set(REGISTERED_SURFACES))
     except ValueError as exc:
         return ActionResultEvent(action="layout.compose", status="failed", detail=str(exc))
     deps.audit.log("action", "layout.compose", {"template": command.template.value})
