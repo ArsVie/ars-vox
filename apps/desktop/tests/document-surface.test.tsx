@@ -93,4 +93,32 @@ describe("DocumentPanel adaptive contract (UI-203)", () => {
     expect(html).toContain("document-mode-btn");
     expect(html).toContain("Aprobado el calendario.");
   });
+
+  // GATE-5 (W1-DOC-SHARED): agent edits reach the open editor LIVE.
+  // document.changed routes through the store's content registry into
+  // documentSlice, which replaces title/path/content while preserving
+  // the reader fields — the panel re-renders the new content.
+  it("applies document.changed live — agent edits replace the rendered content", () => {
+    seedMarkdown();
+    appStore.getState().applyEvent({
+      type: "document.changed",
+      document_id: 1,
+      title: "Reunión",
+      path: "/docs/reunion.md",
+      content: "El agente reescribió el documento.",
+      created_at: ts(),
+    });
+
+    const bag = appStore.getState().content.document_editor;
+    // Reader fields survive the replace (one document, one authority).
+    expect(bag?.kind).toBe("md");
+    expect(bag?.chapters).toEqual([]);
+    expect(bag?.content).toBe("El agente reescribió el documento.");
+
+    const html = renderWithRole("primary");
+    expect(html).toContain("El agente reescribió el documento.");
+    expect(html).not.toContain("Aprobado el calendario.");
+    // The preserved kind keeps the editor affordance available.
+    expect(html).toContain("document-mode-btn");
+  });
 });
