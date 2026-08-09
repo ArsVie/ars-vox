@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationInfo, field_validator
 
 _STRICT = ConfigDict(extra="forbid")
 
@@ -38,17 +38,52 @@ class ServerSection(BaseModel):
 class AuthSection(BaseModel):
     """Local service boundary: per-launch bearer token + origin allowlist.
 
-    enabled: master switch (mock/dev tooling may disable explicitly).
+    enabled: master switch (mock/dev tooling may disable explicitly in
+        the config FILE; the runtime PATCH path must NOT persist a
+        disabled state — see _validate_enabled, source="patch").
     token_env: env var holding the per-launch token (set by the Electron
         main process when spawning the service, or by the launcher).
     allowed_origins: CORS + WS handshake origin allowlist. The token is
-        the real gate; origins are a defense-in-depth layer.
+        the real gate; origins are a defense-in-depth layer. Wildcard
+        entries are rejected at the model level (never "*").
     """
 
     model_config = _STRICT
     enabled: bool = True
     token_env: str = "ARSVOX_AUTH_TOKEN"
     allowed_origins: list[str] = ["http://localhost:5173", "null"]
+
+    @field_validator("allowed_origins")
+    @classmethod
+    def _validate_allowed_origins(cls, v: list[str]) -> list[str]:
+        # GATE-3.5 R15: the auth boundary must never be persisted into a
+        # wildcard state. "*" (or any wildcard-bearing origin) would make
+        # the CORSMiddleware reflect any origin and open the WS handshake
+        # to any site. The app's own origins never need wildcards.
+        for origin in v:
+            if "*" in origin:
+                raise ValueError(
+                    "allowed_origins must not contain wildcard entries (got %r)" % origin
+                )
+        if not v:
+            raise ValueError("allowed_origins must not be empty")
+        return v
+
+    @field_validator("enabled")
+    @classmethod
+    def _validate_enabled(cls, v: bool, info: ValidationInfo) -> bool:
+        # GATE-3.5 R15: auth.enabled=false is a legitimate FILE-level dev/
+        # mock state (conftest and the mock harness rely on it), but the
+        # runtime PATCH /config path must reject it: persisting a disabled
+        # auth boundary through the settings API would silently weaken the
+        # launch security on the next boot. The PATCH handler validates
+        # with context={"source": "patch"}.
+        if not v and (info.context or {}).get("source") == "patch":
+            raise ValueError(
+                "auth.enabled cannot be disabled at runtime via PATCH "
+                "(dev/mock only via the config file)"
+            )
+        return v
 
 
 class ModelSection(BaseModel):

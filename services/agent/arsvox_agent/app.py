@@ -289,7 +289,10 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
     @app.patch("/config")
     async def patch_config(payload: dict):
         try:
-            new_config = AppConfig.model_validate(payload)
+            # GATE-3.5 R15: validate with source="patch" so AuthSection can
+            # reject auth.enabled=false (runtime persistence) while the
+            # config FILE may still disable auth for dev/mock.
+            new_config = AppConfig.model_validate(payload, context={"source": "patch"})
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"config inválida: {exc}") from exc
         new_config.anchor(services.config_path.parent)

@@ -204,12 +204,16 @@ describe("H5 outbound buffering across reconnect", () => {
     ]);
   });
 
-  it("passes sends straight through before the first connection", () => {
-    // Legacy startup behavior: no known-disconnected state yet, so the
-    // buffer does not engage (documented in store.ts).
+  it("R11: buffers sends BEFORE the first connection and flushes them on the first connect", () => {
+    // R11 inverts the legacy startup behavior: early user_text spoken or
+    // clicked during service startup must not be lost (no message-loss
+    // window), so the buffer engages from the very first send.
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
     store.getState().sendText("hola");
+    expect(sent).toEqual([]); // queued, not leaked
+
+    store.getState().setConnected(true); // first connect
     expect(sent).toEqual([{ type: "user_text", text: "hola" }]);
   });
 

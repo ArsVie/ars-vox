@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "zustand";
 
-import { authHeaders, TTS_URL } from "../endpoints";
+import { authenticatedFetch, TTS_URL } from "../endpoints";
 import { appStore } from "../store";
 
 /**
@@ -40,10 +40,10 @@ export function TtsPlayer() {
     audio.onerror = advance; // never block the queue on a failed fetch
     void (async () => {
       try {
-        const res = await fetch(TTS_URL, {
+        const res = await authenticatedFetch(TTS_URL, {
           method: "POST",
-          headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({ text }),
+          contentType: "application/json",
         });
         if (!res.ok) throw new Error(`tts ${res.status}`);
         const blob = await res.blob();

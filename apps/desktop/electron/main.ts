@@ -1,50 +1,58 @@
 /**
  * Electron main process: one window, loads the built renderer (or the
  * vite dev server when VITE_DEV_SERVER_URL is set). The Python agent
- * service is started externally (scripts/run_service.*); this shell only
- * talks to it over WebSocket.
+ * service is SPAWNED here (GATE-3.5 A2, R09): one per-launch token is
+ * generated in this process, the service inherits it via ARSVOX_AUTH_TOKEN,
+ * and startup completes only after an authenticated health handshake.
  *
- * Security (GATE-2.5 H4):
- *  - Per-launch bearer token: read from ARSVOX_AUTH_TOKEN (set by the
- *    launcher for both the service and Electron) or generated fresh; the
- *    renderer receives it ONLY through the preload bridge (contextBridge
- *    + synchronous IPC), never through the page.
+ * Security (GATE-2.5 H4 + GATE-3.5 A2):
+ *  - The per-launch token lives ONLY in this process. The renderer never
+ *    holds it (R14): REST calls are main-proxied (arsvox:fetch attaches
+ *    the Bearer header) and the WebSocket is main-owned (R11 buffering).
+ *  - arsvox:fetch only forwards URLs under the agent base URL, so the
+ *    renderer cannot turn main into an open proxy.
+ *  - Startup failures are reported to the renderer as service events
+ *    (R12) and desktop quit terminates the child process tree (R13).
  *  - The defaultSession media permission grant is scoped to the app's own
  *    WebContents (the one window we create).
  *  - Groundwork for the future remote-content WebContentsView (Electron
  *    major upgrade is a separate ticket): a dedicated deny-by-default
  *    partition plus navigation/window-open guards. Not wired to any UI
  *    yet.
+ *
+ * Dev notes:
+ *  - ARSVOX_SERVICE_MODE=external skips spawning (assume a service is
+ *    already running, e.g. the mock started by hand; the token then comes
+ *    from ARSVOX_AUTH_TOKEN so both processes agree).
+ *  - ARSVOX_PYTHON overrides the interpreter; ARSVOX_AGENT_URL overrides
+ *    the service base URL (default http://127.0.0.1:8765).
  */
 
 import { app, BrowserWindow, ipcMain, session, type Session, type WebContents } from "electron";
-import * as crypto from "crypto";
 import * as path from "path";
+
+import {
+  generateAuthToken,
+  launchService,
+  type ServiceHandle,
+  type ServiceStatus,
+} from "./service";
+import { WsClient } from "./wsclient";
 
 // The assistant speaks without any user click (voice-first product):
 // Chrome's autoplay policy must not block TTS playback.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
-const AUTH_TOKEN_ENV = "ARSVOX_AUTH_TOKEN";
+// Per-launch token: generated HERE (R09). An env override remains for the
+// dev/manual-coordination path (external service mode).
+const AUTH_TOKEN = process.env.ARSVOX_AUTH_TOKEN ?? generateAuthToken();
 
-/**
- * Per-launch token shared with the agent service. The launcher should
- * export ARSVOX_AUTH_TOKEN to both processes; if it is unset here we
- * generate a fresh one so the shell is still self-consistent (the
- * service would need the same env to accept it).
- */
-function resolveAuthToken(): string {
-  const fromEnv = process.env[AUTH_TOKEN_ENV];
-  if (fromEnv) return fromEnv;
-  const generated = crypto.randomBytes(32).toString("base64url");
-  console.warn(
-    `[auth] ${AUTH_TOKEN_ENV} not set — generated per-launch token; ` +
-      "start the agent service with the same env var to accept it.",
-  );
-  return generated;
-}
-
-const AUTH_TOKEN = resolveAuthToken();
+const AGENT_BASE_URL = (process.env.ARSVOX_AGENT_URL ?? "http://127.0.0.1:8765").replace(
+  /\/+$/,
+  "",
+);
+const WS_ENDPOINT = `${AGENT_BASE_URL.replace(/^http/, "ws")}/ws`;
+const SERVICE_MODE = process.env.ARSVOX_SERVICE_MODE === "external" ? "external" : "auto";
 
 // WebContents we own (the app window) — the media grant applies only to
 // these; anything else is denied by default.
@@ -110,6 +118,165 @@ function attachNavigationGuard(wc: WebContents, allowlist: string[]): void {
   });
 }
 
+// ------------------------------------------------------------- service #
+
+let mainWindow: BrowserWindow | null = null;
+let serviceStatus: ServiceStatus = { state: "starting" };
+
+/**
+ * Main-owned WebSocket to the agent service (R14: the renderer cannot
+ * authenticate a browser WebSocket without holding the token). Incoming
+ * frames are forwarded as structured events; outbound frames arrive via
+ * IPC and are queued here until the socket is open (R11 exactly-once).
+ */
+class ServiceWsBridge {
+  private readonly client: WsClient;
+  private wsOpen = false;
+  private connectRequested = false;
+  private closedByUser = false;
+
+  constructor() {
+    this.client = new WsClient({
+      url: WS_ENDPOINT,
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+      onOpen: () => {
+        this.wsOpen = true;
+        this.forward("arsvox:ws-status", true);
+      },
+      onMessage: (text) => {
+        try {
+          this.forward("arsvox:ws-message", JSON.parse(text) as unknown);
+        } catch {
+          // malformed frame: drop, keep the socket alive
+        }
+      },
+      onClose: () => {
+        const wasOpen = this.wsOpen;
+        this.wsOpen = false;
+        if (wasOpen) this.forward("arsvox:ws-status", false);
+      },
+    });
+  }
+
+  connect(): void {
+    this.connectRequested = true;
+    if (serviceStatus.state === "ready") this.client.connect();
+  }
+
+  close(): void {
+    this.closedByUser = true;
+    this.client.close();
+    if (this.wsOpen) {
+      this.wsOpen = false;
+      this.forward("arsvox:ws-status", false);
+    }
+  }
+
+  send(message: string): void {
+    this.client.send(message);
+  }
+
+  private forward(channel: string, payload: unknown): void {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+const wsBridge = new ServiceWsBridge();
+
+// ------------------------------------------------------------------ ipc #
+
+/** Only our own window may use the privileged channels. */
+function isTrustedSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
+  return isAppWebContents(event.sender);
+}
+
+function setupIpc(): void {
+  ipcMain.handle("arsvox:service-status", (event) => {
+    if (!isTrustedSender(event)) throw new Error("unauthorized");
+    return serviceStatus;
+  });
+
+  ipcMain.handle(
+    "arsvox:fetch",
+    async (event, request: { url?: unknown; method?: unknown; headers?: unknown; body?: unknown; contentType?: unknown; filename?: unknown }) => {
+      if (!isTrustedSender(event)) throw new Error("unauthorized");
+      const url = typeof request?.url === "string" ? request.url : "";
+      // The renderer may only reach the agent service itself — never an
+      // arbitrary host (no open proxy).
+      if (!url.startsWith(`${AGENT_BASE_URL}/`)) {
+        throw new Error(`refused: url outside agent base ${AGENT_BASE_URL}`);
+      }
+      const method = typeof request?.method === "string" ? request.method : "GET";
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${AUTH_TOKEN}`,
+      };
+      if (typeof request?.contentType === "string" && request.contentType) {
+        headers["content-type"] = request.contentType;
+      }
+      // Merge caller headers (never allowing a caller-supplied
+      // Authorization to override ours).
+      if (request?.headers && typeof request.headers === "object") {
+        for (const [key, value] of Object.entries(request.headers as Record<string, string>)) {
+          if (key.toLowerCase() === "authorization") continue;
+          if (typeof value === "string") headers[key] = value;
+        }
+      }
+
+      let body: BodyInit | undefined;
+      if (typeof request?.filename === "string" && request.filename) {
+        // STT upload: FastAPI expects multipart/form-data for UploadFile.
+        const form = new FormData();
+        const bytes =
+          request.body instanceof ArrayBuffer
+            ? Buffer.from(request.body)
+            : typeof request.body === "string"
+              ? Buffer.from(request.body, "utf8")
+              : Buffer.alloc(0);
+        form.append(
+          "file",
+          new Blob([bytes], {
+            type: typeof request?.contentType === "string" ? request.contentType : "audio/webm",
+          }),
+          request.filename,
+        );
+        body = form;
+      } else if (request?.body instanceof ArrayBuffer) {
+        body = Buffer.from(request.body);
+      } else if (typeof request?.body === "string") {
+        body = request.body;
+      }
+
+      const res = await fetch(url, { method, headers, body });
+      const buf = Buffer.from(await res.arrayBuffer());
+      return {
+        ok: res.ok,
+        status: res.status,
+        contentType: res.headers.get("content-type") ?? "",
+        body: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer,
+      };
+    },
+  );
+
+  ipcMain.on("arsvox:ws-connect", (event) => {
+    if (!isTrustedSender(event)) return;
+    wsBridge.connect();
+  });
+
+  ipcMain.on("arsvox:ws-close", (event) => {
+    if (!isTrustedSender(event)) return;
+    wsBridge.close();
+  });
+
+  ipcMain.on("arsvox:ws-send", (event, message: unknown) => {
+    if (!isTrustedSender(event)) return;
+    if (typeof message !== "string") return;
+    wsBridge.send(message);
+  });
+}
+
+// --------------------------------------------------------------- app #
+
 app.whenReady().then(() => {
   // Voice-first product: the mic must be usable without fiddling with
   // site permissions — but ONLY in our own window. Any other WebContents
@@ -126,8 +293,27 @@ app.whenReady().then(() => {
   const remoteSession = createRemoteContentSession();
   void remoteSession; // consumed by the future WebContentsView
 
-  ipcMain.on("arsvox:get-token", (event) => {
-    event.returnValue = AUTH_TOKEN;
+  setupIpc();
+  createWindow();
+
+  // R09: spawn the service and complete the authenticated handshake.
+  // The WS bridge connects once the service reports ready. The handle is
+  // registered on the module-level variable so before-quit can terminate
+  // the child (R13).
+  serviceHandle = launchService({
+    token: AUTH_TOKEN,
+    agentBaseUrl: AGENT_BASE_URL,
+    serviceMode: SERVICE_MODE,
+    onStatus: (status) => {
+      serviceStatus = status;
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send("arsvox:service-event", status);
+      if (status.state === "ready") {
+        wsBridge.connect();
+      } else if (status.state === "failed" || status.state === "stopped") {
+        wsBridge.close();
+      }
+    },
   });
 });
 
@@ -146,10 +332,14 @@ function createWindow(): void {
     },
   });
   win.setMenuBarVisibility(false);
+  mainWindow = win;
   appWebContents.add(win.webContents);
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event, url) => {
     if (!isAllowedAppNavigation(url)) event.preventDefault();
+  });
+  win.on("closed", () => {
+    if (mainWindow === win) mainWindow = null;
   });
 
   if (DEV_URL) {
@@ -159,10 +349,17 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+// R13: desktop exit terminates the child service process tree. The quit
+// is deferred until the child is confirmed gone.
+let serviceHandle: ServiceHandle | null = null;
+let quitting = false;
+
+app.on("before-quit", (event) => {
+  if (quitting || !serviceHandle) return;
+  event.preventDefault();
+  quitting = true;
+  void serviceHandle.terminate().finally(() => {
+    app.quit();
   });
 });
 

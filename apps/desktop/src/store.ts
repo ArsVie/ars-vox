@@ -224,6 +224,9 @@ export interface AppState {
 
   send: SendFn;
   setConnected: (connected: boolean) => void;
+  /** GATE-3.5 A2/R12: surface service-lifecycle failures (main-proxied
+   *  service events) through the same error banner as wire errors. */
+  setError: (error: ErrorInfo | null) => void;
   setReducedMotion: (value: boolean) => void;
   setViewport: (viewport: Viewport) => void;
 
@@ -394,14 +397,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
     /** True once any server layout command has been applied; guards the
      *  config-driven default from clobbering later user state on reconnect. */
     let layoutApplied = false;
-    // H5 reconnect: outbound buffering. The raw transport send is rebound
-    // by bindTransport (the singleton); per-store instances keep the send
-    // passed to createAppStore. While the store is in a known-disconnected
-    // state (connected before, now not), outgoing messages are queued and
-    // flushed in order on the next connect — the WebSocket client's send()
-    // silently drops frames when the socket is not OPEN, which is exactly
-    // the loss this buffer prevents. Before the FIRST connection sends
-    // pass straight through (legacy startup behavior, tiny window).
+    // H5 reconnect + GATE-3.5 R11: outbound buffering. The raw transport
+    // send is rebound by bindTransport (the singleton); per-store
+    // instances keep the send passed to createAppStore. While the store
+    // is disconnected — including BEFORE the first connection (R11: early
+    // user_text spoken/clicked during service startup must not be lost) —
+    // outgoing messages are queued and flushed in order on the next
+    // connect. The WebSocket client's send() silently drops frames when
+    // the socket is not OPEN, which is exactly the loss this buffer
+    // prevents; in Electron mode the main-process WS queue backs it up
+    // (exactly-once delivery).
     let rawSend: SendFn = send;
     let hasConnected = false;
     const outbox: unknown[] = [];
@@ -410,7 +415,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       rawSend = next;
     };
     const transportSend = (message: unknown): void => {
-      if (hasConnected && !get().connected) {
+      if (!get().connected) {
         outbox.push(message);
         if (outbox.length > OUTBOX_CAP) outbox.shift();
         return;
@@ -1147,6 +1152,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         );
       },
       dismissError: () => set({ error: null }),
+      setError: (error) => set({ error }),
 
       applyUiCommand,
       applyAdaptiveSpec,
