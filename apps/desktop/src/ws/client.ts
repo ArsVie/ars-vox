@@ -13,14 +13,22 @@
  *    URL query (or none when the mock has auth disabled). Auto-reconnects
  *    with backoff.
  *
+ * GATE-3.5 W3-TRANSPORT: the transport owns the ONE outbox. In direct
+ * mode this client queues frames while the socket is not OPEN (flushed
+ * in order on open — R11 exactly-once); in bridge mode the main-process
+ * queue (electron/wsclient.ts) backs sends. The reconnect backoff policy
+ * is the shared module electron/backoff.ts, imported by both transports.
+ *
  * Events are dispatched to the app store; outbound messages go through
  * the injected send function.
  */
 
 import type { ServerEvent } from "../contracts";
 import { hasBridge, WS_URL, wsUrl } from "../endpoints";
+import { ReconnectBackoff, RECONNECT_BASE_MS } from "../../electron/backoff";
+import { isServerEventShape } from "./validate";
 
-const DEFAULT_RECONNECT_MS = 2000;
+const OUTBOX_CAP = 200;
 
 export interface WsClientOptions {
   url?: string;
@@ -31,22 +39,29 @@ export interface WsClientOptions {
 
 export class WsClient {
   private readonly url: string;
-  private readonly reconnectMs: number;
   private readonly onEvent: (event: ServerEvent) => void;
   private readonly onStatus?: (connected: boolean) => void;
+  private readonly backoff: ReconnectBackoff;
 
   private ws: WebSocket | null = null;
-  private timer: number | null = null;
   private closedByUser = false;
   private readonly bridgeMode: boolean;
   private unsubscribe: (() => void)[] = [];
+  /** W3-TRANSPORT: the single outbox (direct mode) — see send(). */
+  private outbox: string[] = [];
 
   constructor(options: WsClientOptions) {
     this.bridgeMode = hasBridge();
     this.url = options.url ?? (this.bridgeMode ? "" : wsUrl());
-    this.reconnectMs = options.reconnectMs ?? DEFAULT_RECONNECT_MS;
     this.onEvent = options.onEvent;
     this.onStatus = options.onStatus;
+    this.backoff = new ReconnectBackoff(
+      {
+        setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+        clearTimeout: (id) => window.clearTimeout(id as number),
+      },
+      options.reconnectMs ?? RECONNECT_BASE_MS,
+    );
   }
 
   connect(): void {
@@ -60,12 +75,20 @@ export class WsClient {
 
   send(message: unknown): void {
     if (this.bridgeMode) {
+      // The main-process queue (electron/wsclient.ts) is the outbox here.
       window.arsvox?.wsSend(JSON.stringify(message));
       return;
     }
+    const text = JSON.stringify(message);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      this.ws.send(text);
+      return;
     }
+    // W3-TRANSPORT: queue while the socket is not OPEN so pre-connect and
+    // reconnect sends are never dropped (R11); flushed in order on open.
+    // ONE buffer — the store no longer double-buffers (W3 carve-out).
+    this.outbox.push(text);
+    if (this.outbox.length > OUTBOX_CAP) this.outbox.shift();
   }
 
   close(): void {
@@ -76,10 +99,8 @@ export class WsClient {
       window.arsvox?.wsClose();
       return;
     }
-    if (this.timer !== null) {
-      window.clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.backoff.cancel();
+    this.outbox = [];
     this.ws?.close();
     this.ws = null;
   }
@@ -91,10 +112,16 @@ export class WsClient {
     if (!bridge) return;
     this.unsubscribe = [
       bridge.onWsMessage((event) => {
+        // W3-TRANSPORT: validate the wire shape before the cast — a
+        // malformed frame is dropped with a warning, never trusted.
+        if (!isServerEventShape(event)) {
+          console.warn("[ws] dropping malformed inbound frame (bridge):", event);
+          return;
+        }
         try {
-          this.onEvent(event as ServerEvent);
+          this.onEvent(event);
         } catch {
-          // malformed frame: ignore, keep the socket alive
+          // handler error: keep the socket alive
         }
       }),
       bridge.onWsStatus((connected) => {
@@ -118,14 +145,32 @@ export class WsClient {
     this.ws = ws;
 
     ws.onopen = () => {
+      // A successful connection restarts the shared backoff curve and
+      // flushes anything queued while the socket was down (R11).
+      this.backoff.reset();
+      this.flushOutbox();
       this.onStatus?.(true);
     };
     ws.onmessage = (raw) => {
+      let event: unknown;
       try {
-        const event = JSON.parse(String(raw.data)) as ServerEvent;
+        event = JSON.parse(String(raw.data));
+      } catch {
+        // W3-TRANSPORT: unparsable frame — drop with a warning, never
+        // trust it.
+        console.warn("[ws] dropping malformed inbound frame (unparsable):", raw.data);
+        return;
+      }
+      // W3-TRANSPORT: discriminator check on the wire shape before the
+      // cast (ws/client.ts:125 bare cast removed).
+      if (!isServerEventShape(event)) {
+        console.warn("[ws] dropping malformed inbound frame (bad shape):", event);
+        return;
+      }
+      try {
         this.onEvent(event);
       } catch {
-        // malformed frame: ignore, keep the socket alive
+        // handler error: keep the socket alive
       }
     };
     ws.onclose = () => {
@@ -159,10 +204,7 @@ export class WsClient {
       this.connectBridge();
       return;
     }
-    if (this.timer !== null) {
-      window.clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.backoff.cancel();
     const current = this.ws;
     if (current) {
       // Closing fires onclose, which would schedule a backoff reconnect —
@@ -179,10 +221,15 @@ export class WsClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.closedByUser || this.timer !== null) return;
-    this.timer = window.setTimeout(() => {
-      this.timer = null;
-      this.open();
-    }, this.reconnectMs);
+    if (this.closedByUser) return;
+    // Single-flight scheduling + shared exponential policy (W3-TRANSPORT).
+    this.backoff.schedule(() => this.open());
+  }
+
+  private flushOutbox(): void {
+    const pending = this.outbox.splice(0);
+    for (const text of pending) {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(text);
+    }
   }
 }
