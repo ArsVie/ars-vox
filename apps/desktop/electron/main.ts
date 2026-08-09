@@ -11,15 +11,25 @@
  *    + synchronous IPC), never through the page.
  *  - The defaultSession media permission grant is scoped to the app's own
  *    WebContents (the one window we create).
- *  - Groundwork for the future remote-content WebContentsView (Electron
- *    major upgrade is a separate ticket): a dedicated deny-by-default
- *    partition plus navigation/window-open guards. Not wired to any UI
- *    yet.
+ *  - A8 (GATE-3.5): the hardened remote-content foundation lives in
+ *    ./hardened-view.ts + ./security-policy.ts (R40-R42): isolated
+ *    persistent partition, deny-by-default permissions, navigation
+ *    filter, window-open denial, custom local-doc protocol, IPC sender
+ *    validation. Not wired to any UI yet (Wave 2 browser milestone).
  */
 
-import { app, BrowserWindow, ipcMain, session, type Session, type WebContents } from "electron";
+import { app, BrowserWindow, ipcMain, session, type WebContents } from "electron";
 import * as crypto from "crypto";
 import * as path from "path";
+// ==== A8 integration patch (GATE-3.5 wave 1, R40-R42) — browser/security module ====
+import {
+  createRemoteContentSession,
+  installGlobalWebContentsGuard,
+  isTrustedIpcSender,
+  registerLocalDocProtocol,
+} from "./hardened-view";
+import { DEFAULT_REMOTE_ALLOWLIST } from "./security-policy";
+// ==== end A8 integration patch ====
 
 // The assistant speaks without any user click (voice-first product):
 // Chrome's autoplay policy must not block TTS playback.
@@ -56,6 +66,25 @@ function isAppWebContents(wc: WebContents): boolean {
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 
+// ==== A8 integration patch (GATE-3.5 wave 1, R40) — local-doc roots ====
+// ARSVOX_DOC_ROOTS: path.delimiter-separated absolute dirs. Alias "docs"
+// for the first, "docsN" for the rest. Empty by default -> the
+// arsvox-doc: protocol is registered but serves 403 until Wave 2 wires
+// real roots.
+function localDocRoots(): Record<string, string> {
+  const raw = process.env.ARSVOX_DOC_ROOTS;
+  if (!raw) return {};
+  const roots: Record<string, string> = {};
+  raw
+    .split(path.delimiter)
+    .filter((dir) => dir.trim().length > 0)
+    .forEach((dir, i) => {
+      roots[i === 0 ? "docs" : `docs${i}`] = dir.trim();
+    });
+  return roots;
+}
+// ==== end A8 integration patch ====
+
 /** The app's own page may only navigate within its own origin. */
 function isAllowedAppNavigation(url: string): boolean {
   if (url.startsWith("file:")) return true;
@@ -69,46 +98,17 @@ function isAllowedAppNavigation(url: string): boolean {
   return false;
 }
 
-/** Mirrors configs/app.yaml browser.allowlist (Electron does not read app.yaml). */
-const REMOTE_ALLOWLIST = [
-  "youtube.com",
-  "*.youtube.com",
-  "wikipedia.org",
-  "openstreetmap.org",
-];
-
-function hostMatchesAllowlist(url: string, allowlist: string[]): boolean {
-  let host: string;
-  try {
-    host = new URL(url).hostname;
-  } catch {
-    return false;
-  }
-  return allowlist.some((entry) => {
-    if (entry.startsWith("*.")) return host.endsWith(entry.slice(1));
-    return host === entry || host.endsWith(`.${entry}`);
-  });
-}
+/**
+ * Mirrors configs/app.yaml browser.allowlist (Electron does not read
+ * app.yaml). A8: moved to security-policy.ts as DEFAULT_REMOTE_ALLOWLIST
+ * — the single copy now lives with the browser/security module.
+ */
 
 /**
  * Deny-by-default partition for future remote content (WebContentsView,
  * wave 3+): no permissions, no window.open, navigation only to the
- * browser allowlist.
+ * browser allowlist. A8: implemented in ./hardened-view.ts.
  */
-function createRemoteContentSession(): Session {
-  const ses = session.fromPartition("remote-content", { cache: false });
-  ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-  ses.setPermissionCheckHandler(() => false);
-  return ses;
-}
-
-/** Navigation + window.open guards for any WebContents showing remote content. */
-function attachNavigationGuard(wc: WebContents, allowlist: string[]): void {
-  wc.setWindowOpenHandler(() => ({ action: "deny" }));
-  wc.on("will-navigate", (event, url) => {
-    if (!hostMatchesAllowlist(url, allowlist)) event.preventDefault();
-  });
-}
 
 app.whenReady().then(() => {
   // Voice-first product: the mic must be usable without fiddling with
@@ -121,12 +121,29 @@ app.whenReady().then(() => {
     return permission === "media" && (wc ? isAppWebContents(wc) : false);
   });
 
-  // Groundwork: create the hardened remote-content partition eagerly so
-  // the wave-3 WebContentsView wiring only has to attach to it.
-  const remoteSession = createRemoteContentSession();
+  // ==== A8 integration patch (GATE-3.5 wave 1, R40/R41) ====
+  // Local-document protocol: inert until Wave 2 supplies roots
+  // (ARSVOX_DOC_ROOTS = path.delimiter-separated absolute dirs; alias
+  // "docs" for the first, "docsN" for the rest).
+  registerLocalDocProtocol({ roots: localDocRoots() });
+  // Defense in depth: any WebContents that is not the app window gets the
+  // remote guards (navigation filter + window-open denial).
+  installGlobalWebContentsGuard({ allowlist: DEFAULT_REMOTE_ALLOWLIST, isAppWebContents });
+  // Eagerly create the hardened remote-content partition so the Wave 2
+  // WebContentsView wiring only has to attach to it.
+  const remoteSession = createRemoteContentSession({ allowlist: DEFAULT_REMOTE_ALLOWLIST });
   void remoteSession; // consumed by the future WebContentsView
+  // ==== end A8 integration patch ====
 
+  // R41 (A8): no unvalidated IPC senders. The token is only handed to the
+  // main frame of the app window (A2 owns the token flow; this is the
+  // sender-validation half only).
   ipcMain.on("arsvox:get-token", (event) => {
+    if (!isTrustedIpcSender(event, (wc) => isAppWebContents(wc))) {
+      console.warn("[ipc] arsvox:get-token rejected: untrusted sender");
+      event.returnValue = "";
+      return;
+    }
     event.returnValue = AUTH_TOKEN;
   });
 });

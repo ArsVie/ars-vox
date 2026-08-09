@@ -9,13 +9,12 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
-### g35-a5 (media authority — GATE-3.5 consolidation, Wave 1)
-- timestamp: 2026-08-08 (Wave 1 kickoff)
-- task: Single media authority (R24-R27): one MediaController shared by agent tools (media_tools.py), client actions (actions.py) and player callbacks; real seek (position emitted + iframe seekTo); duration/currentTime synced from the YouTube iframe into the controller (no React-only simulated state); primary<->persistent no-remount preserved.
-- files/dirs: services/agent/arsvox_agent/{media.py (new), actions.py, tools/media_tools.py, tools/demo_tools.py}, apps/desktop/src/{media/controller.ts (new), store.ts, components/MediaDock.tsx}, tests/python/{test_media_controller.py (new), test_media_tools.py, test_client_actions.py}, apps/desktop/tests/{media-controller.test.ts (new), media-wiring.test.tsx}, hey.md
-- boundaries: will NOT touch snapshot.py (A6), layout reducer/adaptive (A4), contracts command types (A7), reconnect tests (A6). CROSS-OWNER note for A6 in handoff.
-- status: resolved (commit 4fea57d — pytest 216/216, vitest 455/455, typecheck+build clean; R24-R27 covered; CROSS-OWNER note for A6 snapshot.py in handoff)
-
+### hermes (GATE-3.5 wave 1 — A8 Electron security / browser foundation spike, 2026-08-08)
+- timestamp: 2026-08-08T21:00:00Z
+- task: R40-R42 — new browser/security module: hardened WebContentsView (deny-by-default permissions, navigation filter, window-open denial, persist:remote-content partition, no privileged preload), custom local-doc protocol, IPC sender validation (R41), Electron upgrade migration note (R42) + YouTube embed origins enumeration
+- files/dirs: `apps/desktop/electron/{security-policy.ts,hardened-view.ts}` (new), `apps/desktop/electron/main.ts` (small A8-marked integration patch incl. get-token sender validation), `apps/desktop/tests/electron-{security-policy,hardened-view}.test.ts` (new), `docs/migration-note-electron-upgrade-2026-08-08.md` (new), `docs/threat-model/browser-and-tools.md` (T3/T9 spike-status note)
+- boundaries: will NOT touch A2's spawn/token flow beyond the marked get-token sender check; no UI (A9); no configs/contracts changes (allowlist youtube-nocookie gap flagged, not edited)
+- status: resolved 2026-08-08 — module shipped (security-policy.ts + hardened-view.ts), 41 new unit tests, full suite 485/485, typecheck + build clean, migration note + threat-model updated; commit on wip/g35-a8-electron-sec
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)

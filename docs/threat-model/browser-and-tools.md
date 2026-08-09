@@ -58,6 +58,19 @@ opens and the model's tool calls are NOT trusted inputs.
   with a curated home URL. NOT enforced today — `browser.allowlist`
   has zero readers and the Electron browser is not shipped yet; the
   web demo renders only same-origin fixture content.
+- SPIKE IMPLEMENTED (GATE-3.5 A8, 2026-08-08): the hardened remote-content
+  foundation is real code — `apps/desktop/electron/security-policy.ts` +
+  `hardened-view.ts` (R40/R41): instantiable `WebContentsView` bound to an
+  isolated persistent partition (`persist:remote-content`), deny-by-default
+  permission handlers, navigation filter (dangerous schemes + local/
+  private-network destinations blocked INDEPENDENTLY of the allowlist),
+  window-open denial, no privileged preload (isolated world, sandbox,
+  contextIsolation), app-only `arsvox-doc:` protocol for local documents
+  (roots empty until Wave 2), and IPC sender validation (`isTrustedIpcSender`
+  applied to `arsvox:get-token`). Unit-tested (41 tests). The browser UI and
+  allowlist enforcement remain PLANNED (Wave 2 B2/B3); the Electron upgrade
+  lands BEFORE arbitrary browsing (R42, migration note:
+  docs/migration-note-electron-upgrade-2026-08-08.md).
 - There is no generic "browser agent" tool; page interaction uses a
   fixed navigation vocabulary (navigate/back/forward/refresh) + media
   controls today — no arbitrary script execution. A richer
@@ -65,8 +78,10 @@ opens and the model's tool calls are NOT trusted inputs.
   with the Electron browser.
 - In Electron, remote content renders in a WebContentsView owned by
   the main process, outside the renderer DOM, with
-  `contextIsolation: true` and `nodeIntegration: false` (planned
-  shape; web demo uses an iframe).
+  `contextIsolation: true` and `nodeIntegration: false`. The hardened
+  view module (GATE-3.5 A8 spike, `apps/desktop/electron/hardened-view.ts`)
+  makes this shape instantiable and tested; the web demo still uses an
+  iframe and the real browser wiring is Wave 2 (B2).
 
 ### T4. Prompt injection via documents / library content
 
@@ -127,10 +142,12 @@ opens and the model's tool calls are NOT trusted inputs.
   disabled so the WS token never lands in request logs; the Electron
   main process generates the token and the trusted renderer receives it
   via preload IPC.
-- Remaining boundary work: the embedded browser (WebContentsView) must
-  have zero path to the agent channel — remote content is never
-  granted the token; allowlist + sandboxing ship before arbitrary
-  remote browsing (docs/STATUS.md Known gaps #2).
+- Remaining boundary work: the embedded browser must have zero path to
+  the agent channel — guaranteed by construction in the A8 hardened-view
+  module (remote pages get no preload, no token, no IPC surface; separate
+  partition; `arsvox-doc:`/file: unreachable from remote content).
+  Allowlist + sandboxing ship before arbitrary remote browsing
+  (docs/STATUS.md Known gaps #2; Wave 2 B2/B3).
 - STATUS: docs/STATUS.md (Security posture) is authoritative.
 
 ## Residual risks (accepted)
