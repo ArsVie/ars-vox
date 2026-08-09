@@ -2,7 +2,7 @@
 type: status
 title: Ars-Vox current state
 description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-09.
-timestamp: 2026-08-09T05:00:00Z
+timestamp: 2026-08-09T23:00:00Z
 ---
 
 # Ars-Vox — current state (2026-08-09)
@@ -49,18 +49,63 @@ confirmation — screenshots 29–33).
   card cleared (server-side in-memory), layout + chat survived, no
   error panel.
 
+## GATE-5 Wave 1 (MERGED 2026-08-09; all six lanes landed, post-merge suites green)
+
+Program: docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
+Wave 1 populated the panels against the frozen wire + store: each lane owns
+its slice content, no lane touched the wire or store except the ONE
+orchestrator-approved routing case (document.changed). Two lanes went
+through takeover after connection losses; the conformance lane's checklist
++ harness are in (its summary timed out, work verified by orchestrator).
+
+- W1-MEMORY: memory.remember/memory.recall RETIRED (exact-key k/v against
+  PreferenceStore was a second memory authority). New memory.search runs
+  the real arsvox_memory search_all (FTS5 over notes + turns) through
+  Deps.db — previously unused; emits memory.search_results; honest empty
+  results. Preferences surface as context line + preferences.set. system.md
+  rule 9 added; registry count 44 → 46 (memory_tools, local_media_tools).
+- W1-TASKS: double-publish VERIFIED already fixed (one NotificationEvent
+  per reminder); new pins: fire → tasks.update + notification region, fired
+  one-shot leaves the list, snooze/dismiss paths, cadence injection into
+  build_context (tests only — production was already correct).
+- W1-YOUTUBE: FIXTURE_RESULTS deleted; real search behind a provider seam
+  (search/youtube.py; hosted key can replace the default without touching
+  callers). Result cards selectable by click (media.select_result, full
+  frozen payload) and by voice (agent play). Zero results = honest message.
+- W1-MEDIA-LOCAL: local library discovery (search/local_library.py,
+  local_media_tools: media.search_local / media.play_local) feeding the
+  SAME unified player/controller/UI as YouTube; zero `source === 'local'`
+  branches in the UI layer; HTML5 element driven by the one MediaController
+  (localPlayer.ts mirror of useYoutubePlayer).
+- W1-DOC-SHARED: document_insert_text + document_save now emit
+  document.changed (full content); store routing case added (approved
+  one-line change, df89cee); documentSlice reduces it preserving reader
+  fields; bus-spy pytest + panel vitest pin the live reconcile.
+- W1-CONFORMANCE: docs/vision-conformance.md (one row per panel-vision
+  line, PASS/PENDING/NOT_YET with evidence paths) + tests/e2e harness
+  (deterministic wire probes, scripted model, no live model needed);
+  consistency gate ties checklist rows to probe verdicts.
+- Orchestrator reconciliation at merge: registry pins 44→46, policy
+  TOOL_KINDS + media.search_local/play_local, system.md word-safe prompt
+  (preferences.set contains the substring 'reference' — drift guard now
+  word-boundary), launch-integration timeouts 60s/120s → 180s/200s (cold
+  /mnt/c imports measure 2m10s), store.test.ts youtube pin → unified card.
+
 ## Target hardware
 
 - Physical Windows 11 desktop (mic + speakers), WSL for dev, Windows
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-09, post GATE-5 W0 merge)
+## Test gates (last full run, 2026-08-09, post GATE-5 W1 merge)
 
-- vitest: 595 passed (49 files) — apps/desktop (post-W0: state slices
-  suite +23, directive pins, reconnect reconciliation — the 3 R31
-  history-clear tests rewritten to pin the retired auto-restore)
-- pytest: 322 passed — tests/python
+- vitest: 614 passed + 5 skipped (50 files) — apps/desktop (post-W1:
+  youtube cards, local player, document.changed, tasks/notifications,
+  unified media card in store pins)
+- pytest: 366 passed — tests/python (post-W1: +memory FTS, +local media,
+  +doc-shared emit, +tasks fire pins; registry 46)
+- e2e harness (tests/e2e): 12 passed + consistency gate (probes boot the
+  real app with a scripted model — deterministic, no live model)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
 - OKF docs validator: 23 concepts validated (2026-08-09)
