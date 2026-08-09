@@ -183,6 +183,7 @@ class AppServices:
             self.notifications,
             self.bus,
             self.confirmations,
+            tasks=self.tasks,
         )
         self.pipeline = VoicePipeline(
             config,
