@@ -51,11 +51,12 @@ function findPython(): string | null {
 
   for (const candidate of candidates) {
     if (candidate.includes(path.sep) && !fs.existsSync(candidate)) continue;
-    // Cold imports on /mnt/c (WSL) take ~35s — give the probe room.
+    // Cold imports on /mnt/c (WSL) take 2+ minutes measured — give the
+    // probe room (120s was a flake source).
     const probe = spawnSync(
       candidate,
       ["-c", "import arsvox_agent, arsvox_contracts"],
-      { env: { ...process.env, PYTHONPATH }, stdio: "ignore", timeout: 120_000 },
+      { env: { ...process.env, PYTHONPATH }, stdio: "ignore", timeout: 200_000 },
     );
     if (probe.status === 0) return candidate;
   }
