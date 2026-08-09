@@ -11,19 +11,56 @@ HANDOFF.md is the roadmap (guidance, not history); ADRs are historical
 decisions; audits are snapshots. If any other doc contradicts this file,
 this file wins.
 
+## GATE-5 Wave 0 (MERGED + PACKAGED-VERIFIED 2026-08-09; wire and store.ts FROZEN)
+
+Program: docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
+Wave 0 landed the spine: the full wire surface and the store
+decomposition, in one owner each, then froze both. All three lanes merged
+with ancestry verified; post-merge suites green; packaged GATE-0 smoke
+passed (cold start / compose / reconnect / resize / restart with pending
+confirmation — screenshots 29–33).
+
+- W0-CONTRACT (8b1c6b9): media.search_results + media.select_result,
+  local-source media members, document.changed, browser.dom_action +
+  real can_go_back/can_go_forward in state shape, memory.search_results
+  (semantic/FTS recall, distinct from memory.recall); actions.py union
+  narrowed; schemas regenerated + diffed. Handlers are honest no-ops
+  ("not implemented"), never fake success. THE WIRE IS FROZEN.
+- W0-SLICE (f782d7f): store.ts 1,485 → 971 lines (−36.2% of the 1,420
+  baseline — the one-third gate signal, MET this time). Content bags
+  carved into state/ slices with ONE registration seam
+  (contentRegistry.register); store keeps the choke points
+  (applyAdaptiveSpec / applyEvent / dispatchCommand / applyUiCommand).
+  History auto-restore DELETED: fresh start = central-mic hero; snapshot
+  history stashed for an explicit resume; in-memory chat survives
+  same-tab reconnects (R31 chat-clear retired; reconnect tests
+  reconciled at merge, 8e4a509). STORE.TS IS FROZEN (single owner:
+  W0-SLICE).
+- W0-DIRECTIVE (26b2f9b): template selector deleted outright (dev
+  included — DEMO_TOGGLE_ENABLED gone), ARS·VOX wordmark = home button
+  (layout.restore → panel.open → panel.set_primary, C1 seam only),
+  close X on every panel header, confirmation as a card INSIDE the chat
+  (overlay wrapper retired), minimal state pill in the shell chrome.
+- GATE-0 packaged (real model, mock off): cold start → hero only;
+  compose split (document_editor + media, 640x800 each); resize
+  1280→1500 → slots 640→750 (geometry through the choke); service kill
+  → 20s zero WS errors → restart → recovery turn (Spanish, TTS spoke,
+  voice machine cycled); restart with telegram confirmation pending →
+  card cleared (server-side in-memory), layout + chat survived, no
+  error panel.
+
 ## Target hardware
 
 - Physical Windows 11 desktop (mic + speakers), WSL for dev, Windows
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-09 ~14:20 CST, post GATE-4 remediation close)
+## Test gates (last full run, 2026-08-09, post GATE-5 W0 merge)
 
-- vitest: 567 passed (48 files) — apps/desktop (post-remediation:
-  transport outbox/validation/backoff, media single-authority, browser
-  dead-control removal, layout restore regression, GATE-2 reconciliation)
-- pytest: 322 passed — tests/python (remediation: F1 confirm-settle,
-  F2 tasks-update emission, layout tools two-primary derivation)
+- vitest: 595 passed (49 files) — apps/desktop (post-W0: state slices
+  suite +23, directive pins, reconnect reconciliation — the 3 R31
+  history-clear tests rewritten to pin the retired auto-restore)
+- pytest: 322 passed — tests/python
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
 - OKF docs validator: 23 concepts validated (2026-08-09)
@@ -316,6 +353,7 @@ skill reference gate35-merge-lessons-2026-08.md.
    interaction problems are observed.
 5. (implemented) client-side sequence-gap detection fires resyncHook →
    WsClient.forceReconnect on sequence jumps.
-6. (pending, user directive) fresh start = central-mic hero ONLY; snapshot
-   history stashed for explicit resume, never auto-restored.
-7. (pending, user directive) no template selector anywhere, dev included.
+6. (implemented, GATE-5 W0) fresh start = central-mic hero ONLY; snapshot
+   history stashed for explicit resume, never auto-restored. (Explicit
+   resume consumer is a future conversation-seam lane.)
+7. (implemented, GATE-5 W0) no template selector anywhere, dev included.

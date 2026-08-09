@@ -5,6 +5,29 @@ Current UI screenshots, captured 2026-08-07/09 from the live app
 (owner, 2026-08-08): refresh this folder after EVERY redesign wave — new
 wave shots get the next free numbers, and the wave list below stays current.
 
+## GATE-5 Wave 0 (merged 2026-08-09, packaged build)
+
+Post-W0 state: template selector DELETED (dev included), ARS·VOX wordmark is
+the home button, close X on every panel header, confirmation as a card
+inside the chat, minimal state pill in the shell chrome. Fresh start =
+central-mic hero; snapshot history NEVER auto-restored (directive
+implemented). Captured from the packaged Electron app over CDP with the
+real model (deepseek-v4-flash, mock off).
+
+* [Cold start / hero](29-gate5-cold-start.png) — central-mic hero
+  ("Toca para hablar"), minimal chrome pill (ARS·VOX + En espera +
+  DETENER), no template selector, no error panel
+* [Compose — split](30-gate5-compose-split.png) — real model composed
+  split: document_editor + media, two 640x800 slots
+* [Confirmation in chat](31-gate5-confirm-in-chat.png) — telegram
+  confirmation card rendered INSIDE the conversation panel, voice state
+  "Esperando confirmación"
+* [After service restart](32-gate5-after-restart.png) — layout +
+  in-memory chat survived the restart; confirmation correctly cleared
+  (server-side in-memory pending)
+* [Final state](33-gate5-final-state.png) — split layout held, no error
+  panel, no stale confirmation
+
 ## GATE-3.5 consolidation (closed 2026-08-09)
 
 Post-consolidation state: R43 status bar (brand + ONE status pill
