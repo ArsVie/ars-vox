@@ -280,7 +280,11 @@ export interface AppState {
   /** User-initiated command: optimistic local effect + send to the server. */
   dispatchCommand: (command: ClientCommand) => void;
 
-  applyUiCommand: (command: UiCommand) => void;
+  /** Server command application. C5/A3 (GATE-3.5): accepts the NORMALIZED
+   *  command — callers coming from the wire MUST pass through
+   *  normalizeUiCommand first (applyEvent's ui_command case is the single
+   *  boundary site; surface_id → surfaceId happens exactly there). */
+  applyUiCommand: (command: NormalizedUiCommand) => void;
 
   /**
    * GATE-3.5 (R26): the REAL player's callbacks (YouTube iframe
