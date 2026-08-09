@@ -136,12 +136,14 @@ def _client_action_members():
     return sorted(actions)
 
 
-# The landed narrowed human-initiated union (A7/C1), exactly the 16
+# The landed narrowed human-initiated union (A7/C1), exactly the 17
 # members with authoritative handlers in arsvox_agent/actions.py (H1).
-# Server-originated commands (tts.speak, audio.play, notification.show,
-# media.state) are correctly ABSENT — they travel server->client, never
-# as client frames. The test's value is the exact-set drift guard: it
-# fails if the union gains or loses a member.
+# GATE-5 (W0-CONTRACT) added media.select_result (the user picked a
+# result card — unified media). Server-originated commands (tts.speak,
+# audio.play, notification.show, media.state, memory.search) are
+# correctly ABSENT — they travel server->client, never as client frames.
+# The test's value is the exact-set drift guard: it fails if the union
+# gains or loses a member.
 HANDLED_ACTIONS = {
     "browser.back",
     "browser.forward",
@@ -152,6 +154,7 @@ HANDLED_ACTIONS = {
     "layout.restore",
     "media.play_pause",
     "media.seek",
+    "media.select_result",
     "panel.close",
     "panel.fullscreen",
     "panel.open",
@@ -177,7 +180,7 @@ def test_r39_every_client_action_has_authoritative_handler():
         f"handled actions no longer declared in the ClientAction union: {extra} "
         "(R39/C1 — the landed union is exactly the handled set)"
     )
-    assert len(members) == 16, f"landed ClientAction union has 16 members (got {len(members)})"
+    assert len(members) == 17, f"landed ClientAction union has 17 members (got {len(members)})"
 
 
 def test_r39_tts_speak_is_not_a_client_action():

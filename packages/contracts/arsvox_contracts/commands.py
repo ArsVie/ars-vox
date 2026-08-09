@@ -19,7 +19,14 @@ from arsvox_contracts.adaptive import (
     LayoutSpec,
     Proportion,
 )
-from arsvox_contracts.enums import LayoutTemplate, MediaState, NotificationKind, PanelType
+from arsvox_contracts.enums import (
+    LayoutTemplate,
+    MediaKind,
+    MediaSource,
+    MediaState,
+    NotificationKind,
+    PanelType,
+)
 
 
 def _utcnow() -> datetime:
@@ -190,6 +197,35 @@ class TasksToggle(BaseModel):
     task_id: str
 
 
+# ---------------------------------------------------------------------- #
+# GATE-5 (W0-CONTRACT): unified media + memory surface.
+#
+# media.select_result  — the USER picked one result card (click). Voice
+#   picks go through the agent's play tools; both land in the ONE media
+#   controller, so youtube and local files reach the same player.
+# memory.search       — semantic/FTS recall over the authoritative
+#   memory (W1-MEMORY), DISTINCT from the exact-key memory.recall.
+#   Server-originated: the agent issues it; results come back on
+#   memory.search_results.
+# ---------------------------------------------------------------------- #
+
+
+class MediaSelectResult(BaseModel):
+    action: Literal["media.select_result"] = "media.select_result"
+    result_id: str
+    source: MediaSource
+    kind: MediaKind
+    title: str
+    url: str | None = None
+    local_path: str | None = None
+
+
+class MemorySearch(BaseModel):
+    action: Literal["memory.search"] = "memory.search"
+    query: str
+    limit: int = 10
+
+
 UiCommand = Annotated[
     Union[
         LayoutApply,
@@ -213,6 +249,8 @@ UiCommand = Annotated[
         BrowserRefresh,
         DocumentSave,
         TasksToggle,
+        MediaSelectResult,
+        MemorySearch,
     ],
     Field(discriminator="action"),
 ]

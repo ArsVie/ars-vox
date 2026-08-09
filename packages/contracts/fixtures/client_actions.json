@@ -58,6 +58,17 @@
       "position_s": 42
     }
   },
+  "media.select_result": {
+    "type": "ui_command",
+    "command": {
+      "action": "media.select_result",
+      "result_id": "dQw4w9WgXcQ",
+      "source": "youtube",
+      "kind": "video",
+      "title": "Taller de carpintería para principiantes",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    }
+  },
   "youtube.search": {
     "type": "ui_command",
     "command": {

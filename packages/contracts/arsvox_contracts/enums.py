@@ -119,6 +119,13 @@ class EventType(str, Enum):
     TASKS_UPDATE = "tasks.update"
     MEDIA_STATE = "media.state"
     PONG = "pong"
+    # GATE-5 (W0-CONTRACT): the full program wire surface — unified media
+    # search + selection, agent document edits, browser DOM bridge and
+    # memory recall. Added as honest scaffolding; W1-W3 emit these.
+    MEDIA_SEARCH_RESULTS = "media.search_results"
+    DOCUMENT_CHANGED = "document.changed"
+    BROWSER_DOM_ACTION = "browser.dom_action"
+    MEMORY_SEARCH_RESULTS = "memory.search_results"
     # H5: canonical state snapshot replayed on every WS connect (reconnect
     # recovery). Carries its own session sequence for gap detection.
     STATE_SNAPSHOT = "state_snapshot"

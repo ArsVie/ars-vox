@@ -13,6 +13,9 @@ Backend capabilities implemented here:
                           tool (ToolRegistry gating + real persistence)
   * youtube.search     -> routed through media.search_youtube tool,
                           then a youtube.search event with results
+  * media.select_result (GATE-5) -> the USER picked a result card; the
+                          ONE media controller plays it (youtube or local
+                          — same player), then the media panel opens
   * browser.navigate   -> authoritative browser.navigate event
   * browser.back/forward/refresh -> client-local iframe operations;
                           acknowledged (done) — no backend browser yet
@@ -30,18 +33,25 @@ Backend capabilities implemented here:
   * everything else    -> unsupported (server-originated commands or
                           capabilities that do not exist yet)
 
-Dispatch is an EXHAUSTIVE match over the UiCommand discriminated union
-(GATE-3.5 W1): every union member has a typed case below, so a wire
-action that joins the union without a handler FAILS at type-check time
-(the ``_assert_never`` tail guard) instead of silently falling through
-— the drift class that produced the layout.compose gap.
+Dispatch is an EXHAUSTIVE match over the NARROWED ClientAction
+discriminated union (GATE-3.5 W1 + GATE-5 W0-CONTRACT): the entry point
+declares exactly the client-sendable wire surface (ws.py hands it
+``message.command: ClientAction``), so a wire action that joins the
+client union without a handler FAILS at type-check time (the
+``_assert_never`` tail guard) instead of silently falling through — the
+drift class that produced the layout.compose gap. Server-originated
+UiCommand members (notification.show, media.state, tts.speak,
+audio.play, layout.compose, memory.search) keep typed cases below
+because the direct-call test surface (tests/python/test_client_actions.py,
+test_media_controller.py) pins their verdicts; they can never arrive on
+the client wire today (strict union parse rejects them first).
 """
 
 import json
 import logging
 from typing import Never
 
-from arsvox_contracts import ActionResultEvent, validate_layout_spec
+from arsvox_contracts import ActionResultEvent, ClientAction, validate_layout_spec
 from arsvox_contracts.adaptive import LayoutSpec
 from arsvox_contracts.commands import (
     AudioPlay,
@@ -54,8 +64,10 @@ from arsvox_contracts.commands import (
     LayoutCompose,
     LayoutRestore,
     MediaPlayPause,
+    MediaSelectResult,
     MediaSeek,
     MediaStateChange,
+    MemorySearch,
     NotificationShow,
     PanelClose,
     PanelFullscreen,
@@ -63,11 +75,10 @@ from arsvox_contracts.commands import (
     PanelSetPrimary,
     TasksToggle,
     TtsSpeak,
-    UiCommand,
     YoutubePlay,
     YoutubeSearch,
 )
-from arsvox_contracts.enums import MediaState
+from arsvox_contracts.enums import MediaSource, MediaState, PanelType
 from arsvox_contracts.events import (
     BrowserNavigateEvent,
     ReminderItem,
@@ -112,7 +123,7 @@ def reset_media_state() -> None:
 
 
 async def handle_ui_command(
-    deps: Deps, registry: ToolRegistry, command: UiCommand
+    deps: Deps, registry: ToolRegistry, command: ClientAction
 ) -> ActionResultEvent:
     """Dispatch a parsed client action and return the verdict event.
 
@@ -120,9 +131,14 @@ async def handle_ui_command(
     the bus after the handler returns, so it is always queued AFTER any
     authoritative events the handler emitted (FIFO ordering).
 
-    The match below is exhaustive over the UiCommand union — every
-    member has a typed case (GATE-3.5 W1). A new member without a case
-    fails the ``_assert_never`` tail guard at type-check time.
+    The match below is exhaustive over the NARROWED ClientAction union —
+    every client-sendable member has a typed case (GATE-3.5 W1, GATE-5
+    W0-CONTRACT). A new member without a case fails the ``_assert_never``
+    tail guard at type-check time. Cases for server-originated UiCommand
+    members (notification.show, media.state, tts.speak, audio.play,
+    layout.compose, memory.search) are retained for the direct-call test
+    surface that pins their verdicts; they cannot arrive on the client
+    wire (strict union parse rejects them first).
     """
     action = command.action
     try:
@@ -139,12 +155,20 @@ async def handle_ui_command(
                 return _acknowledge_local(command.action)
             case YoutubePlay():
                 return _acknowledge_local(command.action)
+            case MediaSelectResult():
+                return await _select_media_result(deps, command)
             case AudioPlay() | MediaPlayPause() | MediaSeek():
                 return await _media_action(deps, command)
             case LayoutApply() | PanelOpen() | PanelClose() | PanelSetPrimary() | PanelFullscreen() | LayoutRestore():
                 return await _panel_action(deps, command)
             case LayoutCompose():
                 return await _compose_layout(deps, command)
+            case MemorySearch():
+                # Server-originated (GATE-5 W0-CONTRACT): the agent's
+                # semantic/FTS recall command. W1-MEMORY wires the real
+                # tool behind memory.search_results; until then an
+                # honest not-implemented verdict (never a fake recall).
+                return _unsupported(deps, command.action)
             case NotificationShow() | MediaStateChange() | TtsSpeak():
                 # Server-originated commands (C1): they cannot arrive on
                 # the client wire union today, but they ARE UiCommand
@@ -298,6 +322,53 @@ async def _search_youtube(
     await deps.bus.publish(YoutubeSearchEvent(query=query, results=results))
     return ActionResultEvent(
         action="youtube.search", status="done", detail=f"{len(results)} results"
+    )
+
+
+async def _select_media_result(deps: Deps, command: MediaSelectResult) -> ActionResultEvent:
+    """GATE-5: the USER picked a result card (media.search_results).
+
+    Routes through the ONE media controller (R24) so a youtube video and
+    a local library file reach the SAME player — same controls, same UI.
+    The media panel opens so the unified player is visible. This is the
+    click path; voice picks go through the agent's play tools, which
+    land in the same controller.
+    """
+    if command.source == MediaSource.LOCAL:
+        url = command.local_path or command.url
+        if not url:
+            return ActionResultEvent(
+                action="media.select_result",
+                status="failed",
+                detail="local result needs local_path or url",
+            )
+        await media_controller.play(
+            deps.bus,
+            title=command.title,
+            url=url,
+            source=MediaSource.LOCAL,
+            kind=command.kind,
+        )
+    else:
+        await media_controller.play(
+            deps.bus,
+            title=command.title,
+            url=command.url or f"https://www.youtube.com/watch?v={command.result_id}",
+            video_id=command.result_id,
+            source=MediaSource.YOUTUBE,
+            kind=command.kind,
+        )
+    deps.panels.upsert(PanelType.MEDIA.value, command.title)
+    await deps.bus.publish(
+        UiCommandEvent(command=PanelOpen(panel_type=PanelType.MEDIA, title=command.title))
+    )
+    deps.audit.log(
+        "action",
+        "media.select_result",
+        {"result_id": command.result_id, "source": command.source.value},
+    )
+    return ActionResultEvent(
+        action="media.select_result", status="done", detail=command.title
     )
 
 

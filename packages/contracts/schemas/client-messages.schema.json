@@ -236,6 +236,14 @@
       "title": "LayoutTemplate",
       "type": "string"
     },
+    "MediaKind": {
+      "enum": [
+        "video",
+        "audio"
+      ],
+      "title": "MediaKind",
+      "type": "string"
+    },
     "MediaPlayPause": {
       "properties": {
         "action": {
@@ -266,6 +274,70 @@
       ],
       "title": "MediaSeek",
       "type": "object"
+    },
+    "MediaSelectResult": {
+      "properties": {
+        "action": {
+          "const": "media.select_result",
+          "default": "media.select_result",
+          "title": "Action",
+          "type": "string"
+        },
+        "result_id": {
+          "title": "Result Id",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/MediaSource"
+        },
+        "kind": {
+          "$ref": "#/$defs/MediaKind"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "local_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Path"
+        }
+      },
+      "required": [
+        "result_id",
+        "source",
+        "kind",
+        "title"
+      ],
+      "title": "MediaSelectResult",
+      "type": "object"
+    },
+    "MediaSource": {
+      "enum": [
+        "youtube",
+        "local"
+      ],
+      "title": "MediaSource",
+      "type": "string"
     },
     "PanelClose": {
       "properties": {
@@ -510,6 +582,7 @@
               "layout.restore": "#/$defs/LayoutRestore",
               "media.play_pause": "#/$defs/MediaPlayPause",
               "media.seek": "#/$defs/MediaSeek",
+              "media.select_result": "#/$defs/MediaSelectResult",
               "panel.close": "#/$defs/PanelClose",
               "panel.fullscreen": "#/$defs/PanelFullscreen",
               "panel.open": "#/$defs/PanelOpen",
@@ -544,6 +617,9 @@
             },
             {
               "$ref": "#/$defs/MediaSeek"
+            },
+            {
+              "$ref": "#/$defs/MediaSelectResult"
             },
             {
               "$ref": "#/$defs/YoutubeSearch"

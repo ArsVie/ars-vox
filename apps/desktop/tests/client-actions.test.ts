@@ -49,6 +49,13 @@ const ALL_ACTIONS: ClientCommand[] = [
   { action: "layout.restore" },
   { action: "media.play_pause" },
   { action: "media.seek", position_s: 42 },
+  {
+    action: "media.select_result",
+    result_id: "dQw4w9WgXcQ",
+    source: "youtube",
+    kind: "video",
+    title: "Taller",
+  },
   { action: "youtube.search", query: "carpintería" },
   { action: "youtube.play", video_id: "yt-1", title: "Taller" },
   { action: "browser.navigate", url: "https://example.com/docs" },
