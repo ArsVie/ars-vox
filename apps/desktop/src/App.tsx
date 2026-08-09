@@ -6,7 +6,6 @@ import { TEMPLATE_FIXTURES } from "./adaptive/fixtures";
 import { registerProductSurfaces } from "./adaptive/surfaces";
 import { ConfirmationPanel } from "./components/ConfirmationPanel";
 import { ErrorPanel } from "./components/ErrorPanel";
-import { PanelHost } from "./components/PanelHost";
 import { PersistentRegions, type PersistentSurface } from "./components/PersistentRegions";
 import { StatusBar } from "./components/StatusBar";
 import { TtsPlayer } from "./components/TtsPlayer";
@@ -54,9 +53,9 @@ export default function App() {
 
   const demoSpec = demoTemplate ? TEMPLATE_FIXTURES[demoTemplate] : null;
 
-  // GATE-2: a validated adaptive LayoutSpec (manual via applyAdaptiveSpec —
-  // agent planner is Wave 3) renders through the adaptive stage with REAL
-  // product surfaces; otherwise the legacy PanelHost path stays.
+  // GATE-3.5 (W2-STORE): the adaptive stage is the ONLY layout host — the
+  // legacy PanelHost branch is deleted. The config-driven default lands the
+  // first composition at connect, so the stage renders from boot on.
   const adaptiveSpec = useStore(appStore, (s) => s.adaptive.spec);
   // H7: the role-resolved assignments (fallback ladder output) drive both
   // the geometry and the stage — never the raw spec.
@@ -67,11 +66,9 @@ export default function App() {
 
   // W0 (GATE-3.5): feed the real content-viewport size (px) into the store
   // so the engine can enforce px floors and derive chrome density from
-  // actual geometry. The observer lives on the SHELL div (mounted in BOTH
-  // the legacy PanelHost branch and the adaptive stage branch) — PanelHost
-  // unmounts the moment a composition lands, so an observer there would
-  // freeze the viewport at boot size and adaptive geometry would stop
-  // following window resizes.
+  // actual geometry. The observer lives on the SHELL div (mounted before
+  // the stage's first composition lands) — geometry follows window resizes
+  // from boot, never freezing at the initial size.
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
@@ -111,8 +108,8 @@ export default function App() {
 
   // GATE-1 (2026-08-09): final net under the choke guard — a geometry bug
   // must never white-screen the app. With applyAdaptiveSpec rejecting
-  // unrenderable specs this branch is unreachable; it degrades to the
-  // legacy fallback instead of crashing React.
+  // unrenderable specs this branch is unreachable; it renders no stage
+  // instead of crashing React (the shell chrome stays up).
   const geometry = useMemo(() => {
     const spec = resolvedSpec ?? adaptiveSpec;
     if (!spec) return null;
@@ -124,7 +121,7 @@ export default function App() {
       );
     } catch (error) {
       console.warn(
-        "[adaptive] geometry failed — legacy fallback:",
+        "[adaptive] geometry failed — stage omitted:",
         (error as Error).message,
       );
       return null;
@@ -150,14 +147,12 @@ export default function App() {
       data-high-contrast={highContrast ? "" : undefined}
     >
       <StatusBar demoValue={demoTemplate} onDemoChange={setDemoTemplate} />
-      {adaptiveSpec && geometry ? (
+      {geometry ? (
         <AdaptiveStage
           geometry={geometry}
           assignments={adaptiveAssignments}
         />
-      ) : (
-        <PanelHost demoSpec={demoSpec} />
-      )}
+      ) : null}
       <PersistentRegions surfaces={persistentSurfaces} />
       <ConfirmationPanel />
       <ErrorPanel />

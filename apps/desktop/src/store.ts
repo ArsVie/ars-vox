@@ -1,6 +1,16 @@
 /**
  * App store — vanilla Zustand (no React dependency) so the full event path
  * (server event -> ui_command -> layout change) is unit-testable in node.
+ *
+ * GATE-3.5 (W2-STORE): the legacy layout authority is DELETED —
+ * state.spec / state.layout / state.history / state.panelMeta /
+ * state.fullscreenPanel / recompute() are gone, along with the six
+ * "Legacy boot path" branches they served. The adaptive composition
+ * (state.adaptive) is the single layout authority: the config-driven
+ * default (ui.default_template / ui.default_primary) lands it at connect
+ * (applyConfig), and the first layout command materializes it on demand
+ * (bootDefaultSpec) when no composition exists yet — layout commands can
+ * never touch a legacy mirror.
  */
 
 import { createStore, type StoreApi } from "zustand/vanilla";
@@ -18,24 +28,12 @@ import {
   type ServerEvent,
   type StateSnapshotEvent,
   type TodoItem,
-  type UiCommand,
   type VoiceState,
   type YoutubeVideoResult,
 } from "./contracts";
-import {
-  computeLayout,
-  DEFAULT_PRIMARY,
-  isPanelId,
-  TEMPLATE_SLOTS,
-  type LayoutResult,
-  type LayoutSpec,
-  type LayoutTemplateId,
-  type PanelId,
-  type SlotName,
-  type Viewport,
-} from "./layout/engine";
+import { DEFAULT_PRIMARY, isPanelId, type PanelId } from "./contracts";
+import { computeAdaptiveGeometry, type Viewport } from "./layout/adaptiveEngine";
 import { surfaceRegistry } from "./roles/registry";
-import { computeAdaptiveGeometry } from "./layout/adaptiveEngine";
 import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
 import type {
   AdaptiveTemplate,
@@ -43,7 +41,7 @@ import type {
   Proportion,
   SurfaceRole,
 } from "./adaptive/contracts";
-import { TEMPLATE_SLOTS as ADAPTIVE_TEMPLATE_SLOTS } from "./adaptive/contracts";
+import { TEMPLATE_SLOTS } from "./adaptive/contracts";
 import {
   applyOverrides,
   EMPTY_OVERRIDES,
@@ -51,7 +49,6 @@ import {
   removeSurfaceOverrides,
   type OverrideIntent,
   type OverrideSet,
-  type SurfaceConstraint,
 } from "./adaptive/overrides";
 import {
   matchSpokenOverride,
@@ -66,19 +63,12 @@ import {
   type PlannerRejection,
 } from "./adaptive/planner";
 import {
-  EMPTY_MEDIA,
   mediaController,
   type MediaState,
   type PlayerMediaUpdate,
 } from "./media/controller";
 
-/**
- * The media surface state the UI renders. GATE-3.5 (R24-R27): the shape
- * IS the MediaController's state — every media mutation (server events,
- * user commands, player callbacks) routes through the controller and is
- * mirrored here. `MediaContent` is re-exported for the legacy name.
- */
-export type { MediaState as MediaContent } from "./media/controller";
+/** Re-exported for components that mirror the controller state. */
 export { EMPTY_MEDIA } from "./media/controller";
 
 /** Default content viewport used until the renderer reports real size. */
@@ -90,6 +80,9 @@ export interface ChatMessage {
   text: string;
 }
 
+/** Panel metadata carried by the surface components' `meta` prop
+ *  (title / content_reference). Not store state — the legacy
+ *  state.panelMeta field was deleted with PanelHost (GATE-3.5 W2-STORE). */
 export interface PanelMeta {
   title?: string;
   contentReference?: string;
@@ -97,7 +90,9 @@ export interface PanelMeta {
 
 /**
  * UI-103 adaptive state: the last validated adaptive LayoutSpec plus its
- * role-resolved assignments (empty until the agent sends one).
+ * role-resolved assignments. The config-driven default lands the first
+ * composition at connect, so `spec` is null only before the server's
+ * first config_update.
  *
  * UI-301: `lastRejection` records the planner's rejection reason for the
  * most recent agent layout intent that did NOT reach state (invalid model
@@ -231,14 +226,8 @@ export interface AppState {
   voiceState: VoiceState;
   activity: string | null;
   messages: ChatMessage[];
-  spec: LayoutSpec;
-  layout: LayoutResult;
-  /** Stack of previous specs for layout.restore. */
-  history: LayoutSpec[];
-  panelMeta: Partial<Record<PanelId, PanelMeta>>;
   pending: ConfirmationInfo | null;
   error: ErrorInfo | null;
-  fullscreenPanel: PanelId | null;
   reducedMotion: boolean;
   /** Accessibility modes driven by config ui.large_text / ui.high_contrast. */
   largeText: boolean;
@@ -275,7 +264,9 @@ export interface AppState {
   confirm: (approve: boolean) => void;
   dismissError: () => void;
 
-  /** Local UI action: toggle a panel's fullscreen state (never sent to the server). */
+  /** Local UI action: toggle a panel's fullscreen state (never sent to the
+   *  server). The fullscreen constraint lives in adaptive.overrides — the
+   *  components derive their fullscreen icon state from it (no mirror). */
   toggleFullscreen: (panel: PanelId) => void;
 
   /** User-initiated command: optimistic local effect + send to the server. */
@@ -316,9 +307,11 @@ export interface AppState {
   handleSpokenText: (text: string) => boolean;
   /** UI-103: write a per-surface state value (keyed by surfaceId). */
   setSurfaceState: (surfaceId: string, key: string, value: unknown) => void;
-  recompute: () => void;
   enqueueTts: (text: string) => void;
   ttsDone: () => void;
+  /** GATE-3.5 (W2-REMINDERS seam): client-side removal of one rendered
+   *  notification (dismiss affordance). Never sent to the server. */
+  dismissNotification: (notificationId: string) => void;
 }
 
 let messageSeq = 0;
@@ -333,15 +326,6 @@ function nextMessageId(prefix: string): string {
  * commands, user commands, player callbacks) now route through the one
  * MediaController; this file only mirrors its state into content.media.
  */
-
-function initialSpec(): LayoutSpec {
-  return {
-    template: "focus",
-    primaryPanel: DEFAULT_PRIMARY,
-    secondaryPanel: null,
-    preserve: true,
-  };
-}
 
 /** Slot → semantic role for addSurfaceToSpec (mirrors WIRE_SLOT_ROLE in
  *  the planner: the adaptive contract's frozen role vocabulary). */
@@ -367,7 +351,7 @@ function addSurfaceToSpec(
   const occupied = new Set(spec.assignments.map((a) => a.slot));
   const candidates = [spec.template, "triple"] as const;
   for (const template of candidates) {
-    const free = ADAPTIVE_TEMPLATE_SLOTS[template].find(
+    const free = TEMPLATE_SLOTS[template].find(
       (s: string) => !occupied.has(s),
     );
     if (free) {
@@ -444,34 +428,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       }
       rawSend(message);
     };
-    const spec = initialSpec();
-    const layout = computeLayout(spec, {
-      reducedMotion: false,
-      viewport: DEFAULT_VIEWPORT,
-      mounted: new Set(),
-      previous: null,
-    });
-
-    const recompute = (): void => {
-      const state = get();
-      const mounted = new Set<PanelId>(
-        Object.keys(state.panelMeta) as PanelId[],
-      );
-      const next = computeLayout(state.spec, {
-        reducedMotion: state.reducedMotion,
-        viewport: state.viewport,
-        mounted,
-        previous: state.layout,
-      });
-      set({ layout: next });
-    };
-
-    const pushHistory = (): void => {
-      const state = get();
-      const history = [...state.history, state.spec];
-      if (history.length > 10) history.shift();
-      set({ history });
-    };
 
     /** Append a TTS phrase, honoring the config-driven queue cap. */
     const pushSpeak = (text: string): void => {
@@ -495,6 +451,22 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
     };
 
     /**
+     * GATE-3.5 (W2-STORE): the boot default composition — the adaptive
+     * spec a layout command operates on when the config-driven default
+     * has not landed yet. Registry-gated: an unregistered anchor returns
+     * null (commands no-op; the registry gate never throws on boot data).
+     */
+    const bootDefaultSpec = (): AdaptiveLayoutSpec | null => {
+      if (!surfaceRegistry.has(DEFAULT_PRIMARY)) return null;
+      return {
+        template: "focus",
+        assignments: [
+          { surfaceId: DEFAULT_PRIMARY, role: "primary", slot: "main" },
+        ],
+      };
+    };
+
+    /**
      * Apply the server config snapshot to the UI: accessibility modes,
      * TTS knobs, and (only before any layout command) the default layout.
      */
@@ -513,7 +485,8 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       if (!layoutApplied) {
         // R19 (GATE-3.5): the config-driven default layout is a layout
         // source ("migration") and enters the ONE choke as the initial
-        // adaptive composition. Legacy template ids map through the
+        // adaptive composition — the default lands at connect, before
+        // any user interaction. Legacy template ids map through the
         // planner's frozen wire map; an unregistered default_primary
         // falls back to the conversation anchor (the choke's registry
         // gate must never throw on config data).
@@ -536,16 +509,24 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             configuredPrimary ??
             (surfaceRegistry.has(DEFAULT_PRIMARY) ? DEFAULT_PRIMARY : null);
           if (primary) {
-            applyAdaptiveSpec(
-              {
-                template,
-                assignments: [
-                  { surfaceId: primary, role: "primary", slot: "main" },
-                ],
-              },
-              { userInitiated: false },
-            );
-            layoutApplied = true;
+            try {
+              applyAdaptiveSpec(
+                {
+                  template,
+                  assignments: [
+                    { surfaceId: primary, role: "primary", slot: "main" },
+                  ],
+                },
+                { userInitiated: false },
+              );
+              layoutApplied = true;
+            } catch (error) {
+              // never crash the event path on config data
+              console.warn(
+                "[store] config default layout rejected:",
+                (error as Error).message,
+              );
+            }
           }
         }
       }
@@ -557,7 +538,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
      *  dashboard) map through the planner's frozen legacy map. Unknown ids
      *  → null (no default layout). */
     const adaptiveTemplateFromConfig = (value: string): AdaptiveTemplate | null => {
-      if (value in ADAPTIVE_TEMPLATE_SLOTS) return value as AdaptiveTemplate;
+      if (value in TEMPLATE_SLOTS) return value as AdaptiveTemplate;
       return LEGACY_TEMPLATE_MAP[value] ?? null;
     };
 
@@ -566,19 +547,17 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
      * resolve every role through the deterministic fallback ladder, and
      * store the result. Invalid specs throw and never reach state.
      *
-     * UI-207: spatial inertia guard — the ONLY wave-2 store.ts integration.
-     * After validation, the pure scorer (layout/inertia.ts) decides whether
-     * applying the requested spec is worth its movement cost. Agent chatter
-     * (equivalent layouts, sub-bar movement, unjustified template changes)
-     * is damped: the current composition is kept untouched (zero churn).
-     * User-initiated changes and primary re-focusing always apply — the
-     * policy never blocks a real signal. The legacy engine path is RETIRED
-     * (R22): no layout command writes state.spec anymore — every layout
-     * source flows through this choke.
+     * UI-207: spatial inertia guard. After validation, the pure scorer
+     * (layout/inertia.ts) decides whether applying the requested spec is
+     * worth its movement cost. Agent chatter (equivalent layouts,
+     * sub-bar movement, unjustified template changes) is damped: the
+     * current composition is kept untouched (zero churn). User-initiated
+     * changes and primary re-focusing always apply — the policy never
+     * blocks a real signal. Every layout source flows through this choke
+     * (R22: the legacy engine path is retired).
      *
-    /**
-     * UI-301: agent layout intents (wire ui_command/layout.apply) now flow
-     * through the planner (adaptive/planner.ts) into THIS choke via
+     * UI-301: agent layout intents (wire ui_command/layout.apply) flow
+     * through the planner (adaptive/planner.ts) into this choke via
      * applyLayoutIntent — the inertia guard stays active for agent-initiated
      * changes. User-initiated overrides are UI-302's hook.
      *
@@ -732,10 +711,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // to a LayoutSpec and validates it deterministically — invalid
           // intents are rejected and recorded (adaptive.lastRejection),
           // never thrown and never corrupting layout state.
-          // R22 (GATE-3.5): the legacy engine (state.spec/computeLayout) is
-          // NON-AUTHORITATIVE — it is no longer written by ANY layout
-          // command, so invalid model output can never reach layout state
-          // through it either.
           applyLayoutIntent(command);
           layoutApplied = true;
           return;
@@ -763,33 +738,22 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         }
         case "panel.open": {
           // Overlay panels (confirmation/notification) use their own
-          // channels; only layout panels enter the panel registry.
+          // channels; only layout panels enter the composition.
           if (!isPanelId(command.panel_type)) return;
-          const panelMeta = {
-            ...state.panelMeta,
-            [command.panel_type]: {
-              title: command.title ?? undefined,
-              contentReference: command.content_reference ?? undefined,
-            },
-          };
-          if (state.adaptive.spec == null) {
-            // Legacy boot path (before the first composition): PanelHost
-            // renders the legacy engine — keep the legacy mount semantics.
-            set({ panelMeta });
-            recompute();
-            return;
-          }
-          // R19 (GATE-3.5): the manual-open source enters the ONE choke.
-          // Opening a surface cancels any prior close constraint for it and
-          // places it into the composition deterministically (first free
-          // template slot; the degrade layer rehomes/drops when the
-          // template cannot host it). Unregistered ids are ignored (the
-          // frozen registry check applies at the choke, never silently).
+          // The manual-open source enters the ONE choke: opening a surface
+          // cancels any prior close constraint for it and places it into
+          // the composition deterministically (first free template slot;
+          // the degrade layer rehomes/drops when the template cannot host
+          // it). Unregistered ids are ignored (the frozen registry check
+          // applies at the choke, never silently). Before the config
+          // default has landed, the boot default composition is the base.
+          const base = state.adaptive.spec ?? bootDefaultSpec();
+          if (!base) return;
           layoutApplied = true;
           const opened =
             surfaceRegistry.has(command.panel_type)
-              ? addSurfaceToSpec(state.adaptive.spec, command.panel_type)
-              : state.adaptive.spec;
+              ? addSurfaceToSpec(base, command.panel_type)
+              : base;
           applyAdaptiveSpec(opened, {
             userInitiated: true,
             overrides: removeSurfaceOverrides(
@@ -797,7 +761,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
               command.panel_type,
             ),
           });
-          set({ panelMeta });
           return;
         }
         case "panel.close": {
@@ -805,65 +768,27 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             ? (command.panel_type as PanelId)
             : (command.panel_id as PanelId | null);
           if (!target) return;
-          const panelMeta = { ...state.panelMeta };
-          delete panelMeta[target];
-          if (state.adaptive.spec == null) {
-            // Legacy boot path — keep the legacy close semantics.
-            const next: LayoutSpec = { ...state.spec };
-            if (next.primaryPanel === target) next.primaryPanel = null;
-            if (next.secondaryPanel === target) next.secondaryPanel = null;
-            if (next.slots) {
-              const slots = { ...next.slots };
-              for (const slot of Object.keys(slots) as SlotName[]) {
-                if (slots[slot] === target) slots[slot] = null;
-              }
-              next.slots = slots;
-            }
-            set({
-              panelMeta,
-              spec: next,
-              fullscreenPanel: state.fullscreenPanel === target ? null : state.fullscreenPanel,
-            });
-            recompute();
-            return;
-          }
           // R19/R20 (GATE-3.5): closing a surface is a USER close intent —
           // a persistent constraint through the ONE choke. A later agent
           // composition that proposes the surface cannot bring it back.
+          const base = state.adaptive.spec ?? bootDefaultSpec();
+          if (!base) return;
           layoutApplied = true;
-          applyAdaptiveSpec(state.adaptive.spec, {
+          applyAdaptiveSpec(base, {
             userInitiated: true,
             overrideIntent: { kind: "close", surfaceId: target },
-          });
-          set({
-            panelMeta,
-            fullscreenPanel:
-              state.fullscreenPanel === target ? null : state.fullscreenPanel,
           });
           return;
         }
         case "panel.set_primary": {
           if (!isPanelId(command.panel_type)) return;
-          layoutApplied = true;
-          if (state.adaptive.spec == null) {
-            // Legacy boot path — keep the legacy semantics.
-            pushHistory();
-            set({
-              spec: {
-                ...state.spec,
-                primaryPanel: command.panel_type,
-                slots: state.spec.slots
-                  ? { ...state.spec.slots, main: command.panel_type }
-                  : undefined,
-              },
-            });
-            recompute();
-            return;
-          }
           // R19 (GATE-3.5): "make this the primary" == the frozen "left"
           // intent (the target becomes the main primary; the previous main
           // occupant moves to the side companion) — through the ONE choke.
-          applyAdaptiveSpec(state.adaptive.spec, {
+          const base = state.adaptive.spec ?? bootDefaultSpec();
+          if (!base) return;
+          layoutApplied = true;
+          applyAdaptiveSpec(base, {
             userInitiated: true,
             overrideIntent: { kind: "left", surfaceId: command.panel_type },
           });
@@ -871,41 +796,31 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         }
         case "panel.fullscreen": {
           if (!isPanelId(command.panel_type)) return;
+          // R19 (GATE-3.5): fullscreen through the ONE choke — the
+          // fullscreen constraint replaces the composition with
+          // focus{target} and adaptive.preFullscreen captures the restore
+          // target. The components derive their fullscreen icon state from
+          // adaptive.overrides (no mirror field).
+          const base = state.adaptive.spec ?? bootDefaultSpec();
+          if (!base) return;
           layoutApplied = true;
-          if (state.adaptive.spec == null) {
-            // Legacy boot path — the legacy overlay.
-            set({ fullscreenPanel: command.panel_type });
-            return;
-          }
-          // R19 (GATE-3.5): fullscreen through the ONE choke; the legacy
-          // fullscreenPanel field becomes a non-authoritative VIEW mirror
-          // of the fullscreen constraint (PanelHeader's icon state).
-          applyAdaptiveSpec(state.adaptive.spec, {
+          applyAdaptiveSpec(base, {
             userInitiated: true,
             overrideIntent: { kind: "fullscreen", surfaceId: command.panel_type },
           });
-          set({ fullscreenPanel: command.panel_type });
           return;
         }
         case "layout.restore": {
-          layoutApplied = true;
-          if (state.adaptive.spec == null) {
-            // Legacy boot path — keep the legacy history pop.
-            const history = [...state.history];
-            const previous = history.pop();
-            if (!previous) return;
-            set({ history, spec: previous, fullscreenPanel: null });
-            recompute();
-            return;
-          }
           // R19 (GATE-3.5): "restore layout" == the frozen restore intent —
           // clears the persistent constraint set through the ONE choke (the
           // explicit user reset; the unconstrained composition applies).
-          applyAdaptiveSpec(state.adaptive.spec, {
+          const base = state.adaptive.spec ?? bootDefaultSpec();
+          if (!base) return;
+          layoutApplied = true;
+          applyAdaptiveSpec(base, {
             userInitiated: true,
             overrideIntent: { kind: "restore" },
           });
-          set({ fullscreenPanel: null });
           return;
         }
         case "notification.show": {
@@ -1191,7 +1106,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             }
           }
           set(patch);
-          recompute();
           return;
         }
         case "youtube.search": {
@@ -1287,13 +1201,8 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       voiceState: "sleeping",
       activity: null,
       messages: [],
-      spec,
-      layout,
-      history: [],
-      panelMeta: {},
       pending: null,
       error: null,
-      fullscreenPanel: null,
       reducedMotion: false,
       largeText: false,
       highContrast: false,
@@ -1322,11 +1231,9 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       },
       setReducedMotion: (value) => {
         set({ reducedMotion: value });
-        recompute();
       },
       setViewport: (viewport) => {
         set({ viewport });
-        recompute();
       },
 
       applyEvent,
@@ -1339,31 +1246,26 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       },
       toggleFullscreen: (panel) => {
         const state = get();
-        if (state.adaptive.spec == null) {
-          // Legacy boot path — the legacy overlay (PanelHost).
-          set({ fullscreenPanel: state.fullscreenPanel === panel ? null : panel });
-          return;
-        }
         // R19 (GATE-3.5): the manual fullscreen source enters the ONE
         // choke. The constraint set decides the toggle direction: a
         // fullscreen constraint on this surface → OFF (drop the surface's
         // constraints and restore the pre-fullscreen composition captured
         // when the constraint engaged); otherwise → ON (fullscreen intent).
+        const base = state.adaptive.spec ?? bootDefaultSpec();
+        if (!base) return;
         layoutApplied = true;
         const c = state.adaptive.overrides.bySurface[panel];
         if (c?.fullscreen === true) {
-          const restoreTo = state.adaptive.preFullscreen ?? state.adaptive.spec;
+          const restoreTo = state.adaptive.preFullscreen ?? base;
           applyAdaptiveSpec(restoreTo, {
             userInitiated: true,
             overrides: removeSurfaceOverrides(state.adaptive.overrides, panel),
           });
-          set({ fullscreenPanel: null });
         } else {
-          applyAdaptiveSpec(state.adaptive.spec, {
+          applyAdaptiveSpec(base, {
             userInitiated: true,
             overrideIntent: { kind: "fullscreen", surfaceId: panel },
           });
-          set({ fullscreenPanel: panel });
         }
       },
       stop: () => {
@@ -1540,10 +1442,18 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         return true;
       },
       setSurfaceState,
-      recompute,
       enqueueTts: pushSpeak,
       ttsDone: () => {
         set({ speakTexts: get().speakTexts.slice(1) });
+      },
+      // W2-REMINDERS seam (GATE-3.5): client-side dismissal of one
+      // rendered notification — additive local action, never sent.
+      dismissNotification: (notificationId) => {
+        set({
+          notifications: get().notifications.filter(
+            (n) => n.notificationId !== notificationId,
+          ),
+        });
       },
     };
   });

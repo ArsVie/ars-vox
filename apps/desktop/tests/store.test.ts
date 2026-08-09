@@ -352,16 +352,19 @@ describe("local panel fullscreen toggle", () => {
       created_at: ts(),
     });
 
-    expect(store.getState().fullscreenPanel).toBeNull();
+    expect(store.getState().adaptive.overrides.bySurface).toEqual({});
     // R19: the manual fullscreen source enters the ONE choke — the
-    // composition becomes focus{target} and the legacy field mirrors it.
+    // composition becomes focus{target}; the fullscreen constraint in
+    // adaptive.overrides is the authoritative state (no mirror field).
     store.getState().toggleFullscreen("document_editor");
     expect(store.getState().adaptive.spec?.template).toBe("focus");
     expect(
       store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId),
     ).toEqual(["document_editor"]);
     expect(store.getState().adaptive.preFullscreen?.template).toBe("split");
-    expect(store.getState().fullscreenPanel).toBe("document_editor");
+    expect(
+      store.getState().adaptive.overrides.bySurface["document_editor"],
+    ).toMatchObject({ fullscreen: true });
     // local UI action: nothing sent to the server
     expect(sent).toHaveLength(0);
 
@@ -374,7 +377,6 @@ describe("local panel fullscreen toggle", () => {
       state.adaptive.spec?.assignments.map((a) => a.surfaceId),
     ).toEqual(["document_editor", "conversation"]);
     expect(state.adaptive.overrides.bySurface).toEqual({});
-    expect(state.fullscreenPanel).toBeNull();
 
     // a different panel's toggle while one is fullscreen switches target
     store.getState().toggleFullscreen("document_editor");
@@ -382,18 +384,26 @@ describe("local panel fullscreen toggle", () => {
     expect(store.getState().adaptive.spec?.assignments).toEqual([
       { surfaceId: "conversation", role: "primary", slot: "main" },
     ]);
-    expect(store.getState().fullscreenPanel).toBe("conversation");
+    expect(
+      store.getState().adaptive.overrides.bySurface["conversation"],
+    ).toMatchObject({ fullscreen: true });
   });
 
-  it("keeps the legacy overlay behavior before the first composition", () => {
+  it("materializes the boot default composition when toggled before any composition", () => {
     const store = createAppStore(() => {});
     expect(store.getState().adaptive.spec).toBeNull();
+    // W2-STORE: no legacy overlay — the toggle creates the composition
+    // on demand (bootDefaultSpec) and fullscreens it through the ONE choke.
     store.getState().toggleFullscreen("conversation");
-    expect(store.getState().fullscreenPanel).toBe("conversation");
+    expect(store.getState().adaptive.spec?.template).toBe("focus");
+    expect(
+      store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId),
+    ).toEqual(["conversation"]);
+    expect(
+      store.getState().adaptive.overrides.bySurface["conversation"],
+    ).toMatchObject({ fullscreen: true });
     store.getState().toggleFullscreen("conversation");
-    expect(store.getState().fullscreenPanel).toBeNull();
-    // no composition was created by the boot-path toggle
-    expect(store.getState().adaptive.spec).toBeNull();
+    expect(store.getState().adaptive.overrides.bySurface).toEqual({});
   });
 });
 
@@ -615,9 +625,9 @@ describe("config-driven UI state (config_update)", () => {
       created_at: ts(),
     });
     const state = store.getState();
-    expect(Object.keys(state.panelMeta)).toEqual([]);
-    expect(state.spec.primaryPanel).toBe("conversation");
-    expect(state.fullscreenPanel).toBeNull();
+    // overlay panels never enter the composition or the constraint set
+    expect(state.adaptive.spec).toBeNull();
+    expect(state.adaptive.overrides.bySurface).toEqual({});
   });
 });
 
@@ -954,12 +964,42 @@ describe("panel content events (content channel)", () => {
   });
 });
 
+describe("notifications (GATE-3.5 A6/R34 + W2-REMINDERS seam)", () => {
+  it("renders notifications and dismisses one client-side without sending", () => {
+    const sent: unknown[] = [];
+    const store = createAppStore((m) => sent.push(m));
+    store.getState().setConnected(true);
+    store.getState().applyEvent({
+      type: "notification",
+      notification_id: "n1",
+      kind: "reminder",
+      title: "Reunión",
+      text: "En 5 minutos",
+      due_at: "2026-08-09T09:00:00Z",
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "notification",
+      notification_id: "n2",
+      kind: "info",
+      title: "Sistema",
+      text: "Listo",
+      due_at: null,
+      created_at: ts(),
+    });
+    expect(store.getState().notifications).toHaveLength(2);
+    store.getState().dismissNotification("n1");
+    const ids = store.getState().notifications.map((n) => n.notificationId);
+    expect(ids).toEqual(["n2"]);
+    // dismiss is a local UI action: nothing sent, chat lines untouched
+    expect(sent).toHaveLength(0);
+    expect(store.getState().messages).toHaveLength(2);
+  });
+});
+
 describe("layout.compose (adaptive-native, C5/A3)", () => {
   it("composes straight into adaptive.spec, normalizing surface_id to surfaceId at the wire boundary", () => {
     const store = createAppStore(() => {});
-    // registerProductSurfaces() runs at module scope — document_editor,
-    // conversation and browser are all registered product surfaces.
-    const legacyBefore = store.getState().spec;
 
     // The exact python wire shape (commands.py LayoutCompose): assignments
     // carry surface_id — normalized ONCE by normalizeUiCommand, never here.
@@ -988,10 +1028,8 @@ describe("layout.compose (adaptive-native, C5/A3)", () => {
         { surfaceId: "browser", role: "support", slot: "rail" },
       ],
     });
-    // adaptive-native ONLY: the legacy engine spec is never written by
-    // layout.compose (Wave 2 will delete the legacy system — nothing here
-    // depends on it).
-    expect(state.spec).toBe(legacyBefore);
+    // adaptive-native ONLY: there is no legacy engine spec to write —
+    // the adaptive composition is the single layout authority (W2-STORE).
     expect(state.adaptive.lastUnhandledAction).toBeNull();
   });
 

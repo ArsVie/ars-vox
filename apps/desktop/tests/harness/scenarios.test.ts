@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { STUB_CANVAS } from "../../src/adaptive/harness/geometry";
+import { STUB_CANVAS } from "./geometry";
 import { renderScenario, renderStoryboard, scenarioCatalog, storyboardPayload } from "../../src/adaptive/harness/scenarios";
 import { CANONICAL_SURFACES } from "../../src/adaptive/harness/workflows";
 import { STORYBOARD_REGISTERED_IDS } from "../../src/adaptive/harness/scenarios";

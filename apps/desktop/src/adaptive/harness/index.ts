@@ -20,4 +20,5 @@ export * from "./host";
 export * from "./fixtures";
 export * from "./workflows";
 export * from "./scenarios";
-export * from "./geometry";
+// GATE-3.5 (W2-STORE): the stub geometry moved to tests/harness/geometry.ts
+// (test-only stub, no longer shipping in src/).

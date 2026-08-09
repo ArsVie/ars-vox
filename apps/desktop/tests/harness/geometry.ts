@@ -12,8 +12,8 @@
  * a pure function OF the spec, never part of it.
  */
 
-import type { AdaptiveTemplate, Proportion } from "../contracts";
-import { TEMPLATE_SLOTS } from "../contracts";
+import type { AdaptiveTemplate, Proportion } from "../../src/adaptive/contracts";
+import { TEMPLATE_SLOTS } from "../../src/adaptive/contracts";
 
 /** Virtual canvas the stub geometry resolves against (documented, fixed). */
 export const STUB_CANVAS = { width: 1280, height: 800 } as const;

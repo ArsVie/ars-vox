@@ -14,8 +14,8 @@
 
 import { validateLayoutSpec } from "../contracts";
 import type { LayoutSpec } from "../contracts";
-import type { SlotGeometryMap } from "./geometry";
-import { assertGeometryCoversTemplate, stubGeometry } from "./geometry";
+import type { SlotGeometryMap } from "../../../tests/harness/geometry";
+import { assertGeometryCoversTemplate, stubGeometry } from "../../../tests/harness/geometry";
 
 /** Result of applying a LayoutSpec through the test driver. */
 export interface AppliedLayout {
