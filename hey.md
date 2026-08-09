@@ -9,6 +9,23 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
+### hermes A4 (GATE-3.5 Wave 1 — frontend layout authority, 2026-08-08)
+- timestamp: 2026-08-08T08:30:00Z
+- task: A4 single frontend layout authority + user override wiring (R19-R23).
+  One applyAdaptiveSpec choke for ALL layout sources (agent/manual/spoken/
+  reconnect/migration); spoken override phrases → deterministic
+  OverrideIntents (renderer-side, before user_text); legacy engine retired
+  non-authoritative w/ deletion task. NO Python touched (A3 boundary);
+  constraint model stays plain-JSON (A6 snapshot serializability).
+- files/dirs: apps/desktop/src/store.ts, apps/desktop/src/adaptive/
+  (spokenOverrides.ts new), apps/desktop/src/voice/micHub.ts,
+  apps/desktop/src/contracts.ts (snapshot adaptive_composition TS mirror),
+  apps/desktop/src/layout/engine.ts (non-authoritative banner),
+  apps/desktop/tests/{spoken-overrides,one-choke}.test.ts new,
+  tests/overrides-store.test.ts (R20 family), store/planner/reconnect tests
+- boundaries: NO packages/contracts/** (A3), NO services/agent tools (A3),
+  no components/ chrome changes (A9), no snapshot Python (A6 — TS seam only).
+- status: IN PROGRESS
 ### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
