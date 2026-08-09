@@ -27,6 +27,8 @@ from arsvox_agent.media import media_controller, reset_media_controller
 from arsvox_agent.tools.context import ToolContext
 from arsvox_agent.tools.media_tools import media_play, media_resume
 
+from tests.python.test_media_tools import seed_offered
+
 
 class _CaptureBus:
     def __init__(self) -> None:
@@ -87,6 +89,10 @@ def _media_states(bus) -> list[MediaStateEvent]:
 @pytest.fixture(autouse=True)
 def _clean_media():
     reset_media_controller()
+    # GATE-5 (W1-YOUTUBE): media.play resolves ids against the OFFERED
+    # set — these controller tests exercise play -> MediaStateEvent, so
+    # they seed the 'agent already searched' precondition directly.
+    seed_offered()
     yield
     reset_media_controller()
 

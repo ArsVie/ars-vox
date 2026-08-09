@@ -49,6 +49,7 @@ from arsvox_contracts.commands import (
 from arsvox_contracts.enums import LayoutTemplate, MediaState, NotificationKind, PanelType
 
 from arsvox_agent.actions import handle_ui_command, reset_media_state
+from arsvox_agent.tools.media_tools import reset_offered_results
 
 from tests.python.conftest import ws_collect
 
@@ -470,7 +471,39 @@ def test_media_play_pause_seek_have_authoritative_handlers(client):
     reset_media_state()
 
 
-def test_youtube_search_emits_results_event(client):
+def test_youtube_search_emits_results_event(client, monkeypatch):
+    # GATE-5 (W1-YOUTUBE): the tool searches through the provider seam —
+    # mock the network here (the scraping provider's own parsing is
+    # covered in test_search_youtube.py), never a fixture list.
+    from arsvox_agent.search.youtube import YoutubeSearchResult
+    from arsvox_agent.tools import media_tools
+
+    class _FakeProvider:
+        name = "fake"
+
+        async def search(self, query: str, limit: int = 10):
+            return [
+                YoutubeSearchResult(
+                    id="dQw4w9WgXcQ",
+                    title="Taller de carpintería para principiantes",
+                    channel="El Taller de Marta",
+                    duration_s=742,
+                    published="hace 3 días",
+                    thumbnail_url=None,
+                ),
+                YoutubeSearchResult(
+                    id="9bZkp7q19f0",
+                    title="Cómo lijar madera sin errores",
+                    channel="Bricolaje Fácil",
+                    duration_s=495,
+                    published="hace 1 semana",
+                    thumbnail_url=None,
+                ),
+            ]
+
+    monkeypatch.setattr(media_tools, "get_youtube_search_provider", lambda: _FakeProvider())
+    reset_offered_results()
+
     with client.websocket_connect("/ws") as ws:
         _connect(ws)
         ws.send_json(
@@ -484,10 +517,11 @@ def test_youtube_search_emits_results_event(client):
         assert verdict["status"] == "done"
         searches = [e for e in events if e["type"] == "youtube.search"]
         assert searches and searches[-1]["query"] == "carpintería"
-        assert searches[-1]["results"], "expected fixture results"
-        # H7: fixture ids are real playable YouTube ids now (the media
-        # surface derives videoId from the url and renders the embed)
+        assert searches[-1]["results"], "expected real provider results"
+        # Real ids from the provider seam — the media surface derives
+        # videoId from the url and renders the embed.
         assert searches[-1]["results"][0]["id"] == "dQw4w9WgXcQ"
+    reset_offered_results()
 
 
 # --------------------------------------------------------------------- #

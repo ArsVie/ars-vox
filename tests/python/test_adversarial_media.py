@@ -33,7 +33,7 @@ from arsvox_agent.actions import reset_media_state
 from arsvox_agent.media import media_controller
 from arsvox_agent.tools.media_tools import media_play, media_seek
 
-from tests.python.test_media_tools import _make_context
+from tests.python.test_media_tools import _make_context, seed_offered
 from tests.python.conftest import ws_collect
 from tests.python.test_reconnect_snapshot import _scripted
 
@@ -88,6 +88,9 @@ def test_r25_tool_seek_emits_real_position():
     position is 30 — the renderer has no other channel to move the
     player."""
     reset_media_state()
+    # GATE-5 (W1-YOUTUBE): play resolves against the OFFERED set — the
+    # scripted agent already searched, so seed that precondition.
+    seed_offered()
     tctx, bus, _ = _make_context()
 
     asyncio.run(media_play(tctx, "dQw4w9WgXcQ"))
@@ -130,6 +133,9 @@ def test_r24_agent_play_then_human_pause_seek_resume(script_client):
     route through ONE controller: every human action emits an
     authoritative media.state and the seek really moves the position."""
     reset_media_state()
+    # GATE-5 (W1-YOUTUBE): the scripted agent's media.play resolves
+    # against the OFFERED set — seed the 'already searched' precondition.
+    seed_offered()
     c = script_client(_scripted("media_play", {"result_id": "dQw4w9WgXcQ"}))
     try:
         with c.websocket_connect("/ws") as ws:
@@ -227,6 +233,9 @@ def test_scripted_media_play_emits_tool_call_and_media_state(script_client):
     the whole path: execute_gated runs, ToolCallEvent lands, the
     controller emits media.state playing."""
     reset_media_state()
+    # GATE-5 (W1-YOUTUBE): the scripted agent's media.play resolves
+    # against the OFFERED set — seed the 'already searched' precondition.
+    seed_offered()
     c = script_client(_scripted("media_play", {"result_id": "dQw4w9WgXcQ"}))
     try:
         with c.websocket_connect("/ws") as ws:
