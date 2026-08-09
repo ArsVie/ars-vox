@@ -3,7 +3,10 @@
  *
  * Owns the `content.document_editor` bag: the PDF/EPUB/TXT reader +
  * agent-first editor payload. Server `document.load` events land the
- * document; the optimistic `document.save` command carries the editor's
+ * document; `document.changed` events carry an agent-side edit to the
+ * SAME stored document and replace title/path/content while preserving
+ * the reader fields (kind/url/chapters) — one document, one authority.
+ * The optimistic `document.save` command carries the editor's
  * local content and changes nothing in the store (the editor already
  * holds the text — preserved from the pre-slice store).
  */
@@ -14,7 +17,7 @@ import type { DocumentContent } from "./types";
 
 export const documentSlice: SurfaceSlice<DocumentContent> = {
   panelId: "document_editor",
-  eventTypes: ["document.load"],
+  eventTypes: ["document.load", "document.changed"],
   commandActions: ["document.save"],
   applyEvent(bag, event) {
     switch (event.type) {
@@ -26,6 +29,18 @@ export const documentSlice: SurfaceSlice<DocumentContent> = {
           url: event.url ?? null,
           content: event.content,
           chapters: event.chapters,
+        };
+      case "document.changed":
+        // GATE-5 (W1-DOC-SHARED): the wire event carries no reader
+        // fields — merge over the existing bag so kind/url/chapters
+        // survive an agent edit. Without a loaded bag there is nothing
+        // to reconcile (kind is unknowable from this event).
+        if (!bag) return bag;
+        return {
+          ...bag,
+          title: event.title,
+          path: event.path,
+          content: event.content,
         };
       default:
         return bag;
