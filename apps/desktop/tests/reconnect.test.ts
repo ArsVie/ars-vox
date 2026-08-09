@@ -1,8 +1,10 @@
 /**
  * H5 + GATE-3.5 A6 — reconnect recovery (desktop side):
  *  - state_snapshot application on WS connect: pending confirmation card,
- *    layout panels, media and voice state restored from the canonical
- *    server snapshot (tests/reconnect.test.ts per the H5 brief).
+ *    media and voice state restored from the canonical
+ *    server snapshot (tests/reconnect.test.ts per the H5 brief). Panels
+ *    are deliberately NOT restored (user directive 2026-08-08: a fresh
+ *    load starts at the central-mic hero).
  *  - A6 authoritative semantics: media=null clears the stale player (R30),
  *    history=[]/notifications=[] clear stale chat/notification state (R31),
  *    adaptive composition reconstructs the workspace (R33), restored
@@ -17,7 +19,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ServerEvent, StateSnapshotEvent } from "../src/contracts";
-import { bindResync, createAppStore, type PanelMeta } from "../src/store";
+import { registerProductSurfaces } from "../src/adaptive/surfaces";
+import { bindResync, createAppStore } from "../src/store";
 import { WsClient } from "../src/ws/client";
 
 function ts(): string {
@@ -102,11 +105,9 @@ describe("H5 state_snapshot application on connect", () => {
     expect(state.voiceState).toBe("waiting_for_confirmation");
     // user directive 2026-08-08: snapshot panels are NOT restored — a
     // fresh load starts at the central-mic hero; the agent's own commands
-    // re-populate the desk.
-    expect(state.panelMeta.document_editor).toBeUndefined();
-    expect(
-      state.layout.panels.find((p) => p.panel === "document_editor"),
-    ).toBeUndefined();
+    // re-populate the desk. The adaptive composition (the only layout
+    // authority since W2-STORE) stays empty after the reconnect.
+    expect(state.adaptive.spec).toBeNull();
     expect(state.content.media?.videoId).toBe("abc123");
     expect(state.content.media?.state).toBe("playing");
   });
@@ -128,7 +129,10 @@ describe("H5 state_snapshot application on connect", () => {
     expect(store.getState().pending).toBeNull();
   });
 
-  it("keeps in-memory panels across a reconnect and ignores snapshot panels", () => {
+  it("keeps the in-memory adaptive desk across a reconnect and ignores snapshot panels", () => {
+    // panel.open routes through the applyAdaptiveSpec choke — the
+    // surface must be in the shared registry for it to land.
+    registerProductSurfaces();
     const store = createAppStore(() => {});
     // panel opened before the disconnect stays (same-tab reconnect keeps
     // its desk — like media, the snapshot cannot fabricate one)
@@ -137,7 +141,9 @@ describe("H5 state_snapshot application on connect", () => {
       command: { action: "panel.open", panel_type: "browser" },
       created_at: ts(),
     });
-    expect(store.getState().panelMeta.browser).toBeDefined();
+    expect(
+      store.getState().adaptive.assignments.map((a) => a.surfaceId),
+    ).toContain("browser");
 
     store.getState().applyEvent(
       snapshot({
@@ -150,12 +156,12 @@ describe("H5 state_snapshot application on connect", () => {
       }),
     );
     // the in-memory desk survives; the snapshot's panels are ignored
-    expect(store.getState().panelMeta.browser).toBeDefined();
-    expect(
-      (store.getState().panelMeta as Record<string, PanelMeta | undefined>)
-        .confirmation,
-    ).toBeUndefined();
-    expect(store.getState().panelMeta.document_editor).toBeUndefined();
+    const surfaceIds = store
+      .getState()
+      .adaptive.assignments.map((a) => a.surfaceId);
+    expect(surfaceIds).toContain("browser");
+    expect(surfaceIds).not.toContain("confirmation");
+    expect(surfaceIds).not.toContain("document_editor");
   });
 
   it("R30: clears the stale media player when the snapshot carries media=null", () => {
