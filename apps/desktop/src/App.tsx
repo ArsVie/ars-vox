@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 
 import type { AdaptiveTemplate, LayoutSpec, SurfaceRole } from "./adaptive/contracts";
@@ -62,6 +62,28 @@ export default function App() {
   // the geometry and the stage — never the raw spec.
   const adaptiveAssignments = useStore(appStore, (s) => s.adaptive.assignments);
   const viewport = useStore(appStore, (s) => s.viewport);
+  const setViewport = useStore(appStore, (s) => s.setViewport);
+  const shellRef = useRef<HTMLDivElement>(null);
+
+  // W0 (GATE-3.5): feed the real content-viewport size (px) into the store
+  // so the engine can enforce px floors and derive chrome density from
+  // actual geometry. The observer lives on the SHELL div (mounted in BOTH
+  // the legacy PanelHost branch and the adaptive stage branch) — PanelHost
+  // unmounts the moment a composition lands, so an observer there would
+  // freeze the viewport at boot size and adaptive geometry would stop
+  // following window resizes.
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const report = () => {
+      const rect = el.getBoundingClientRect();
+      setViewport({ width: Math.round(rect.width), height: Math.round(rect.height) });
+    };
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [setViewport]);
 
   // H7: conditional persistent media/notifications. Persistent surfaces are
   // shell-owned infra, NOT always-visible chrome: the media bar renders only
@@ -100,6 +122,7 @@ export default function App() {
 
   return (
     <div
+      ref={shellRef}
       className="app"
       data-large-text={largeText ? "" : undefined}
       data-high-contrast={highContrast ? "" : undefined}
