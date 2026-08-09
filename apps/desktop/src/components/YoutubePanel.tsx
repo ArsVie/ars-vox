@@ -1,7 +1,7 @@
 import { useStore } from "zustand";
 import { useState } from "react";
 
-import type { YoutubeVideoResult } from "../contracts";
+import type { MediaSearchResult } from "../contracts";
 import { appStore, type YoutubeContent } from "../store";
 import { PanelHeader } from "./PanelHeader";
 import { PlayIcon, SearchIcon, YoutubeIcon } from "./icons";
@@ -15,19 +15,23 @@ function fmtDuration(total: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+function watchUrl(result: MediaSearchResult): string {
+  return `https://www.youtube.com/watch?v=${result.id}`;
+}
+
 function VideoCard({
   video,
-  onPlay,
+  onSelect,
 }: {
-  video: YoutubeVideoResult;
-  onPlay: (video: YoutubeVideoResult) => void;
+  video: MediaSearchResult;
+  onSelect: (video: MediaSearchResult) => void;
 }) {
   return (
     <button
       type="button"
       className="youtube-card"
-      onClick={() => onPlay(video)}
-      aria-label={`Reproducir: ${video.title}`}
+      onClick={() => onSelect(video)}
+      aria-label={`Seleccionar: ${video.title}`}
     >
       <span className="youtube-thumb">
         {video.thumbnail_url ? <img src={video.thumbnail_url} alt="" loading="lazy" /> : null}
@@ -47,9 +51,12 @@ function VideoCard({
 }
 
 /**
- * YouTube search panel — the agent searches, results render as selectable
- * options, and the user picks one (click now, voice later). Playback goes
- * to the media panel. The user can also search directly here.
+ * YouTube search panel — the agent searches for real, results render as
+ * SELECTABLE OPTIONS (vision line), and the user picks one by click
+ * (media.select_result -> the ONE media controller -> playback in the
+ * media panel) or by voice (the agent's media.play tool). The user can
+ * also search directly here. A performed search with zero results is an
+ * honest "no encontré nada" — never a fixture.
  */
 export function YoutubePanel({ meta }: { meta?: { title?: string } }) {
   const youtube = useStore(appStore, (s) => s.content.youtube);
@@ -65,6 +72,22 @@ export function YoutubePanel({ meta }: { meta?: { title?: string } }) {
   const content: YoutubeContent | undefined = youtube;
   const results = content?.results ?? [];
   const loading = content?.loading ?? false;
+  // A search has actually been performed (vs. the untouched panel).
+  const searched = content !== undefined && content.query.length > 0;
+
+  const selectCard = (video: MediaSearchResult): void => {
+    // GATE-5 wire: the CLICK path is media.select_result — the server's
+    // ONE media controller plays the card and opens the media panel.
+    dispatchCommand({
+      action: "media.select_result",
+      result_id: video.id,
+      source: video.source,
+      kind: video.kind,
+      title: video.title,
+      url: video.source === "youtube" ? watchUrl(video) : undefined,
+      local_path: video.local_path ?? undefined,
+    });
+  };
 
   return (
     <section className="panel youtube-panel">
@@ -99,18 +122,14 @@ export function YoutubePanel({ meta }: { meta?: { title?: string } }) {
               <YoutubeIcon size={30} />
             </span>
             <span className="content-panel-empty-text">
-              Pídeme que busque un vídeo o escribe aquí arriba.
+              {searched
+                ? `No encontré nada para «${content.query}».`
+                : "Pídeme que busque un vídeo o escribe aquí arriba."}
             </span>
           </div>
         ) : (
           results.map((video) => (
-            <VideoCard
-              key={video.id}
-              video={video}
-              onPlay={(v) =>
-                dispatchCommand({ action: "youtube.play", video_id: v.id, title: v.title })
-              }
-            />
+            <VideoCard key={video.id} video={video} onSelect={selectCard} />
           ))
         )}
       </div>

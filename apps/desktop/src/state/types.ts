@@ -10,6 +10,7 @@
 import type {
   ClientCommand,
   DocumentKind,
+  MediaSearchResult,
   NormalizedUiCommand,
   PanelId,
   ReminderItem,
@@ -66,7 +67,9 @@ export interface ErrorInfo {
 export interface YoutubeContent {
   query: string;
   loading: boolean;
-  results: YoutubeVideoResult[];
+  /** The cards the agent OFFERED — the unified wire shape
+   *  (media.search_results) so source/kind travel with each card. */
+  results: MediaSearchResult[];
 }
 
 export interface BrowserContent {
