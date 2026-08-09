@@ -147,6 +147,18 @@ export class WsClient {
    */
   forceReconnect(): void {
     if (this.closedByUser) return;
+    if (this.bridgeMode) {
+      // Bridge mode: the socket lives in the MAIN process — there is no
+      // renderer WebSocket to reopen (url is "" here; new WebSocket("")
+      // throws and would spin scheduleReconnect() every 2s forever in the
+      // packaged build). Resync = tear down the IPC subscriptions and
+      // re-issue wsConnect() — the server sends a fresh state_snapshot on
+      // every connect, which is the R29 resync mechanism.
+      for (const unsubscribe of this.unsubscribe) unsubscribe();
+      this.unsubscribe = [];
+      this.connectBridge();
+      return;
+    }
     if (this.timer !== null) {
       window.clearTimeout(this.timer);
       this.timer = null;
