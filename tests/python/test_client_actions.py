@@ -16,7 +16,39 @@ from pathlib import Path
 import pytest
 
 from arsvox_contracts import parse_client_message
+from arsvox_contracts.adaptive import (
+    AdaptiveTemplate,
+    LayoutAssignment,
+    Proportion,
+    SurfaceRole,
+)
 from arsvox_contracts.client_messages import ClientAction
+from arsvox_contracts.commands import (
+    AudioPlay,
+    BrowserBack,
+    BrowserForward,
+    BrowserNavigate,
+    BrowserRefresh,
+    DocumentSave,
+    LayoutApply,
+    LayoutCompose,
+    LayoutRestore,
+    MediaPlayPause,
+    MediaSeek,
+    MediaStateChange,
+    NotificationShow,
+    PanelClose,
+    PanelFullscreen,
+    PanelOpen,
+    PanelSetPrimary,
+    TasksToggle,
+    TtsSpeak,
+    YoutubePlay,
+    YoutubeSearch,
+)
+from arsvox_contracts.enums import LayoutTemplate, MediaState, NotificationKind, PanelType
+
+from arsvox_agent.actions import handle_ui_command, reset_media_state
 
 from tests.python.conftest import ws_collect
 
@@ -450,3 +482,137 @@ def test_youtube_search_emits_results_event(client):
         # H7: fixture ids are real playable YouTube ids now (the media
         # surface derives videoId from the url and renders the embed)
         assert searches[-1]["results"][0]["id"] == "dQw4w9WgXcQ"
+
+
+# --------------------------------------------------------------------- #
+# GATE-3.5 W1: layout.compose (C5/A3) + UiCommand exhaustiveness mirror
+# --------------------------------------------------------------------- #
+
+
+def _valid_compose_command() -> LayoutCompose:
+    """A spec that passes the frozen adaptive invariants (LayoutSpec)
+    AND the registered-surface gate (browser, conversation,
+    document_editor, tasks, media)."""
+    return LayoutCompose(
+        template=AdaptiveTemplate.SIDECAR,
+        assignments=[
+            LayoutAssignment(
+                surface_id="document_editor", role=SurfaceRole.PRIMARY, slot="main"
+            ),
+            LayoutAssignment(
+                surface_id="conversation", role=SurfaceRole.COMPANION, slot="side"
+            ),
+        ],
+        proportion=Proportion.BALANCED,
+    )
+
+
+def _drain(queue) -> list[dict]:
+    events = []
+    while not queue.empty():
+        events.append(queue.get_nowait())
+    return events
+
+
+async def test_layout_compose_has_authoritative_handler(client):
+    """C5/A3 (W1): layout.compose must be handled authoritatively — the
+    service validates it against the frozen adaptive invariants and
+    re-emits the ui_command as the authoritative event (mirrors the
+    agent-side layout.compose tool). Direct handler call: the client
+    wire union does not carry layout.compose yet (W1-PYCONTRACT owns
+    that addition; this test pins the handler so the action is never
+    silently unsupported again)."""
+    services = client.app.state.services
+    command = _valid_compose_command()
+    verdict = await handle_ui_command(services.deps_base, services.registry, command)
+    assert verdict.status == "done"
+    assert verdict.detail == "sidecar"
+    # service-side audit trail
+    assert any(
+        r["category"] == "action" and r["action"] == "layout.compose"
+        for r in services.audit.recent()
+    )
+    # authoritative event re-emitted on the bus
+    q = services.deps_base.bus.subscribe()
+    await handle_ui_command(services.deps_base, services.registry, command)
+    echoed = [e for e in _drain(q) if e["type"] == "ui_command"]
+    assert echoed and echoed[-1]["command"]["action"] == "layout.compose"
+    assert echoed[-1]["command"]["template"] == "sidecar"
+    assert echoed[-1]["command"]["assignments"][0]["surface_id"] == "document_editor"
+
+
+async def test_layout_compose_unregistered_surface_fails(client):
+    """The registered-surface gate (validate_layout_spec) runs
+    server-side: an unregistered surface must be rejected and never
+    re-emitted as an authoritative command."""
+    services = client.app.state.services
+    command = LayoutCompose(
+        template=AdaptiveTemplate.SIDECAR,
+        assignments=[
+            LayoutAssignment(
+                surface_id="telegram_preview", role=SurfaceRole.PRIMARY, slot="main"
+            ),
+            LayoutAssignment(
+                surface_id="conversation", role=SurfaceRole.COMPANION, slot="side"
+            ),
+        ],
+    )
+    verdict = await handle_ui_command(services.deps_base, services.registry, command)
+    assert verdict.status == "failed"
+    assert "unregistered" in verdict.detail
+    q = services.deps_base.bus.subscribe()
+    await handle_ui_command(services.deps_base, services.registry, command)
+    assert not [e for e in _drain(q) if e["type"] == "ui_command"]
+
+
+async def test_every_ui_command_member_has_a_typed_case(client):
+    """Runtime mirror of the type-level exhaustiveness guard in
+    handle_ui_command (W1): every UiCommand member must map to a
+    verdict; only the server-originated trio may be 'unsupported'. If a
+    new member joins the union without a dispatch case, this test
+    enumerates it and mypy's _assert_never tail fails at type-check —
+    the drift class that produced the layout.compose gap."""
+    services = client.app.state.services
+    reset_media_state()
+    client_initiable = [
+        TasksToggle(task_id="1"),
+        DocumentSave(panel_type="document_editor", content="x"),
+        YoutubeSearch(query="x"),
+        BrowserNavigate(url="https://example.com"),
+        BrowserBack(),
+        BrowserForward(),
+        BrowserRefresh(),
+        YoutubePlay(video_id="dQw4w9WgXcQ", title="x"),
+        AudioPlay(asset="chime.wav"),
+        MediaPlayPause(),
+        MediaSeek(position_s=1),
+        LayoutApply(
+            template=LayoutTemplate.SPLIT,
+            primary_panel=PanelType.DOCUMENT_EDITOR,
+            secondary_panel=PanelType.CONVERSATION,
+        ),
+        PanelOpen(panel_type=PanelType.DOCUMENT_EDITOR),
+        PanelClose(panel_id="no-such-panel"),
+        PanelSetPrimary(action="panel.set_primary", panel_type=PanelType.DOCUMENT_EDITOR),
+        PanelFullscreen(panel_type=PanelType.DOCUMENT_EDITOR),
+        LayoutRestore(),
+        _valid_compose_command(),
+    ]
+    server_only = [
+        NotificationShow(
+            notification_id="n1", kind=NotificationKind.INFO, title="t", text="x"
+        ),
+        MediaStateChange(state=MediaState.PAUSED),
+        TtsSpeak(text="x"),
+    ]
+    for command in client_initiable:
+        verdict = await handle_ui_command(services.deps_base, services.registry, command)
+        assert verdict.status != "unsupported", (
+            f"{command.action} lacks an authoritative handler (R39)"
+        )
+    for command in server_only:
+        verdict = await handle_ui_command(services.deps_base, services.registry, command)
+        assert verdict.status == "unsupported", (
+            f"{command.action} is server-originated and must not be client-handled (C1)"
+        )
+    reset_media_state()
