@@ -160,18 +160,18 @@ def test_tasks_update_frame_shape():
 
 def test_agent_search_emits_youtube_search_offer(client):
     """The OFFER channel works end to end: when the agent runs its search
-    tool, a youtube.search event lands with the results as selectable
+    tool, a media.search_results event lands with the results as selectable
     cards data (youtubeSlice reduces it into content.youtube.results).
     Realness of the results is W1-YOUTUBE's row (probe: youtube_realness)."""
     events = run_scripted_turn(
         client.app, "media_search_youtube", {"query": "carpintería"}
     )
-    offers = frames_of(events, "youtube.search")
-    assert offers, "expected a youtube.search event from the agent's search tool"
+    offers = frames_of(events, "media.search_results")
+    assert offers, "expected a media.search_results event from the agent's search tool"
     assert offers[-1]["query"] == "carpintería"
     assert offers[-1]["results"], "the offer must carry result cards"
     card = offers[-1]["results"][0]
-    for field in ("id", "title", "channel", "duration_s"):
+    for field in ("id", "title", "channel", "duration_s", "source"):
         assert field in card, f"result card missing {field}"
 
 

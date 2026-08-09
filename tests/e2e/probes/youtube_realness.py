@@ -38,15 +38,18 @@ def main(record_dir: Path) -> int:
     ensure_worktree_paths()
     checks: list[dict] = []
 
-    # c1 — the fixture list is gone
+    # c1 — the fixture list is gone (a docstring mention is fine; the
+    # constant must not be DEFINED anywhere in the tool module)
+    import re as _re
+
     src = MEDIA_TOOLS.read_text(encoding="utf-8") if MEDIA_TOOLS.exists() else ""
-    c1 = "FIXTURE_RESULTS" not in src
+    c1 = not _re.search(r"FIXTURE_RESULTS\s*=", src)
     checks.append(
         {
             "id": "fixture_results_gone",
             "label": "media_tools.py no longer defines FIXTURE_RESULTS",
             "pass": c1,
-            "evidence": f"source scan of {MEDIA_TOOLS.relative_to(WORKTREE)}",
+            "evidence": f"source scan of {MEDIA_TOOLS.relative_to(WORKTREE)} (definition check)",
         }
     )
 
@@ -65,10 +68,21 @@ def main(record_dir: Path) -> int:
         }
     )
 
-    # c3 — zero results is an honest empty list (no fixture fallback)
+    # c3 — zero results is an honest empty list (no fixture fallback).
+    # Stub the provider to return NO hits: the invariant is the TOOL's
+    # behavior when the provider yields nothing (a live nonsense query is
+    # NOT a reliable zero — the real engine matches substrings, e.g.
+    # "zzzz-no-existe-nada" -> "Aquel Nap ZzZz").
+    import arsvox_agent.tools.media_tools as media_tools_mod
+
+    class _EmptyProvider:
+        async def search(self, query: str):
+            return []
+
+    media_tools_mod.get_youtube_search_provider = lambda: _EmptyProvider()
     app, _ = make_app()
     events = run_scripted_turn(app, "media_search_youtube", {"query": "zzzz-no-existe-nada"})
-    offers = frames_of(events, "youtube.search")
+    offers = frames_of(events, "media.search_results")
     empty = bool(offers) and offers[-1]["results"] == []
     checks.append(
         {
@@ -76,8 +90,8 @@ def main(record_dir: Path) -> int:
             "label": "a query with no matches yields an EMPTY results list (never a fixture fallback)",
             "pass": empty,
             "evidence": (
-                f"scripted media.search_youtube('zzzz-no-existe-nada') -> "
-                f"{len(offers[-1]['results']) if offers else 'no youtube.search event'} results"
+                f"stubbed provider (0 hits) -> media.search_results with "
+                f"{len(offers[-1]['results']) if offers else 'no event'} results"
             ),
         }
     )
