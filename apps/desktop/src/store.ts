@@ -737,6 +737,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         case "youtube.search":
         case "browser.navigate":
         case "document.load":
+        case "document.changed":
         case "tasks.update": {
           // GATE-5 (W0-SLICE): panel content events reduce through the ONE
           // content registry — the store routes, the owning slice reduces.
