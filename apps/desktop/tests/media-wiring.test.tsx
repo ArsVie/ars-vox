@@ -16,6 +16,7 @@
  * Node env + renderToStaticMarkup (repo convention — no jsdom).
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { appStore } from "../src/store";
@@ -27,9 +28,49 @@ import {
   youtubeEmbedSrc,
 } from "../src/components/MediaDock";
 import type { ServerEvent, UiCommand } from "../src/contracts";
+import {
+  SurfaceRoleProvider,
+  type SurfaceRoleInfo,
+} from "../src/roles/context";
+import type { SurfaceRole } from "../src/adaptive/contracts";
 
 function ts(): string {
   return new Date().toISOString();
+}
+
+/** Capabilities the media surface declares in the shared registry. */
+const MEDIA_ROLES: readonly SurfaceRole[] = [
+  "primary",
+  "companion",
+  "persistent",
+];
+
+function roleInfo(
+  surfaceId: string,
+  capabilities: readonly SurfaceRole[],
+): SurfaceRoleInfo {
+  return {
+    surfaceId,
+    role: "primary",
+    requestedRole: "primary",
+    capabilities,
+    degraded: false,
+  };
+}
+
+/** Mount a panel as the PRIMARY surface (full variant) — the W2-SURFACES
+ *  contract: surfaces render inside a SurfaceRoleProvider (same pattern
+ *  as tests/media-surface.test.tsx). */
+function renderPrimary(
+  node: ReactNode,
+  surfaceId: string,
+  capabilities: readonly SurfaceRole[],
+): string {
+  return renderToStaticMarkup(
+    <SurfaceRoleProvider value={roleInfo(surfaceId, capabilities)}>
+      {node}
+    </SurfaceRoleProvider>,
+  );
 }
 
 /** A backend ui_command event carrying the given command. */
@@ -161,7 +202,7 @@ describe("H7: the media surface renders backend-commanded state", () => {
       }),
     );
 
-    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
     expect(html).toContain("media-dock");
     expect(html).toContain("Taller de carpintería");
     expect(html).toContain('aria-label="Pausar"');
@@ -169,7 +210,7 @@ describe("H7: the media surface renders backend-commanded state", () => {
   });
 
   it("empty surface still shows the waiting state", () => {
-    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
     expect(html).toContain("Reproducción en espera.");
   });
 });
@@ -183,7 +224,7 @@ describe("H7: real YouTube player control (no URL swap)", () => {
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     });
 
-    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
     // enablejsapi=1: the postMessage channel is open; the legacy URL swap
     // (autoplay=0 marker on pause) is gone.
     expect(html).toContain("youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1");
@@ -199,7 +240,7 @@ describe("H7: real YouTube player control (no URL swap)", () => {
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     });
 
-    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
     expect(html).toContain("youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&amp;autoplay=1");
     // Same video id, same key — toggling state never remounts the embed.
     expect(html).toContain('data-youtube-control="postmessage"');
@@ -212,8 +253,8 @@ describe("H7: real YouTube player control (no URL swap)", () => {
       title: "Pasta",
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     });
-    const a = renderToStaticMarkup(<MediaDock panelId="media" />);
-    const b = renderToStaticMarkup(<MediaDock panelId="media" />);
+    const a = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
+    const b = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
     expect(a).toBe(b);
   });
 

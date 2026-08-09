@@ -1,12 +1,18 @@
 /**
  * SSR render coverage for the five content panels (YoutubePanel,
  * BrowserPanel, TasksPanel, DocumentPanel, MediaDock) — renderToString,
- * no DOM/jsdom needed. Same zustand SSR trick as panelhost.test.tsx:
- * useStore snapshots via `api.getServerState || api.getInitialState`,
- * so we attach a live getServerState in beforeEach and seed the
- * singleton store through the real event path (applyEvent) or setState.
+ * no DOM/jsdom needed. Same zustand SSR trick as the deleted
+ * panelhost.test.tsx: useStore snapshots via `api.getServerState ||
+ * api.getInitialState`, so we attach a live getServerState in beforeEach
+ * and seed the singleton store through the real event path (applyEvent)
+ * or setState.
+ *
+ * W2-SURFACES: the panel components require a SurfaceRoleProvider
+ * ancestor (useSurfaceRole throws without one) — every render mounts
+ * through the provider the way tests/media-surface.test.tsx does.
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { appStore } from "../src/store";
@@ -15,9 +21,54 @@ import { BrowserPanel } from "../src/components/BrowserPanel";
 import { TasksPanel } from "../src/components/TasksPanel";
 import { DocumentPanel } from "../src/components/DocumentPanel";
 import { MediaDock } from "../src/components/MediaDock";
+import {
+  SurfaceRoleProvider,
+  type SurfaceRoleInfo,
+} from "../src/roles/context";
+import type { SurfaceRole } from "../src/adaptive/contracts";
 
 function ts(): string {
   return new Date().toISOString();
+}
+
+/** Capabilities the product surfaces declare in the shared registry. */
+const STANDARD_ROLES: readonly SurfaceRole[] = [
+  "primary",
+  "companion",
+  "support",
+];
+const MEDIA_ROLES: readonly SurfaceRole[] = [
+  "primary",
+  "companion",
+  "persistent",
+];
+
+function roleInfo(
+  surfaceId: string,
+  capabilities: readonly SurfaceRole[],
+): SurfaceRoleInfo {
+  return {
+    surfaceId,
+    role: "primary",
+    requestedRole: "primary",
+    capabilities,
+    degraded: false,
+  };
+}
+
+/** Mount a panel as the PRIMARY surface (full variant) — the W2-SURFACES
+ *  contract: surfaces render inside a SurfaceRoleProvider (same pattern
+ *  as tests/media-surface.test.tsx). */
+function renderPrimary(
+  node: ReactNode,
+  surfaceId: string,
+  capabilities: readonly SurfaceRole[],
+): string {
+  return renderToStaticMarkup(
+    <SurfaceRoleProvider value={roleInfo(surfaceId, capabilities)}>
+      {node}
+    </SurfaceRoleProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -53,7 +104,7 @@ describe("YoutubePanel", () => {
       created_at: ts(),
     });
 
-    const html = renderToStaticMarkup(<YoutubePanel />);
+    const html = renderPrimary(<YoutubePanel />, "youtube", STANDARD_ROLES);
     expect(html).toContain("youtube-search");
     expect(html).toContain("Sinfonía nº 9");
     expect(html).toContain("Orquesta Clásica");
@@ -65,7 +116,7 @@ describe("YoutubePanel", () => {
   });
 
   it("renders the empty-state text when there is no youtube content", () => {
-    const html = renderToStaticMarkup(<YoutubePanel />);
+    const html = renderPrimary(<YoutubePanel />, "youtube", STANDARD_ROLES);
     expect(html).toContain("content-panel-empty-text");
     expect(html).toContain("Pídeme que busque un vídeo o escribe aquí arriba.");
     expect(html).not.toContain("youtube-card");
@@ -84,7 +135,7 @@ describe("BrowserPanel", () => {
       created_at: ts(),
     });
 
-    const html = renderToStaticMarkup(<BrowserPanel />);
+    const html = renderPrimary(<BrowserPanel />, "browser", STANDARD_ROLES);
     expect(html).toContain("browser-toolbar");
     expect(html).toContain('aria-label="Atrás"');
     expect(html).toContain('aria-label="Recargar"');
@@ -94,7 +145,7 @@ describe("BrowserPanel", () => {
   });
 
   it("renders the empty-state text when there is no browser content", () => {
-    const html = renderToStaticMarkup(<BrowserPanel />);
+    const html = renderPrimary(<BrowserPanel />, "browser", STANDARD_ROLES);
     expect(html).toContain("content-panel-empty-text");
     expect(html).toContain("Pídeme que abra una página o escribe una dirección arriba.");
     expect(html).not.toContain("<iframe");
@@ -115,7 +166,7 @@ describe("TasksPanel", () => {
       created_at: ts(),
     });
 
-    const html = renderToStaticMarkup(<TasksPanel />);
+    const html = renderPrimary(<TasksPanel />, "tasks", STANDARD_ROLES);
     expect(html).toContain("Pendientes · 1/2");
     expect(html).toContain("Comprar leche");
     expect(html).toContain("Llamar a María");
@@ -129,7 +180,7 @@ describe("TasksPanel", () => {
   });
 
   it("renders the empty-state text when there are no tasks", () => {
-    const html = renderToStaticMarkup(<TasksPanel />);
+    const html = renderPrimary(<TasksPanel />, "tasks", STANDARD_ROLES);
     expect(html).toContain("content-panel-empty-text");
     expect(html).toContain("No hay tareas. Pídeme que anote una.");
   });
@@ -149,7 +200,11 @@ describe("DocumentPanel", () => {
       created_at: ts(),
     });
 
-    const html = renderToStaticMarkup(<DocumentPanel panelId="document_editor" />);
+    const html = renderPrimary(
+      <DocumentPanel panelId="document_editor" />,
+      "document_editor",
+      STANDARD_ROLES,
+    );
     expect(html).toContain("doc-h2");
     expect(html).toContain("Reunión");
     expect(html).toContain("doc-paragraph");
@@ -162,7 +217,11 @@ describe("DocumentPanel", () => {
   });
 
   it("renders the empty-state text when no document is open", () => {
-    const html = renderToStaticMarkup(<DocumentPanel panelId="document_editor" />);
+    const html = renderPrimary(
+      <DocumentPanel panelId="document_editor" />,
+      "document_editor",
+      STANDARD_ROLES,
+    );
     expect(html).toContain("content-panel-empty-text");
     expect(html).toContain("No hay documento abierto. Pídeme que abra uno.");
     expect(html).not.toContain("document-mode-btn");
@@ -185,7 +244,7 @@ describe("MediaDock", () => {
       created_at: ts(),
     });
 
-    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
     expect(html).toContain("media-dock");
     expect(html).toContain("media-player");
     expect(html).toContain('aria-label="Pausar"');
@@ -197,7 +256,7 @@ describe("MediaDock", () => {
   });
 
   it("renders the waiting text when there is no media content", () => {
-    const html = renderToStaticMarkup(<MediaDock panelId="media" />);
+    const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
     expect(html).toContain("media-dock-empty");
     expect(html).toContain("Reproducción en espera.");
     expect(html).not.toContain("media-player");

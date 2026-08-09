@@ -15,7 +15,7 @@
  * (3) the demo role-history showing one uninterrupted per-surfaceId entry
  * with the full role sequence.
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import type { StoreApi } from "zustand/vanilla";
 
@@ -388,27 +388,41 @@ describe("store adaptive state (UI-103)", () => {
     });
   });
 
-  it("invalid specs throw and never reach state", () => {
+  it("invalid specs are REJECTED, never thrown — state untouched (GATE-1 addendum)", () => {
+    // GATE-1 changed applyAdaptiveSpec to warn-and-return on an
+    // unrenderable spec: the geometry guard (computeAdaptiveGeometry)
+    // catches validator/geometry failures, console.warns, and leaves
+    // state untouched — the app must never white-screen.
     const store = createAppStore(() => {});
     store.getState().applyAdaptiveSpec(specPrimary);
     const before = store.getState().adaptive;
-    expect(() =>
-      store.getState().applyAdaptiveSpec({
-        template: "sidecar",
-        assignments: [
-          { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
-          { surfaceId: "placeholder.companion", role: "primary", slot: "side" },
-        ],
-      }),
-    ).toThrow(/exactly one primary/);
-    expect(() =>
-      store.getState().applyAdaptiveSpec({
-        template: "focus",
-        assignments: [
-          { surfaceId: "ghost", role: "primary", slot: "main" },
-        ],
-      }),
-    ).toThrow(/unregistered/);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // two primaries in a sidecar — frozen validator violation
+      expect(() =>
+        store.getState().applyAdaptiveSpec({
+          template: "sidecar",
+          assignments: [
+            { surfaceId: "placeholder.primary", role: "primary", slot: "main" },
+            { surfaceId: "placeholder.companion", role: "primary", slot: "side" },
+          ],
+        }),
+      ).not.toThrow();
+      // unregistered surface — registry violation
+      expect(() =>
+        store.getState().applyAdaptiveSpec({
+          template: "focus",
+          assignments: [
+            { surfaceId: "ghost", role: "primary", slot: "main" },
+          ],
+        }),
+      ).not.toThrow();
+      // the rejection is observable: warn-and-return
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+    // layout state is exactly what it was before — no partial updates
     expect(store.getState().adaptive).toEqual(before);
   });
 

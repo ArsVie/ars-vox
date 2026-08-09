@@ -31,6 +31,11 @@ import { ConversationPanel } from "../src/components/ConversationPanel";
 import { StatusBar } from "../src/components/StatusBar";
 import type { VoiceState } from "../src/contracts";
 import { appStore } from "../src/store";
+import {
+  SurfaceRoleProvider,
+  type SurfaceRoleInfo,
+} from "../src/roles/context";
+import type { SurfaceRole } from "../src/adaptive/contracts";
 
 const STYLES_CSS = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const CONTENT_CSS = readFileSync(new URL("../src/content.css", import.meta.url), "utf8");
@@ -84,6 +89,34 @@ function renderStatusBar(state: VoiceState): string {
   setVoiceState(state);
   return renderToStaticMarkup(
     <StatusBar demoValue={null} onDemoChange={() => undefined} />,
+  );
+}
+
+/** Capabilities the conversation surface declares in the shared registry. */
+const CONVERSATION_ROLES: readonly SurfaceRole[] = [
+  "primary",
+  "companion",
+  "support",
+];
+
+/** W2-SURFACES: surfaces render inside a SurfaceRoleProvider — mount the
+ *  conversation as PRIMARY (full variant), same pattern as
+ *  tests/media-surface.test.tsx. */
+function renderConversation(): string {
+  return renderToStaticMarkup(
+    <SurfaceRoleProvider
+      value={
+        {
+          surfaceId: "conversation",
+          role: "primary",
+          requestedRole: "primary",
+          capabilities: CONVERSATION_ROLES,
+          degraded: false,
+        } satisfies SurfaceRoleInfo
+      }
+    >
+      <ConversationPanel panelId="conversation" />
+    </SurfaceRoleProvider>,
   );
 }
 
@@ -247,9 +280,7 @@ describe("UI-303 tab order sanity", () => {
 
   it("composer: input -> mic button -> send button", () => {
     appStore.setState({ messages: [] });
-    const html = renderToStaticMarkup(
-      <ConversationPanel panelId="conversation" />,
-    );
+    const html = renderConversation();
     const inputIdx = html.indexOf('aria-label="Escribe una petición"');
     const micIdx = html.indexOf('class="mic-button');
     const sendIdx = html.indexOf('class="send-button"');

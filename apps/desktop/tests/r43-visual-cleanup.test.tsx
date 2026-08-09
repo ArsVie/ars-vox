@@ -32,6 +32,11 @@ import { ConfirmationPanel } from "../src/components/ConfirmationPanel";
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import { STATUS_VOCABULARY, StatusBar } from "../src/components/StatusBar";
 import { appStore } from "../src/store";
+import {
+  SurfaceRoleProvider,
+  type SurfaceRoleInfo,
+} from "../src/roles/context";
+import type { SurfaceRole } from "../src/adaptive/contracts";
 
 function renderStatusBar(): string {
   return renderToStaticMarkup(
@@ -39,8 +44,32 @@ function renderStatusBar(): string {
   );
 }
 
+/** Capabilities the conversation surface declares in the shared registry. */
+const CONVERSATION_ROLES: readonly SurfaceRole[] = [
+  "primary",
+  "companion",
+  "support",
+];
+
+/** W2-SURFACES: surfaces render inside a SurfaceRoleProvider — mount the
+ *  conversation as PRIMARY (full variant), same pattern as
+ *  tests/media-surface.test.tsx. */
 function renderPrimaryConversation(): string {
-  return renderToStaticMarkup(<ConversationPanel panelId="conversation" />);
+  return renderToStaticMarkup(
+    <SurfaceRoleProvider
+      value={
+        {
+          surfaceId: "conversation",
+          role: "primary",
+          requestedRole: "primary",
+          capabilities: CONVERSATION_ROLES,
+          degraded: false,
+        } satisfies SurfaceRoleInfo
+      }
+    >
+      <ConversationPanel panelId="conversation" />
+    </SurfaceRoleProvider>,
+  );
 }
 
 beforeEach(() => {
