@@ -5,6 +5,8 @@ vocabulary — this fails."""
 
 from arsvox_agent.runtime import PROMPT_FILE
 
+import re
+
 
 def _prompt() -> str:
     return PROMPT_FILE.read_text(encoding="utf-8")
@@ -49,9 +51,13 @@ def test_system_prompt_does_not_advertise_deprecated_layout_vocabulary():
     # Legacy wire templates and slot names are NOT model vocabulary
     # anymore (C5): layout.compose is semantic-only, the application
     # derives slots from roles and owns all geometry.
+    # Word-boundary match: a raw substring check would collide with the
+    # legitimate tool name `preferences.set` (contains "reference").
     text = _prompt()
     for legacy in ("dashboard", "reading", "dock", "rail", "background_media", "reference"):
-        assert legacy not in text, f"system.md re-advertises legacy vocabulary '{legacy}'"
+        assert not re.search(rf"\b{re.escape(legacy)}\b", text), (
+            f"system.md re-advertises legacy vocabulary '{legacy}'"
+        )
 
 
 def test_system_prompt_forbids_coordinates():
