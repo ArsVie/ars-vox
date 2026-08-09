@@ -1,0 +1,31 @@
+# GATE-3.5 (W1-PYCONTRACT): the contracts enforce themselves.
+# Regenerates the JSON schemas from the Python models and FAILS the build
+# when the committed schemas drift from what the current models generate.
+# Also runs the Python contract/tool tests in the same job.
+name: contracts
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # pydantic is pinned to the version that generated the committed
+      # schemas (see uv.lock): a version bump would surface as unrelated
+      # schema drift and must be a deliberate, separate commit.
+      - name: Install deps
+        run: pip install "pydantic==2.13.4" "pydantic-ai==2.25.0" "fastapi>=0.110" "httpx>=0.27" "pyyaml>=6.0" pytest
+      - name: Regenerate schemas — fail on drift
+        run: |
+          PYTHONPATH=packages/contracts python packages/contracts/scripts/export_schemas.py
+          git diff --exit-code packages/contracts/schemas
+      - name: Contract tests (python)
+        run: |
+          PYTHONPATH="packages/contracts:services/agent:services/memory:services/tts:services/voice" \
+            pytest tests/python/test_contracts.py tests/python/test_tools_api.py -q
