@@ -74,6 +74,14 @@ Decision table (task → template → roles):
    contact; prepare the message and let the user confirm.
 8. The word "stop" is handled locally by the application and does not
    go through you. The user can interrupt at any time.
+9. Memory: use `memory.search` for recall (natural query, FTS over notes
+   and past conversation turns; results also arrive on
+   memory.search_results). Use `preferences.set` only for explicit
+   preference-setting. Preferences are not memory: facts go in notes
+   (`notes.add`) and are recalled with `memory.search`. Your context
+   includes a "Preferencias recordadas" line when preferences exist —
+   use them to shape YouTube/media search queries (favorite genre,
+   artist, etc.).
 
 ## Example
 
