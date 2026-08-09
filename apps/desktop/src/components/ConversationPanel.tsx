@@ -8,10 +8,14 @@ import { appStore } from "../store";
 import { useSurfaceRole } from "../roles/context";
 import { MicButton } from "./MicButton";
 import { MicHero } from "./MicHero";
-import { PanelHeader } from "./PanelHeader";
-import { ChatIcon, SendIcon } from "./icons";
+import { SendIcon } from "./icons";
 
-const SUGGESTIONS = ["Abre un documento", "Lee mis correos", "Dime la hora"];
+/**
+ * R43 — suggestion chips are a capability contract, not aspirational copy:
+ * every chip must name something the assistant can actually do. Email is
+ * NOT implemented, so "Lee mis correos" must never appear.
+ */
+const SUGGESTIONS = ["Abre un documento", "Dime la hora"];
 
 /** Support-variant window: the latest exchange only (render-only slice —
  *  history stays untouched in the store). */
@@ -68,14 +72,14 @@ export function ConversationPanel({ meta, panelId }: { meta?: PanelMeta; panelId
   return (
     <section
       className={`panel conversation-panel conversation--${role}`}
-      aria-label="Conversation"
+      aria-label="Conversación"
       data-variant={role}
     >
-      {role === "primary" ? (
-        <PanelHeader panelId={panelId} icon={<ChatIcon size={15} />}>
-          Conversación
-        </PanelHeader>
-      ) : isCompanion ? (
+      {/* R43: the generic CONVERSACIÓN label is container vocabulary —
+          redundant when conversation IS the primary surface (its identity
+          is the message list / mic hero). Companion keeps its subdued
+          subheader: that one identifies a SIDE conversation. */}
+      {role === "companion" ? (
         <div className="conversation-subheader">Conversación</div>
       ) : null}
       <div className="message-list" ref={listRef}>
@@ -124,7 +128,7 @@ export function ConversationPanel({ meta, panelId }: { meta?: PanelMeta; panelId
             if (e.key === "Enter") submit();
           }}
           placeholder="Escribe una petición..."
-          aria-label="Request"
+          aria-label="Escribe una petición"
         />
         <MicButton />
         <button type="button" className="send-button" onClick={submit} disabled={!draft.trim()}>

@@ -73,7 +73,9 @@ describe("PanelHost slot rendering", () => {
       fullscreenPanel: null,
     });
     const html = renderToString(<PanelHost />);
-    expect(html).toContain("Conversación");
+    // R43: primary conversation carries its Spanish accessible name instead
+    // of the generic CONVERSACIÓN container header label.
+    expect(html).toContain('aria-label="Conversación"');
     expect(html).toContain("panel-slot--rail");
     expect(html).toContain("content-panel--notes");
     expect(html).toContain("Notas");

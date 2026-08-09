@@ -98,7 +98,7 @@ describe("adaptive stage hosting real surfaces", () => {
     // UI-201: BrowserPanel renders its role variant attribute.
     expect(html).toContain('data-browser-role="primary"');
     // UI-202: ConversationPanel composer contract survives every variant.
-    expect(html).toContain('aria-label="Request"');
+    expect(html).toContain('aria-label="Escribe una petición"');
   });
 
   it("passes a persistent role to the media surface", () => {

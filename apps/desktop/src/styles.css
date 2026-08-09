@@ -962,28 +962,6 @@ body,
   flex: 1;
 }
 
-.status-conn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-dim);
-  font-size: 13.5px;
-}
-
-.status-conn .conn-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.status-conn .conn-dot.on {
-  background: var(--ok);
-}
-
-.status-conn .conn-dot.off {
-  background: var(--danger);
-}
-
 /* --------------------------------------------------------- stop button */
 /* The single most important affordance in a voice-first app: always
    visible, filled, red-tinted (stop is a legitimate exception to the
@@ -1561,13 +1539,6 @@ body,
   margin: 0 0 8px 0;
   font-size: 15px;
   line-height: 1.6;
-}
-
-.confirmation-tool {
-  color: var(--text-faint);
-  font-size: 12.5px;
-  margin: 0;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 
 .confirmation-actions {
