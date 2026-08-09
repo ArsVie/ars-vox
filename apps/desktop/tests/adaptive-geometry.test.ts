@@ -8,13 +8,16 @@
  * unregistered surface, stage too small), and surface mobility between
  * slots (identity = surfaceId, never instance).
  */
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+import { describe, expect, it, beforeEach } from "vitest";
 
 import {
   ALL_TEMPLATES,
   PLACEHOLDER_REGISTERED_IDS,
   TEMPLATE_FIXTURES,
 } from "../src/adaptive/fixtures";
+import { registerProductSurfaces } from "../src/adaptive/surfaces";
 import type { AdaptiveTemplate, LayoutSpec, Proportion } from "../src/adaptive/contracts";
 import {
   AdaptiveGeometryError,
@@ -28,6 +31,8 @@ import {
   computeTemplateRects,
   type AdaptiveGeometry,
 } from "../src/layout/adaptiveEngine";
+import { surfaceRegistry } from "../src/roles/registry";
+import { appStore, EMPTY_ADAPTIVE } from "../src/store";
 
 /** Target desktop resolution (frozen acceptance baseline). */
 const DESKTOP: { width: number; height: number } = { width: 1280, height: 800 };
@@ -449,5 +454,61 @@ describe("computeTemplateRects (exported math)", () => {
     expect(normal.main.width).toBeCloseTo(0.62, 12);
     expect(equal.main.width).toBeCloseTo(0.5, 12);
     expect(equal.side.width).toBeCloseTo(0.5, 12);
+  });
+});
+
+describe("W0 viewport ownership — adaptive geometry follows the shell (regression)", () => {
+  beforeEach(() => {
+    registerProductSurfaces();
+    appStore.setState({ adaptive: EMPTY_ADAPTIVE });
+  });
+
+  it("the viewport writer lives in the app shell, not PanelHost", () => {
+    const appSource = readFileSync(
+      new URL("../src/App.tsx", import.meta.url),
+      "utf8",
+    );
+    const panelHostSource = readFileSync(
+      new URL("../src/components/PanelHost.tsx", import.meta.url),
+      "utf8",
+    );
+    // The adaptive path mounts AdaptiveStage and UNMOUNTS PanelHost the
+    // moment a composition lands (App.tsx branch). A setViewport writer
+    // inside PanelHost therefore freezes the viewport at boot size and
+    // geometry stops following window resizes. The shell must own it.
+    expect(appSource).toContain("ResizeObserver");
+    expect(appSource).toContain("setViewport");
+    expect(panelHostSource).not.toContain("ResizeObserver");
+    expect(panelHostSource).not.toContain("setViewport");
+  });
+
+  it("resizing in the adaptive path changes geometry", () => {
+    // Seed a real adaptive composition through the store choke (same
+    // pattern as adaptive-resolved.test.tsx).
+    const spec: LayoutSpec = {
+      template: "sidecar",
+      proportion: "balanced",
+      assignments: [
+        { surfaceId: "conversation", role: "primary", slot: "main" },
+        { surfaceId: "browser", role: "companion", slot: "side" },
+      ],
+    };
+    appStore.getState().applyAdaptiveSpec(spec);
+    expect(appStore.getState().adaptive.spec).not.toBeNull();
+
+    const ids = surfaceRegistry.registeredIds();
+    const boot = computeAdaptiveGeometry(spec, appStore.getState().viewport, ids);
+    // The shell ResizeObserver's report(): store the new rect.
+    appStore.getState().setViewport({ width: 1920, height: 1080 });
+    const resized = computeAdaptiveGeometry(
+      spec,
+      appStore.getState().viewport,
+      ids,
+    );
+
+    expect(resized).not.toEqual(boot);
+    expect(slotOf(resized, "main").pxWidth).toBeGreaterThan(
+      slotOf(boot, "main").pxWidth,
+    );
   });
 });

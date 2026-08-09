@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ComponentType } from "react";
+import { useRef, type ComponentType } from "react";
 import { useStore } from "zustand";
 
 import type { LayoutSpec, SurfaceRole } from "../adaptive/contracts";
@@ -127,24 +127,7 @@ export function PanelHost({
   const layout = useStore(appStore, (s) => s.layout);
   const panelMeta = useStore(appStore, (s) => s.panelMeta);
   const fullscreenPanel = useStore(appStore, (s) => s.fullscreenPanel);
-  const setViewport = useStore(appStore, (s) => s.setViewport);
   const hostRef = useRef<HTMLDivElement>(null);
-
-  // Feed the real content-viewport size (px) into the store so the engine
-  // can enforce px floors and derive chrome density from actual geometry.
-  // Re-run when demo mode toggles: the host div remounts and the ref is stale.
-  useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
-    const report = () => {
-      const rect = el.getBoundingClientRect();
-      setViewport({ width: Math.round(rect.width), height: Math.round(rect.height) });
-    };
-    report();
-    const observer = new ResizeObserver(report);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [setViewport, demoSpec]);
 
   if (demoSpec) {
     return <ShellDemo spec={demoSpec} />;
