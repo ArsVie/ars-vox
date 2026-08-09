@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { PanelId } from "../layout/engine";
+import type { PanelId } from "../contracts";
 import type { PanelMeta } from "../store";
 import { PanelHeader } from "./PanelHeader";
 import {

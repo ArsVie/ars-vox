@@ -43,7 +43,7 @@
  */
 
 import type { LayoutSlotsWire } from "../contracts";
-import type { AnyTemplate, PanelId } from "../layout/engine";
+import type { AnyTemplate, PanelId } from "../contracts";
 import {
   ASSIGNABLE_ROLES,
   EQUAL_SPLIT_TEMPLATES,

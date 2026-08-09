@@ -21,7 +21,7 @@
 import type { ComponentType } from "react";
 
 import type { SurfaceRegistration } from "./contracts";
-import type { PanelId } from "../layout/engine";
+import type { PanelId } from "../contracts";
 import { surfaceRegistry } from "../roles/registry";
 import { BrowserPanel } from "../components/BrowserPanel";
 import { ConversationPanel } from "../components/ConversationPanel";

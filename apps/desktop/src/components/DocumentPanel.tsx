@@ -1,7 +1,7 @@
 import { useStore } from "zustand";
 import { useMemo, useState } from "react";
 
-import type { PanelId } from "../layout/engine";
+import type { PanelId } from "../contracts";
 import type { PanelMeta } from "../store";
 import type { ReaderLocation } from "../readers/reader";
 import { appStore } from "../store";

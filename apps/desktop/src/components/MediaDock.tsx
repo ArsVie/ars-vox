@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { useStore } from "zustand";
 
 import type { MediaState } from "../contracts";
-import type { PanelId } from "../layout/engine";
+import type { PanelId } from "../contracts";
 import type { PanelMeta } from "../store";
 import { appStore, EMPTY_MEDIA } from "../store";
 import { useSurfaceRole } from "../roles/context";

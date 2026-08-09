@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 
-import type { PanelId } from "../layout/engine";
+import type { PanelId } from "../contracts";
 import type { PanelMeta } from "../store";
 import { appStore } from "../store";
 import { useSurfaceRole } from "../roles/context";
