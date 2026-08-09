@@ -9,7 +9,13 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - Re-read after long pauses; new agents may have entered.
 
 ## Active
-### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
+### hermes-g35-a9 (Wave 1 — consumer UI + accessibility cleanup, R43)
+- timestamp: 2026-08-09T02:51:00Z
+- task: R43 visual cleanup ONLY — remove PLANTILLA demo selector from production UI (dev-flag gate, screenshot workflow preserved), remove redundant "agente conectado" indicator (one status indicator), drop CONVERSACIÓN header label when conversation is primary, audit suggestion chips (remove "Lee mis correos" — email not implemented), no raw `tool:` names in confirmation UI, Spanish a11y labels, role="status" moved off interactive controls (pill only), one canonical status vocabulary.
+- worktree: /mnt/c/dev/ars-vox-worktrees/g35-a9-visual (branch wip/g35-a9-visual, base df48da6)
+- files/dirs: apps/desktop/src/components/{StatusBar,ConversationPanel,ConfirmationPanel,PanelHeader}.tsx + styles.css + tests/ (a11y, conversation-surface, surfaces-wiring, panelhost)
+- status: ACTIVE
+
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
 - tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
 - worktrees: /mnt/c/dev/ars-vox-worktrees/h{1..7}-*, branches wip/h{1..7}-* (briefs /tmp/gate25-briefs/)
