@@ -32,6 +32,9 @@ are the page-originated triggers that transmit over the page's WS).
   main panel, conversation beside. NOTE: opened doc was an empty file, so
   the editor shows its empty-state; chat-bubble rendering in headless is
   under debug (deleg_5facf00a).
+* [Chat history restored](26-chat-history-live.png) — after the
+  snapshot-history fix (H5 gap): reload no longer blanks the chat; the
+  conversation shows the previous REAL turns (user + assistant).
 
 ## Wave 2 — adaptive surfaces + motion (GATE-2, merged 2026-08-08)
 
