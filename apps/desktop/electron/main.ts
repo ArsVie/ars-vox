@@ -33,14 +33,10 @@ import { app, BrowserWindow, ipcMain, session, type Session, type WebContents } 
 import * as crypto from "crypto";
 import * as path from "path";
 // ==== A8 integration patch (GATE-3.5 wave 1, R40-R42) — browser/security module ====
-import {
-  createRemoteContentSession,
-  installGlobalWebContentsGuard,
-  isTrustedIpcSender,
-  registerLocalDocProtocol,
-} from "./hardened-view";
+import { createRemoteContentSession, installGlobalWebContentsGuard, registerLocalDocProtocol } from "./hardened-view";
 import { DEFAULT_REMOTE_ALLOWLIST } from "./security-policy";
 // ==== end A8 integration patch ====
+import { isTrustedIpcSender } from "./ipc-guard";
 
 import {
   generateAuthToken,
@@ -187,21 +183,24 @@ const wsBridge = new ServiceWsBridge();
 
 // ------------------------------------------------------------------ ipc #
 
-/** Only our own window may use the privileged channels. */
-function isTrustedSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
-  return isAppWebContents(event.sender);
-}
-
+/**
+ * R41 sender validation is applied in EVERY handler below: the sender
+ * must be a live WebContents we created AND the main frame of it
+ * (isTrustedIpcSender in ./ipc-guard.ts). The local isTrustedSender
+ * that only checked isAppWebContents is gone — it omitted the
+ * isDestroyed() and mainFrame checks (a subframe of the app window
+ * would have passed).
+ */
 function setupIpc(): void {
   ipcMain.handle("arsvox:service-status", (event) => {
-    if (!isTrustedSender(event)) throw new Error("unauthorized");
+    if (!isTrustedIpcSender(event, isAppWebContents)) throw new Error("unauthorized");
     return serviceStatus;
   });
 
   ipcMain.handle(
     "arsvox:fetch",
     async (event, request: { url?: unknown; method?: unknown; headers?: unknown; body?: unknown; contentType?: unknown; filename?: unknown }) => {
-      if (!isTrustedSender(event)) throw new Error("unauthorized");
+      if (!isTrustedIpcSender(event, isAppWebContents)) throw new Error("unauthorized");
       const url = typeof request?.url === "string" ? request.url : "";
       // The renderer may only reach the agent service itself — never an
       // arbitrary host (no open proxy).
@@ -260,17 +259,17 @@ function setupIpc(): void {
   );
 
   ipcMain.on("arsvox:ws-connect", (event) => {
-    if (!isTrustedSender(event)) return;
+    if (!isTrustedIpcSender(event, isAppWebContents)) return;
     wsBridge.connect();
   });
 
   ipcMain.on("arsvox:ws-close", (event) => {
-    if (!isTrustedSender(event)) return;
+    if (!isTrustedIpcSender(event, isAppWebContents)) return;
     wsBridge.close();
   });
 
   ipcMain.on("arsvox:ws-send", (event, message: unknown) => {
-    if (!isTrustedSender(event)) return;
+    if (!isTrustedIpcSender(event, isAppWebContents)) return;
     if (typeof message !== "string") return;
     wsBridge.send(message);
   });

@@ -213,22 +213,11 @@ export function registerLocalDocProtocol(options: LocalDocProtocolOptions): void
 /* ------------------------------------------------------------------ */
 
 /**
- * R41 — a sender is trusted ONLY when it is (a) a live WebContents the
- * app itself created and vouches for via `trusted`, and (b) the MAIN
- * frame of that WebContents (subframes/iframes can be foreign content).
- * Use in every ipcMain handler; the app's only handler today is A2's
- * arsvox:get-token (patched in main.ts).
+ * R41 — sender validation. Moved to ./ipc-guard.ts (survives the
+ * browser-story decision; this module is retired). See ipc-guard.ts for
+ * the current handler list.
  */
-export function isTrustedIpcSender(
-  event: Pick<IpcMainEvent, "sender" | "senderFrame">,
-  trusted: (wc: WebContents) => boolean,
-): boolean {
-  if (!event.sender || event.sender.isDestroyed()) return false;
-  if (!trusted(event.sender)) return false;
-  const frame = event.senderFrame;
-  if (!frame) return false;
-  return frame === event.sender.mainFrame;
-}
+export { isTrustedIpcSender } from "./ipc-guard";
 
 /**
  * R40/R41 — defense in depth: every WebContents the app creates that is
