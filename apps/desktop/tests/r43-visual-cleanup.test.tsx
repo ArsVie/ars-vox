@@ -1,27 +1,28 @@
 /**
- * GATE-3.5 R43 (Wave 1, A9) — production UI free of implementation
- * vocabulary. Node env, renderToStaticMarkup + CSS source reads (repo
- * convention — no jsdom, zustand getServerState shim in beforeEach).
+ * GATE-3.5 R43 (Wave 1, A9) + GATE-5 W0-DIRECTIVE — production UI free of
+ * implementation vocabulary. Node env, renderToStaticMarkup + CSS source
+ * reads (repo convention — no jsdom, zustand getServerState shim in
+ * beforeEach).
  *
  * Guards the cleanup so it cannot regress:
- *   (a) PLANTILLA demo selector: dev tooling only — gated by a
- *       module-level import.meta.env.DEV constant in FOLDABLE form so
- *       production builds dead-code-eliminate it (source-level contract
- *       here; bundle verified post-build via dist grep). Vitest runs in
- *       dev mode, so the combobox IS present in these renders — the
- *       screenshot workflow is preserved.
+ *   (a) NO template selector anywhere, dev included: the R43 demo
+ *       combobox is DELETED (W0-DIRECTIVE) — no DEMO_TOGGLE_ENABLED in
+ *       source, no <select> in the shell chrome, no "Plantilla".
  *   (b) ONE status indicator: the redundant "agente conectado" text is
  *       gone; the status pill is the single indicator.
  *   (c) No generic CONVERSACIÓN container header when conversation is
  *       primary (covered in conversation-surface.test.tsx) — here we pin
  *       the suggestion chips to real capabilities (no "Lee mis correos").
- *   (d) Confirmation UI shows human labels only — no raw `tool:` names.
+ *   (d) Confirmation UI shows human labels only — no raw `tool:` names —
+ *       and renders as a popup inside the chat, not a full-screen overlay.
  *   (e) Spanish accessibility labels everywhere in the touched chrome.
  *   (f) role="status" live region contains NO interactive controls.
  *   (g) One canonical status vocabulary (STATUS_VOCABULARY is the only
  *       voice-state text source).
  *   (h) STOP floor (>=48px token) stays guarded by a11y.test.tsx; here we
- *       pin the Spanish accessible name in the shell bar.
+ *       pin the Spanish accessible name in the shell chrome.
+ *   (i) W0-DIRECTIVE: persistent home affordance (ARS·VOX → mic hero) and
+ *       a close X on every panel header.
  */
 import { readFileSync } from "node:fs";
 
@@ -30,6 +31,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { ConfirmationPanel } from "../src/components/ConfirmationPanel";
 import { ConversationPanel } from "../src/components/ConversationPanel";
+import { PanelHeader } from "../src/components/PanelHeader";
 import { STATUS_VOCABULARY, StatusBar } from "../src/components/StatusBar";
 import { appStore } from "../src/store";
 import {
@@ -39,9 +41,7 @@ import {
 import type { SurfaceRole } from "../src/adaptive/contracts";
 
 function renderStatusBar(): string {
-  return renderToStaticMarkup(
-    <StatusBar demoValue={null} onDemoChange={() => undefined} />,
-  );
+  return renderToStaticMarkup(<StatusBar />);
 }
 
 /** Capabilities the conversation surface declares in the shared registry. */
@@ -85,28 +85,23 @@ beforeEach(() => {
     appStore.getState();
 });
 
-/* -------------------------------------------------- (a) PLANTILLA gate */
+/* ----------------------------------------- (a) NO template selector gate */
 
-describe("R43 PLANTILLA selector is dev tooling, not a production control", () => {
-  it("the gate is a foldable module-level DEV constant (DCE contract)", () => {
+describe("W0-DIRECTIVE: no template selector anywhere, dev included", () => {
+  it("the demo toggle is deleted from source — no DEMO_TOGGLE_ENABLED, no select", () => {
     const src = readFileSync(new URL("../src/components/StatusBar.tsx", import.meta.url), "utf8");
-    // Vite's define() replaces import.meta.env.DEV with `false` in prod
-    // builds; a module-level constant folds so the combobox is eliminated.
-    // A prop/function indirection would NOT fold — this pins the form.
-    expect(src).toMatch(
-      /DEMO_TOGGLE_ENABLED\s*=\s*import\.meta\.env\.DEV\s*===\s*true/,
-    );
-    // The combobox is always gated by the constant.
-    expect(src).toMatch(/DEMO_TOGGLE_ENABLED\s*\?/);
-    expect(src).not.toContain("demoEnabled");
+    expect(src).not.toContain("DEMO_TOGGLE_ENABLED");
+    expect(src).not.toContain("status-demo");
+    expect(src).not.toContain("<select");
+    expect(src).not.toContain("TEMPLATE_DEMO_LABELS");
   });
 
-  it("dev mode (vitest) keeps the demo combobox — screenshot workflow preserved", () => {
+  it("the shell chrome renders no selector and no demo vocabulary", () => {
     const html = renderStatusBar();
-    expect(html).toContain("status-demo-select");
-    expect(html).toContain("Plantilla");
-    expect(html).toContain("Automática");
-    expect(html).toContain("aria-label=\"Plantilla de demostración\"");
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain("status-demo-select");
+    expect(html).not.toContain("Plantilla");
+    expect(html).not.toContain("Automática");
   });
 });
 
@@ -135,7 +130,7 @@ describe("R43 suggestion chips name real capabilities only", () => {
 
 /* ---------------------------------------- (d) confirmation human labels */
 
-describe("R43 confirmation UI: human labels only", () => {
+describe("W0-DIRECTIVE confirmation: human labels, popup inside the chat", () => {
   it("never renders the raw tool name", () => {
     appStore.setState({
       pending: {
@@ -152,6 +147,22 @@ describe("R43 confirmation UI: human labels only", () => {
     expect(html).not.toContain("tool:");
     expect(html).not.toContain("telegram.send_pending");
     expect(html).toContain('aria-label="Confirmación"');
+  });
+
+  it("renders as a chat popup, not a full-screen overlay panel", () => {
+    appStore.setState({
+      pending: {
+        pendingId: "p1",
+        tool: "telegram.send_pending",
+        title: "Enviar mensaje por Telegram",
+        detail: "Se enviará a la persona aprobada:\nhola",
+        expiresInS: 60,
+      },
+    });
+    const html = renderToStaticMarkup(<ConfirmationPanel />);
+    expect(html).toContain("confirmation-popup");
+    expect(html).toContain("confirmation-card");
+    expect(html).not.toContain('class="overlay"');
   });
 });
 
@@ -193,15 +204,41 @@ describe("R43 role=status live region contains no interactive controls", () => {
     expect(regionContent).not.toContain("<input");
   });
 
-  it("dev-mode demo select is outside the live region too", () => {
+  it("no select exists anywhere in the shell chrome (dev included)", () => {
     const html = renderStatusBar();
-    const statusIdx = html.indexOf('role="status"');
-    const stopIdx = html.indexOf('<button type="button" class="stop-button');
-    const selectIdx = html.indexOf("status-demo-select");
-    expect(stopIdx).toBeGreaterThan(statusIdx);
-    expect(selectIdx).toBeGreaterThan(stopIdx);
-    const regionContent = html.slice(statusIdx, stopIdx);
-    expect(regionContent).not.toContain("<select");
+    expect(html).not.toContain("<select");
+  });
+});
+
+/* ------------------------------------------------- (i) W0-DIRECTIVE chrome */
+
+describe("W0-DIRECTIVE: persistent home affordance + close X on panel headers", () => {
+  it("the ARS·VOX home affordance is persistent and labeled Inicio", () => {
+    const html = renderStatusBar();
+    expect(html).toContain("ARS");
+    expect(html).toContain("VOX");
+    expect(html).toContain('aria-label="Inicio"');
+    expect(html).toContain('class="home-button"');
+    expect(html).toContain('class="shell-chrome"');
+  });
+
+  it("the state presentation is minimal — no activity line, no header bar", () => {
+    const html = renderStatusBar();
+    expect(html).not.toContain("status-activity");
+    expect(html).not.toContain("status-bar");
+    expect(html).not.toContain("app-topbar");
+  });
+
+  it("every panel header exposes a close X through the shared seam", () => {
+    const html = renderToStaticMarkup(
+      <PanelHeader panelId="browser" icon={<span>i</span>}>
+        Navegador
+      </PanelHeader>,
+    );
+    expect(html).toContain('aria-label="Cerrar panel"');
+    expect(html).toContain("panel-action--close");
+    // The maximize/restore action is preserved alongside the close X.
+    expect(html).toContain('aria-label="Maximizar panel"');
   });
 });
 

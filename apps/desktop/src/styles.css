@@ -27,13 +27,16 @@
    DOM contract preserved: .panel-slot, .panel-slot--{main,side,rail,dock},
    .density-{full,compact,rail}, .composer-collapsed, .panel, .panel-header,
    .message-list, .message.{user,assistant,system}, .composer input/button,
-   .mic-button, .status-bar, .status-dot, .stop-button, .overlay,
-   .confirmation-card, .error-banner, .document-body, .document-reference,
-   .media-dock.
-   UI-101 shell layer (2026-08-07): .app-topbar, .shell-region (+
+   .mic-button, .shell-chrome, .status-pill, .status-dot, .stop-button,
+   .overlay, .confirmation-card, .error-banner, .document-body,
+   .document-reference, .media-dock.
+   UI-101 shell layer (2026-08-07): .shell-region (+
    .shell-region--{main,side,rail,dock,unassigned}, --seam-right/--seam-top),
-   .shell-demo, .app-persistent, .shell-persistent-region, .placeholder-*,
-   .status-demo. One separator language: --divider-strong/normal/subordinate.
+   .shell-demo, .app-persistent, .shell-persistent-region, .placeholder-*.
+   W0-DIRECTIVE (GATE-5): the full-width status bar is retired — the shell
+   chrome is a minimal floating cluster (.shell-chrome: home affordance +
+   voice-state pill + STOP), and the demo template selector is deleted.
+   One separator language: --divider-strong/normal/subordinate.
    ========================================================================== */
 
 :root {
@@ -247,10 +250,66 @@ body,
    chrome (no region borders beyond the seam, no radius, no shadows, no moat).
    ======================================================================== */
 
-/* ------------------------------------------------- global top bar (chrome) */
-.app-topbar {
-  flex: none;
-  z-index: 100;
+/* --------------------------------------------------- shell chrome (floating)
+   W0-DIRECTIVE: not a header/status bar. The state presentation is a
+   minimal floating cluster — persistent ARS·VOX home affordance, the
+   single voice-state pill (where the eyes land), and STOP — hovering at
+   the top-center of the stage in every template. */
+.shell-chrome {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-2);
+  box-shadow: var(--shadow-float);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  max-width: calc(100% - 24px);
+}
+
+/* Persistent home affordance: the ARS·VOX wordmark returns to the
+   central mic hero (C1 layout reset through the shared wire seam). */
+.home-button {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height-sm);
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.home-button:hover {
+  background: var(--state-hover);
+  color: var(--text);
+  border-color: var(--panel-border);
+}
+
+.home-button:active {
+  background: var(--state-active);
+  transform: scale(0.97);
+}
+
+.home-brand {
+  font-weight: 700;
+  letter-spacing: 2.4px;
+  font-size: 13px;
+}
+
+.home-brand em {
+  font-style: normal;
+  color: var(--accent);
 }
 
 /* -------------------------------------------- activity stage (the surface) */
@@ -834,38 +893,10 @@ body,
   line-height: 1.65;
 }
 
-/* ------------------------------------------------- global chrome (UI-101) */
-/* The status/presence bar is the application's GLOBAL top bar: brand,
-   assistant state, STOP and connection live here — Ars Vox chrome, never
-   panel chrome. It is a sibling of the activity stage and stays visible in
-   every template. */
-.status-bar {
-  position: relative;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 16px;
-  background: linear-gradient(180deg, #0d131c, #0a0e14);
-  border-bottom: 1px solid var(--divider-strong);
-  font-size: 13.5px;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-}
-
-.status-brand {
-  font-weight: 700;
-  letter-spacing: 2.4px;
-  font-size: 13px;
-  color: var(--text-dim);
-  margin-right: 2px;
-}
-
-.status-brand em {
-  font-style: normal;
-  color: var(--accent);
-}
-
+/* -------------------------------------------------------- status pill
+   W0-DIRECTIVE: the pill is the MINIMAL state presentation — icon + label
+   for the assistant's voice state, living inside the floating shell
+   chrome (no full-width bar, no activity line, no connection text). */
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -948,18 +979,6 @@ body,
   50% {
     opacity: 0.45;
   }
-}
-
-.status-activity {
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
-.status-spacer {
-  flex: 1;
 }
 
 /* --------------------------------------------------------- stop button */
@@ -1182,39 +1201,6 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* ---------------------------------------------------- demo select (top bar) */
-.status-demo {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: none;
-}
-
-.status-demo-label {
-  font-size: 12px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.status-demo-select {
-  height: 36px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--divider-normal);
-  background: var(--panel-3);
-  color: var(--text);
-  font-size: 13.5px;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.status-demo-select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* density: rail = icon + one-word label header, no chrome actions */
@@ -1476,6 +1462,10 @@ body,
 }
 
 /* ------------------------------------------------------------ overlays */
+/* W0-DIRECTIVE: the confirmation card is a popup INSIDE the chat, not a
+   separate full-screen overlay panel. `.overlay` remains defined as the
+   generic overlay-surface style (the catalog token conformance pins it);
+   the confirmation component no longer mounts it. */
 .overlay {
   position: absolute;
   inset: 0;
@@ -1495,6 +1485,29 @@ body,
   to {
     opacity: 1;
   }
+}
+
+/* Confirmation popup — positioned INSIDE the conversation surface (the
+   chat) when it is the portal host, floating above the message list;
+   otherwise anchored to the shell. The wrapper carries no motion of its
+   own: the card-in animation lives on .confirmation-card, which the
+   reduced-motion gate already covers. */
+.confirmation-popup {
+  position: absolute;
+  z-index: 60;
+  width: min(480px, calc(100% - 32px));
+}
+
+.conversation-panel > .confirmation-popup {
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+}
+
+.app > .confirmation-popup {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .confirmation-card {
@@ -1679,6 +1692,7 @@ body,
   .composer input,
   .composer button,
   .panel-action,
+  .home-button,
   .mic-button,
   .stop-button,
   .empty-action,
@@ -1725,7 +1739,7 @@ body,
   font-size: 13.5px;
 }
 
-.app[data-large-text] .status-bar {
+.app[data-large-text] .shell-chrome {
   font-size: 15px;
 }
 

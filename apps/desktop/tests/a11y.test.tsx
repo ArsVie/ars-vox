@@ -87,9 +87,7 @@ function setVoiceState(state: VoiceState): void {
 
 function renderStatusBar(state: VoiceState): string {
   setVoiceState(state);
-  return renderToStaticMarkup(
-    <StatusBar demoValue={null} onDemoChange={() => undefined} />,
-  );
+  return renderToStaticMarkup(<StatusBar />);
 }
 
 /** Capabilities the conversation surface declares in the shared registry. */
@@ -147,18 +145,21 @@ describe("UI-303 STOP: immediately recognizable and accessible", () => {
     );
   });
 
-  it("renders in the shell bar in every state as a real button with matching names", () => {
+  it("renders in the shell chrome in every state as a real button with matching names", () => {
     const states: VoiceState[] = ["sleeping", "listening", "thinking", "speaking"];
     for (const state of states) {
       const html = renderStatusBar(state);
       expect(html).toContain('class="stop-button');
       expect(html).toContain("DETENER"); // visible Spanish label
       expect(html).toContain('aria-label="Detener"'); // accessible name matches
-      // Always reachable: STOP precedes every other focusable in the bar.
+      // Always reachable: the home affordance precedes STOP, and no
+      // selector exists anywhere in the shell chrome (W0-DIRECTIVE).
       const stopIdx = html.indexOf("stop-button");
-      const selectIdx = html.indexOf("status-demo-select");
+      const homeIdx = html.indexOf('class="home-button"');
       expect(stopIdx).toBeGreaterThan(-1);
-      expect(selectIdx).toBeGreaterThan(stopIdx);
+      expect(homeIdx).toBeGreaterThan(-1);
+      expect(stopIdx).toBeGreaterThan(homeIdx);
+      expect(html).not.toContain("<select");
     }
   });
 
@@ -270,12 +271,15 @@ describe("UI-303 status: text + icon, never color alone", () => {
 /* ------------------------------------------------------------ (e) tab */
 
 describe("UI-303 tab order sanity", () => {
-  it("shell bar: STOP is the first focusable, before the demo select", () => {
+  it("shell chrome: home affordance first, then STOP — no demo select", () => {
     const html = renderStatusBar("sleeping");
     const stopIdx = html.indexOf("stop-button");
-    const selectIdx = html.indexOf("status-demo-select");
+    const homeIdx = html.indexOf('class="home-button"');
     expect(stopIdx).toBeGreaterThan(-1);
-    expect(selectIdx).toBeGreaterThan(stopIdx);
+    expect(homeIdx).toBeGreaterThan(-1);
+    expect(stopIdx).toBeGreaterThan(homeIdx);
+    expect(html).not.toContain("status-demo-select");
+    expect(html).not.toContain("<select");
   });
 
   it("composer: input -> mic button -> send button", () => {
