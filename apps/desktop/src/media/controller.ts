@@ -11,9 +11,10 @@
  * There is NO React-only simulated playback state: position/duration
  * come from the real player (YouTube iframe infoDelivery) or from the
  * backend controller (which emits the same full state shape). The store
- * mirrors `getState()` into `content.media` after every routed call, so
- * every consumer (MediaDock, persistent bar, snapshot restore) reads
- * the one authoritative state.
+ * The controller notifies subscribers after every state change; the app
+ * store derives `content.media` from it through ONE subscription
+ * (GATE-3.5 W3-MEDIA), so every consumer (MediaDock, persistent bar,
+ * snapshot restore) reads the one authoritative state.
  */
 
 import type {
@@ -91,14 +92,34 @@ export interface PlayerMediaUpdate {
  */
 export class MediaController {
   private _state: MediaState = { ...EMPTY_MEDIA };
+  /** GATE-3.5 (W3-MEDIA): change subscribers (the store's single mirror). */
+  private _listeners = new Set<() => void>();
 
   getState(): MediaState {
     return this._state;
   }
 
+  /**
+   * GATE-3.5 (W3-MEDIA): subscribe to controller changes. The app store
+   * derives content.media through ONE such subscription; the controller
+   * stays the single authority and the only write-target for media
+   * events. Returns an unsubscribe function.
+   */
+  subscribe(listener: () => void): () => void {
+    this._listeners.add(listener);
+    return () => {
+      this._listeners.delete(listener);
+    };
+  }
+
+  private emit(): void {
+    for (const listener of this._listeners) listener();
+  }
+
   /** Test hook: clear to the empty track (in place semantics). */
   reset(): void {
     this._state = { ...EMPTY_MEDIA };
+    this.emit();
   }
 
   // ------------------------------------------------------------------ //
@@ -118,6 +139,7 @@ export class MediaController {
       durationS: ev.duration_s,
       volume: ev.volume,
     };
+    this.emit();
   }
 
   /**
@@ -144,6 +166,7 @@ export class MediaController {
         kind: command.url != null ? (isYoutube ? "video" : "audio") : m.kind,
         volume: command.volume ?? m.volume,
       };
+      this.emit();
       return;
     }
     if (command.action === "audio.play") {
@@ -161,6 +184,7 @@ export class MediaController {
           durationS: m.durationS,
           volume: m.volume,
         };
+        this.emit();
         return;
       }
       // Bare name: keep the loaded track's identity, just start playing.
@@ -173,6 +197,7 @@ export class MediaController {
         videoId: null,
         positionS: 0,
       };
+      this.emit();
     }
   }
 
@@ -189,6 +214,7 @@ export class MediaController {
       ...m,
       state: m.state === "playing" ? "paused" : "playing",
     };
+    this.emit();
   }
 
   /** User dragged the slider / seek command (media.seek). */
@@ -196,6 +222,7 @@ export class MediaController {
     const m = this._state;
     if (!hasTrack(m)) return;
     this._state = { ...m, positionS: Math.max(0, Math.floor(positionS)) };
+    this.emit();
   }
 
   /** User picked a YouTube result (youtube.play). */
@@ -211,6 +238,7 @@ export class MediaController {
       durationS: 0,
       volume: this._state.volume,
     };
+    this.emit();
   }
 
   // ------------------------------------------------------------------ //
@@ -224,6 +252,7 @@ export class MediaController {
    */
   playerStateChanged(state: WireMediaState): void {
     this._state = { ...this._state, state };
+    this.emit();
   }
 
   /**
@@ -242,6 +271,7 @@ export class MediaController {
     }
     if (next.positionS !== m.positionS || next.durationS !== m.durationS) {
       this._state = next;
+      this.emit();
     }
   }
 

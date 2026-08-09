@@ -321,10 +321,13 @@ function nextMessageId(prefix: string): string {
 }
 
 /**
- * GATE-3.5 (R24-R27): the H7 media-command merge helpers moved into
- * src/media/controller.ts — ALL media mutations (server events, server
- * commands, user commands, player callbacks) now route through the one
- * MediaController; this file only mirrors its state into content.media.
+ * GATE-3.5 (R24-R27 + W3-MEDIA): the H7 media-command merge helpers moved
+ * into src/media/controller.ts — ALL media mutations (server events,
+ * server commands, user commands, player callbacks, snapshot restore)
+ * route through the one MediaController, and this file derives
+ * content.media from it through ONE subscription (see createAppStore).
+ * The store is never a write-target for media events; the wire paths
+ * below only APPLY controller output.
  */
 
 /** Slot → semantic role for addSurfaceToSpec (mirrors WIRE_SLOT_ROLE in
@@ -860,21 +863,15 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "media.state": {
-          // GATE-3.5 (R24-R27): defensive server-command path — routed
-          // through the single MediaController like every other media
-          // input; the controller merges the partial command and the
-          // store mirrors the authoritative result.
+          // GATE-3.5 (R24-R27 + W3-MEDIA): defensive server-command path —
+          // routed through the single MediaController like every other
+          // media input; the controller merges the partial command and
+          // the store's ONE subscription mirrors the authoritative result.
           mediaController.applyServerCommand(command);
-          set({
-            content: { ...state.content, media: mediaController.getState() },
-          });
           return;
         }
         case "audio.play": {
           mediaController.applyServerCommand(command);
-          set({
-            content: { ...state.content, media: mediaController.getState() },
-          });
           return;
         }
         default: {
@@ -1026,6 +1023,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           // central-mic hero (user directive, 2026-08-08), and a same-tab
           // reconnect keeps its in-memory desk.
           const snap = event as StateSnapshotEvent;
+          // R30 (A6): media=null is authoritative absence — the stale
+          // player is CLEARED, never preserved. Snapshot restore is
+          // another server-state input routed through the SAME
+          // MediaController (A5/W3-MEDIA — single authority); the store's
+          // ONE subscription mirrors the result into content.media.
+          if (snap.media) {
+            mediaController.applyServerEvent(snap.media);
+          } else {
+            mediaController.reset();
+          }
           const patch: Partial<AppState> = {
             voiceState: snap.voice_state,
             pending: snap.pending_confirmation
@@ -1037,19 +1044,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                   expiresInS: snap.pending_confirmation.expires_in_s,
                 }
               : null,
-            // R30 (A6): media=null is authoritative absence — the stale
-            // player is CLEARED, never preserved. The restore routes
-            // through the SAME MediaController (A5 — single authority),
-            // then the store mirrors the controller state.
-            content: (() => {
-              if (snap.media) {
-                // A5: snapshot restore is another server-state input.
-                mediaController.applyServerEvent(snap.media);
-              } else {
-                mediaController.reset();
-              }
-              return { ...state.content, media: mediaController.getState() };
-            })(),
             // R31/R34: history and notifications are authoritative —
             // empty lists CLEAR stale chat/notification state.
             messages: snap.history.map((h) => ({
@@ -1173,12 +1167,10 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         }
         case "media.state": {
           const ev = event as MediaStateEvent;
-          // GATE-3.5 (R24-R27): the authoritative server state (agent
-          // tool / client action verdict) feeds the single controller.
+          // GATE-3.5 (R24-R27 + W3-MEDIA): the authoritative server state
+          // (agent tool / client action verdict) feeds the single
+          // controller; the store's ONE subscription mirrors it.
           mediaController.applyServerEvent(ev);
-          set({
-            content: { ...state.content, media: mediaController.getState() },
-          });
           return;
         }
         case "action_result": {
@@ -1305,15 +1297,10 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             break;
           }
           case "youtube.play": {
-            // GATE-3.5: user pick -> the controller (optimistic; the
-            // server ack/verdict reconciles afterwards).
+            // GATE-3.5 (W3-MEDIA): user pick -> the controller (optimistic;
+            // the server ack/verdict reconciles afterwards); the store's
+            // ONE subscription mirrors the result.
             mediaController.userPlayYoutube(command.video_id, command.title);
-            set({
-              content: {
-                ...state.content,
-                media: mediaController.getState(),
-              },
-            });
             break;
           }
           case "browser.navigate": {
@@ -1359,28 +1346,16 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
             break;
           }
           case "media.play_pause": {
-            // Optimistic toggle through the controller; mirror only when
-            // the controller state actually changed (no track = no-op =
+            // W3-MEDIA: optimistic toggle through the controller — the
+            // subscription mirrors only real changes (no track = no-op =
             // no fake media surface created).
-            const before = mediaController.getState();
             mediaController.userPlayPause();
-            const after = mediaController.getState();
-            if (after !== before) {
-              set({
-                content: { ...state.content, media: after },
-              });
-            }
             break;
           }
           case "media.seek": {
-            const before = mediaController.getState();
+            // W3-MEDIA: optimistic seek through the controller — the
+            // subscription mirrors only real changes.
             mediaController.userSeek(command.position_s);
-            const after = mediaController.getState();
-            if (after !== before) {
-              set({
-                content: { ...state.content, media: after },
-              });
-            }
             break;
           }
           case "document.save":
@@ -1410,21 +1385,12 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
 
       applyUiCommand,
       /**
-       * GATE-3.5 (R26): player callbacks -> the one controller -> store.
-       * No React-only simulated playback state: what the iframe reports
-       * IS what the progress bar shows.
+       * GATE-3.5 (R26 + W3-MEDIA): player callbacks -> the one controller
+       * -> store (single subscription). No React-only simulated playback
+       * state: what the iframe reports IS what the progress bar shows.
        */
       applyPlayerMediaEvent: (update) => {
-        const before = mediaController.getState();
         mediaController.applyPlayerUpdate(update);
-        const after = mediaController.getState();
-        if (after === before) return; // no real change — skip the mirror
-        set({
-          content: {
-            ...get().content,
-            media: after,
-          },
-        });
       },
       applyAdaptiveSpec,
       applyLayoutIntent,
@@ -1466,6 +1432,22 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       },
     };
   });
+
+  // GATE-3.5 (W3-MEDIA): ONE media authority — content.media is DERIVED
+  // from the MediaController through this single subscription. The store
+  // is never a write-target for media events: every wire path above
+  // (server events, ui_commands, user commands, player callbacks,
+  // snapshot restore) only APPLIES controller output, and this
+  // subscription mirrors the authoritative result. Emits that produce no
+  // real change (no-op toggles/seeks, redundant player time updates)
+  // leave the state object untouched — no re-render churn.
+  mediaController.subscribe(() => {
+    const media = mediaController.getState();
+    store.setState((s: AppState) =>
+      s.content.media === media ? s : { ...s, content: { ...s.content, media } },
+    );
+  });
+
   return store;
 }
 

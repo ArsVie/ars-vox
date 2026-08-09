@@ -19,6 +19,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { appStore } from "../src/store";
 import { MediaDock } from "../src/components/MediaDock";
+import { mediaController } from "../src/media/controller";
 import {
   SurfaceRoleProvider,
   type SurfaceRoleInfo,
@@ -70,6 +71,58 @@ function seedPlayingMedia(): void {
 }
 
 describe("UI-205 MediaDock adaptive variants", () => {
+  it("ONE media authority: tool path -> controller -> store subscription -> dock", () => {
+    // The agent TOOL path: a server MediaStateEvent.
+    appStore.getState().applyEvent({
+      type: "media.state",
+      state: "playing",
+      source: "youtube",
+      kind: "video",
+      title: "Taller de carpintería",
+      video_id: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      position_s: 12,
+      duration_s: 742,
+      volume: 1,
+      created_at: ts(),
+    });
+
+    // The store value IS the controller's state object — ONE authority,
+    // no parallel mirror that could drift.
+    expect(appStore.getState().content.media).toBe(mediaController.getState());
+    expect(mediaController.getState().videoId).toBe("dQw4w9WgXcQ");
+
+    // The dock renders the authoritative state.
+    const html = renderWithRole("primary");
+    expect(html).toContain("Taller de carpintería");
+    expect(html).toContain('aria-label="Pausar"');
+    expect(html).toContain(
+      "youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&amp;autoplay=1",
+    );
+
+    // A second tool-path change (pause) lands in the CONTROLLER first…
+    appStore.getState().applyEvent({
+      type: "media.state",
+      state: "paused",
+      source: "youtube",
+      kind: "video",
+      title: "Taller de carpintería",
+      video_id: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      position_s: 12,
+      duration_s: 742,
+      volume: 1,
+      created_at: ts(),
+    });
+    expect(mediaController.getState().state).toBe("paused");
+    expect(appStore.getState().content.media).toBe(mediaController.getState());
+
+    // …and the dock (re-rendered from the store subscription) reflects it.
+    const pausedHtml = renderWithRole("primary");
+    expect(pausedHtml).toContain('aria-label="Reproducir"');
+    expect(pausedHtml).not.toContain('aria-label="Pausar"');
+  });
+
   it("primary renders the large player with header and full controls", () => {
     seedPlayingMedia();
     const html = renderWithRole("primary");

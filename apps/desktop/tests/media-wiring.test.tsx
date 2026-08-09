@@ -22,6 +22,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { appStore } from "../src/store";
 import { resetMediaController } from "../src/media/controller";
 import {
+  autoplayIntent,
   MediaDock,
   parseYoutubePlayerEvent,
   youtubeCommandMessage,
@@ -216,6 +217,22 @@ describe("H7: the media surface renders backend-commanded state", () => {
 });
 
 describe("H7: real YouTube player control (no URL swap)", () => {
+  it("GATE-3.5 W3: autoplay intent is captured ONCE PER VIDEO key", () => {
+    const captured = new Map<string, boolean>();
+    // Video A first appears PLAYING -> its embed mounts with autoplay=1.
+    expect(autoplayIntent("vidA", true, captured)).toBe(true);
+    // Video B first appears PAUSED -> its embed mounts WITHOUT autoplay —
+    // A's intent can never poison B (the old globally-keyed bug).
+    expect(autoplayIntent("vidB", false, captured)).toBe(false);
+    // Revisiting A keeps A's own mount-time intent for its lifetime
+    // (toggling on the SAME video never remounts the embed).
+    expect(autoplayIntent("vidA", false, captured)).toBe(true);
+    expect(autoplayIntent("vidB", true, captured)).toBe(false);
+    // A fresh surface (new component instance) starts from scratch.
+    const fresh = new Map<string, boolean>();
+    expect(autoplayIntent("vidB", true, fresh)).toBe(true);
+  });
+
   it("embed src is the stable player-API URL — paused mounts carry NO autoplay", () => {
     appStore.getState().applyUiCommand({
       action: "media.state",
