@@ -399,7 +399,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
     /** True once any server layout command has been applied; guards the
      *  config-driven default from clobbering later user state on reconnect. */
     let layoutApplied = false;
-<<<<<<< HEAD
     // GATE-3.5 (A6/R29): bus-sequence authority. lastSeq is the highest
     // sequence seen (reset by every state_snapshot — the snapshot is the
     // sync point and the only thing that can reset a lower sequence after

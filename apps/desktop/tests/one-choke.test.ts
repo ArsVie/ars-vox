@@ -4,7 +4,7 @@
  * R19: every layout source — agent (wire layout.apply), manual UI
  * (panel.open/close/set_primary/fullscreen, layout.restore, the local
  * fullscreen toggle), spoken override (handleSpokenText), reconnect
- * (state_snapshot adaptive_composition), migration (config default) —
+ * (state_snapshot adaptive), migration (config default) —
  * enters the ONE applyAdaptiveSpec choke (adaptive.spec is the only
  * layout state that changes).
  *
@@ -15,7 +15,6 @@
 import { describe, expect, it } from "vitest";
 
 import type { ServerEvent } from "../src/contracts";
-import { TEMPLATE_FIXTURES } from "../src/adaptive/fixtures";
 import { registerProductSurfaces } from "../src/adaptive/surfaces";
 import { createAppStore } from "../src/store";
 
@@ -145,19 +144,12 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
     expect(adaptive.spec?.assignments[0].surfaceId).toBe("browser");
   });
 
-  it("reconnect source: a snapshot adaptive_composition restores through the choke", () => {
+  it("reconnect source: a snapshot adaptive composition restores through the choke", () => {
     const store = createAppStore(() => {});
-    const composition = {
-      spec: TEMPLATE_FIXTURES.sidecar,
-      overrides: {
-        bySurface: {
-          "placeholder.companion": {
-            surfaceId: "placeholder.companion",
-            remove: true,
-          },
-        },
-      },
-    };
+    // A6 wire shape (contracts.ts AdaptiveSnapshot): template + flat
+    // assignments (surface_id/role/slot) + proportion + overrides keyed by
+    // surface id. The store wraps the wire overrides into the OverrideSet
+    // { bySurface } shape and restores through the ONE choke (R33).
     store.getState().applyEvent({
       type: "state_snapshot",
       sequence: 1,
@@ -169,44 +161,62 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
       notifications: [],
       content_keys: [],
       history: [],
-      adaptive_composition: composition,
+      adaptive: {
+        template: "sidecar",
+        assignments: [
+          { surface_id: "conversation", role: "primary", slot: "main" },
+          { surface_id: "browser", role: "companion", slot: "side" },
+        ],
+        proportion: "wide",
+        // user constraint from the snapshot: conversation stays pinned
+        overrides: { conversation: { pin: true } },
+      },
       created_at: ts(),
     } as unknown as ServerEvent);
     const { adaptive } = store.getState();
-    // the composition restored AND the snapshot's constraint set applied
-    // through the choke (the closed companion stays out)
+    // the composition landed through the choke (adaptive.spec is the only
+    // layout state the choke writes)
     expect(adaptive.spec?.template).toBe("sidecar");
-    expect(
-      adaptive.spec?.assignments.map((a) => a.surfaceId),
-    ).not.toContain("placeholder.companion");
-    expect(adaptive.overrides.bySurface["placeholder.companion"]).toMatchObject({
-      remove: true,
+    expect(adaptive.spec?.assignments).toEqual([
+      { surfaceId: "conversation", role: "primary", slot: "main" },
+      { surfaceId: "browser", role: "companion", slot: "side" },
+    ]);
+    expect(adaptive.spec?.proportion).toBe("wide");
+    // the snapshot's user constraint set survived the restore — the choke
+    // is the only writer of adaptive.overrides, so its presence proves the
+    // restore did NOT bypass applyAdaptiveSpec
+    expect(adaptive.overrides.bySurface["conversation"]).toMatchObject({
+      pin: true,
     });
   });
 
   it("reconnect source: a malformed snapshot composition is skipped, never thrown", () => {
     const store = createAppStore(() => {});
-    store.getState().applyEvent({
-      type: "state_snapshot",
-      sequence: 1,
-      voice_state: "sleeping",
-      config: {} as never,
-      layout: { panels: [] },
-      pending_confirmation: null,
-      media: null,
-      notifications: [],
-      content_keys: [],
-      history: [],
-      adaptive_composition: {
-        spec: {
+    expect(() =>
+      store.getState().applyEvent({
+        type: "state_snapshot",
+        sequence: 1,
+        voice_state: "sleeping",
+        config: {} as never,
+        layout: { panels: [] },
+        pending_confirmation: null,
+        media: null,
+        notifications: [],
+        content_keys: [],
+        history: [],
+        // well-shaped wire but the surface is not in the registry — the
+        // choke rejects it and the restore is skipped (R33: no crash)
+        adaptive: {
           template: "focus",
           assignments: [
-            { surfaceId: "ghost.surface", role: "primary", slot: "main" },
+            { surface_id: "ghost.surface", role: "primary", slot: "main" },
           ],
+          proportion: null,
+          overrides: {},
         },
-      },
-      created_at: ts(),
-    } as unknown as ServerEvent);
+        created_at: ts(),
+      } as unknown as ServerEvent),
+    ).not.toThrow();
     expect(store.getState().adaptive.spec).toBeNull();
   });
 });

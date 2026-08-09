@@ -29,6 +29,9 @@ function snapshot(overrides: Partial<StateSnapshotEvent> = {}): StateSnapshotEve
     notifications: [],
     content_keys: [],
     history: [],
+    // A6 wire contract: the snapshot carries the AdaptiveSnapshot field
+    // (empty composition = no layout restore, same as absence)
+    adaptive: { template: null, assignments: [], proportion: null, overrides: {} },
     created_at: ts(),
     ...overrides,
   };
