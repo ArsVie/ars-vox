@@ -6,10 +6,12 @@
  *    are deliberately NOT restored (user directive 2026-08-08: a fresh
  *    load starts at the central-mic hero).
  *  - A6 authoritative semantics: media=null clears the stale player (R30),
- *    history=[]/notifications=[] clear stale chat/notification state (R31),
- *    adaptive composition reconstructs the workspace (R33), restored
- *    notifications are rendered state (R34), and bus sequence gaps force a
- *    reconnect resync (R29).
+ *    history is NEVER auto-restored (GATE-5 directive: fresh start =
+ *    central-mic hero; in-memory chat survives reconnects — the old R31
+ *    chat clear is retired), notifications=[] clear stale notification
+ *    state (R34), adaptive composition reconstructs the workspace (R33),
+ *    restored notifications are rendered state (R34), and bus sequence
+ *    gaps force a reconnect resync (R29).
  *  - outbound buffering: messages sent while the socket is in a
  *    known-disconnected state are queued and flushed in order on the
  *    next connect (the transport's send() silently drops non-OPEN
@@ -187,7 +189,10 @@ describe("H5 state_snapshot application on connect", () => {
     expect(store.getState().content.media?.title).toBe("");
   });
 
-  it("restores conversation history from the snapshot (reload does not blank the chat)", () => {
+  it("GATE-5 directive: snapshot history is NEVER auto-restored (fresh start = central-mic hero)", () => {
+    // Contract inversion (GATE-5, W0-SLICE, 2026-08-09): the snapshot's
+    // history is stashed for an explicit resume, never applied. A fresh
+    // load starts empty — the central-mic hero is the only entry point.
     const store = createAppStore(() => {});
     store.getState().applyEvent(
       snapshot({
@@ -198,14 +203,14 @@ describe("H5 state_snapshot application on connect", () => {
       }),
     );
     const msgs = store.getState().messages;
-    expect(msgs).toHaveLength(2);
-    expect(msgs[0]).toEqual({ id: "h1", role: "user", text: "Abre un documento" });
-    expect(msgs[1]).toEqual({ id: "h2", role: "assistant", text: "Listo, abrí el documento." });
+    expect(msgs).toHaveLength(0);
   });
 
-  it("R31: wipes in-memory messages when the snapshot history is empty (authoritative clear)", () => {
-    // Contract inversion: history=[] means NO conversation — stale chat
-    // must never resurrect.
+  it("GATE-5 directive: in-memory messages survive a same-tab reconnect (R31 authoritative clear retired)", () => {
+    // Contract inversion (GATE-5, W0-SLICE, 2026-08-09): the snapshot
+    // never touches messages — not even with an EMPTY history. The old
+    // R31 "history=[] wipes the chat" rule was retired with the
+    // auto-restore directive; the in-memory chat survives reconnects.
     const store = createAppStore(() => {});
     store.getState().applyEvent({
       type: "user_message",
@@ -215,7 +220,8 @@ describe("H5 state_snapshot application on connect", () => {
     });
     expect(store.getState().messages).toHaveLength(1);
     store.getState().applyEvent(snapshot({ history: [] }));
-    expect(store.getState().messages).toEqual([]);
+    expect(store.getState().messages).toHaveLength(1);
+    expect(store.getState().messages[0].text).toBe("hola");
   });
 
   it("R34: restores notifications from the snapshot as renderable state", () => {
@@ -387,7 +393,10 @@ describe("GATE-3.5 A6: bus sequence authority (R29)", () => {
       withSeq({ type: "user_message", id: "u2", text: "después", created_at: ts() }, 6),
     );
     expect(resyncCalls).toBe(0);
-    expect(store.getState().messages.map((m) => m.text)).toEqual(["después"]);
+    // GATE-5 (W0-SLICE): the snapshot never touches in-memory messages —
+    // the pre-restart line survives the lower-sequence snapshot (R31
+    // authoritative clear retired with the auto-restore directive).
+    expect(store.getState().messages.map((m) => m.text)).toEqual(["antes", "después"]);
   });
 
   it("resyncs at most once per gap episode (throttled until the next snapshot)", () => {
