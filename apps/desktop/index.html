@@ -3,6 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content-Security-Policy (GATE-3.5 wave 1): meta tag so it travels
+      with the HTML in BOTH dev (vite, http://localhost:5173) and the
+      packaged app (file:// load). webRequest.onHeadersReceived cannot
+      cover file: loads, so this is the single approach that works in
+      both.
+
+      Grounded in actual renderer usage:
+      - script-src 'self'            vite modules / built bundle
+      - style-src 'unsafe-inline'    vite injects <style> in dev; inline
+                                     style props
+      - img-src data: blob: https:   agent thumbnails (http://127.0.0.1:8765)
+      - media-src blob:              TTS playback (createObjectURL)
+      - connect-src http/ws agent    main proxies REST, but keep the agent
+                                     origin allowed; ws://localhost:5173 is
+                                     vite HMR (dev only, harmless in prod)
+      - frame-src https:             the BrowserPanel iframe IS the browser
+                                     (any https URL) + youtube embeds
+      - frame-ancestors 'none'       never embed the app elsewhere
+      Caveat: ARSVOX_AGENT_URL overrides of the service base URL would
+      need a matching connect-src/img-src/media-src entry here.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://127.0.0.1:8765; media-src 'self' blob: http://127.0.0.1:8765; connect-src 'self' http://127.0.0.1:8765 ws://127.0.0.1:8765 ws://localhost:5173; frame-src https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    />
     <title>Ars-Vox</title>
   </head>
   <body>
