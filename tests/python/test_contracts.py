@@ -1,5 +1,8 @@
 """Contract validation tests: events, commands, client messages."""
 
+import re
+from pathlib import Path
+
 import pytest
 
 from arsvox_contracts import (
@@ -149,3 +152,108 @@ def test_generated_schema_frozen_templates_and_slots():
     # slots: main required, rest optional
     assert defs["LayoutSlots"]["required"] == ["main"]
     assert set(defs["LayoutSlots"]["properties"]) == {"main", "side", "rail", "dock"}
+
+
+# --------------------------------------------------------------------- #
+# GATE-3.5: cross-language parity — the hand-mirrored tables must not
+# drift between the Python service and the TypeScript desktop app. The TS
+# literals are parsed from disk (ugly and correct); the Python side is the
+# imported truth. Repo-relative paths are robust to the worktree location.
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _read_ts(rel_path: str) -> str:
+    return (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+
+
+def _ts_literal_body(src: str, var: str) -> str:
+    """Body of `(export )?const VAR ... = { ... };` / `= [ ... ];` —
+    terminates at the first `};` / `];` (inner arrays end with `],` and
+    nested objects with `},`, so neither matches early)."""
+    m = re.search(
+        rf"(?:export )?const {var}\b[^=]*=\s*(\{{|\[)(.*?)(?:\}};|\];)", src, re.S
+    )
+    assert m, f"{var} literal not found in TS source"
+    return m.group(2)
+
+
+def _ts_string_map(src: str, var: str) -> dict[str, str]:
+    """Parse `{ key: "value", ... }` with bare or quoted keys."""
+    body = _ts_literal_body(src, var)
+    pairs: dict[str, str] = {}
+    for quoted, bare, value in re.findall(
+        r'(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*:\s*"([^"]+)"', body
+    ):
+        pairs[quoted or bare] = value
+    return pairs
+
+
+def _ts_string_array(src: str, var: str) -> list[str]:
+    """Parse `[ "a", "b", ... ]` (string entries only)."""
+    body = _ts_literal_body(src, var)
+    return re.findall(r'"([^"]+)"', body)
+
+
+def _ts_object_array_field(src: str, var: str, field: str) -> list[str]:
+    """Parse the values of one quoted field across an object array."""
+    body = _ts_literal_body(src, var)
+    return re.findall(rf"{field}\s*:\s*\"([^\"]+)\"", body)
+
+
+def test_parity_legacy_template_map_with_ts_planner():
+    """_LEGACY_TEMPLATE_MAP (snapshot.py) must equal the client planner's
+    LEGACY_TEMPLATE_MAP (apps/desktop/src/adaptive/planner.ts): server and
+    client must agree on what a legacy layout intent means."""
+    from arsvox_agent.snapshot import _LEGACY_TEMPLATE_MAP
+
+    ts = _read_ts("apps/desktop/src/adaptive/planner.ts")
+    assert _ts_string_map(ts, "LEGACY_TEMPLATE_MAP") == _LEGACY_TEMPLATE_MAP
+
+
+def test_parity_registered_surfaces_with_ts_product_surfaces():
+    """REGISTERED_SURFACES (ui_tools.py) must equal the surfaceIds in
+    PRODUCT_SURFACES (apps/desktop/src/adaptive/surfaces.ts): the model
+    may only compose surfaces the frontend registry hosts."""
+    from arsvox_agent.tools.ui_tools import REGISTERED_SURFACES
+
+    ts = _read_ts("apps/desktop/src/adaptive/surfaces.ts")
+    ts_ids = set(_ts_object_array_field(ts, "PRODUCT_SURFACES", "surfaceId"))
+    assert ts_ids == set(REGISTERED_SURFACES)
+
+
+def test_parity_remote_allowlist_with_ts_security_policy():
+    """BrowserSection.allowlist default must equal the Electron
+    DEFAULT_REMOTE_ALLOWLIST (apps/desktop/electron/security-policy.ts):
+    the service and the shell agree on which remote hosts are reachable."""
+    from arsvox_contracts.config import BrowserSection
+
+    ts = _read_ts("apps/desktop/electron/security-policy.ts")
+    ts_list = _ts_string_array(ts, "DEFAULT_REMOTE_ALLOWLIST")
+    py_default = list(BrowserSection.model_fields["allowlist"].default)
+    assert ts_list == py_default
+
+
+def test_parity_spoken_vocabularies_with_ts_spoken_overrides():
+    """The frozen spoken-override vocabulary (spokenOverrides.ts) must not
+    collide with the Python frozen utterance vocabularies (local_intents.py)
+    — an utterance can never be both a layout override and a
+    stop/confirm/reject — and both sides must share the normalization and
+    politeness-suffix conventions."""
+    from arsvox_agent.local_intents import (
+        CONFIRM_UTTERANCES,
+        REJECT_UTTERANCES,
+        STOP_POLITENESS_SUFFIXES,
+        STOP_UTTERANCES,
+        _normalize,
+    )
+
+    ts = _read_ts("apps/desktop/src/adaptive/spokenOverrides.ts")
+    phrases = set(_ts_string_map(ts, "SPOKEN_OVERRIDE_PHRASES"))
+    # disjointness: no phrase is also a stop/confirm/reject utterance
+    assert phrases.isdisjoint(STOP_UTTERANCES | CONFIRM_UTTERANCES | REJECT_UTTERANCES)
+    # keys are post-normalize forms: python normalization is idempotent on
+    # every phrase the TS side stores (accents/punctuation would never match)
+    assert all(_normalize(p) == p for p in phrases)
+    # politeness filler convention mirrored
+    assert _ts_string_array(ts, "POLITENESS_SUFFIXES") == list(STOP_POLITENESS_SUFFIXES)
