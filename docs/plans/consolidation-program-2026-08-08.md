@@ -127,25 +127,25 @@ validator + cold-start e2e.
 
 Acceptance — GATE-3.5 is NOT complete unless ALL hold:
 
-- [ ] Cold app launch works without manually sharing an auth token.
-- [ ] User input during service startup is not lost.
-- [ ] Button STOP stops model + mic/STT + current TTS.
-- [ ] Spoken STOP does the same.
-- [ ] Long TTS does not start the inactivity timeout prematurely.
-- [ ] Spoken confirmation approves the frozen pending action.
-- [ ] One global confirmation policy remains intact.
-- [ ] All ClientActions have real authoritative handlers.
-- [ ] Agent emits native adaptive LayoutSpec.
-- [ ] No model-visible News panel remains.
-- [ ] All layout changes pass through one constrained reducer.
-- [ ] Persistent user overrides beat later agent preferences.
-- [ ] Agent and user media actions share one controller.
-- [ ] Agent media.seek actually changes position.
-- [ ] SnapshotTracker remains current after >1000 events.
-- [ ] Sequence gap causes resync.
-- [ ] Authoritative null/empty snapshot fields clear stale state.
-- [ ] Frontend + Python suites pass.
-- [ ] Full cold-start end-to-end scenario passes.
+- [x] Cold app launch works without manually sharing an auth token.
+- [x] User input during service startup is not lost.
+- [x] Button STOP stops model + mic/STT + current TTS.
+- [x] Spoken STOP does the same.
+- [x] Long TTS does not start the inactivity timeout prematurely.
+- [x] Spoken confirmation approves the frozen pending action.
+- [x] One global confirmation policy remains intact.
+- [x] All ClientActions have real authoritative handlers.
+- [x] Agent emits native adaptive LayoutSpec.
+- [x] No model-visible News panel remains.
+- [x] All layout changes pass through one constrained reducer.
+- [x] Persistent user overrides beat later agent preferences.
+- [x] Agent and user media actions share one controller.
+- [x] Agent media.seek actually changes position.
+- [x] SnapshotTracker remains current after >1000 events.
+- [x] Sequence gap causes resync.
+- [x] Authoritative null/empty snapshot fields clear stale state.
+- [x] Frontend + Python suites pass.
+- [x] Full cold-start end-to-end scenario passes.
 
 If any fails, the real-browser feature wave does NOT start.
 
