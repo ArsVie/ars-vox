@@ -14,10 +14,11 @@
  *    frames; the store-level buffer closes that loss window).
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ServerEvent, StateSnapshotEvent } from "../src/contracts";
 import { bindResync, createAppStore, type PanelMeta } from "../src/store";
+import { WsClient } from "../src/ws/client";
 
 function ts(): string {
   return new Date().toISOString();
@@ -466,5 +467,71 @@ describe("H5 outbound buffering across reconnect", () => {
 
     store.getState().setConnected(true);
     expect(sent).toEqual([{ type: "confirm", pending_id: "p9" }]);
+  });
+});
+
+describe("GATE-3.5 A6: bridge-mode forceReconnect (R29 resync, packaged build)", () => {
+  /**
+   * Stub the Electron preload bridge exactly like tests/endpoints-auth.test.ts
+   * (globalThis.window with window.arsvox so hasBridge() flips true). The
+   * no-op timers keep the OLD buggy code from actually spinning a real
+   * reconnect loop when this test runs against it.
+   */
+  function installBridge() {
+    const unsubMessage = vi.fn();
+    const unsubStatus = vi.fn();
+    const bridge = {
+      wsConnect: vi.fn(),
+      wsClose: vi.fn(),
+      wsSend: vi.fn(),
+      onWsMessage: vi.fn(() => unsubMessage),
+      onWsStatus: vi.fn(() => unsubStatus),
+    };
+    (globalThis as Record<string, unknown>).window = {
+      arsvox: bridge,
+      setTimeout: (() => 0) as unknown as typeof setTimeout,
+      clearTimeout: (() => {}) as unknown as typeof clearTimeout,
+    };
+    return { bridge, unsubMessage, unsubStatus };
+  }
+
+  function removeBridgeStub(): void {
+    delete (globalThis as Record<string, unknown>).window;
+  }
+
+  it("re-subscribes and re-issues wsConnect() WITHOUT constructing a WebSocket", () => {
+    const { bridge, unsubMessage, unsubStatus } = installBridge();
+    // The renderer WebSocket must be untouchable in bridge mode: client.ts
+    // sets url="" there, and new WebSocket("") throws -> scheduleReconnect()
+    // -> spin loop every 2s forever in the packaged Electron build.
+    const wsCtor = vi.fn(() => {
+      throw new Error("bridge-mode forceReconnect must never construct a WebSocket");
+    });
+    const realWs = (globalThis as { WebSocket?: unknown }).WebSocket;
+    (globalThis as { WebSocket?: unknown }).WebSocket = wsCtor;
+    try {
+      const client = new WsClient({ onEvent: () => {} });
+
+      client.connect();
+      expect(bridge.onWsMessage).toHaveBeenCalledTimes(1);
+      expect(bridge.onWsStatus).toHaveBeenCalledTimes(1);
+      expect(bridge.wsConnect).toHaveBeenCalledTimes(1);
+
+      client.forceReconnect();
+
+      // R29 resync stays on the IPC path — no direct-mode socket.
+      expect(wsCtor).not.toHaveBeenCalled();
+      // stale subscriptions are torn down...
+      expect(unsubMessage).toHaveBeenCalledTimes(1);
+      expect(unsubStatus).toHaveBeenCalledTimes(1);
+      // ...and re-established with a fresh wsConnect (the server replies
+      // with a fresh state_snapshot on connect = the resync mechanism).
+      expect(bridge.onWsMessage).toHaveBeenCalledTimes(2);
+      expect(bridge.onWsStatus).toHaveBeenCalledTimes(2);
+      expect(bridge.wsConnect).toHaveBeenCalledTimes(2);
+    } finally {
+      (globalThis as { WebSocket?: unknown }).WebSocket = realWs;
+      removeBridgeStub();
+    }
   });
 });
