@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useStore } from "zustand";
 
 import type { TtsAckMessage } from "../contracts";
-import { authHeaders, TTS_URL } from "../endpoints";
+import { authenticatedFetch, TTS_URL } from "../endpoints";
 import { appStore } from "../store";
 
 /**
@@ -48,6 +48,11 @@ export function TtsPlayer() {
         }
       },
       onDone: ttsDone,
+      onError: (message) => {
+        // LOUD failure (W0): a transport error must reach the error banner,
+        // never render as a silently mute assistant.
+        appStore.getState().setError({ message, recoverable: true });
+      },
     });
     audioRef.current = player.audio;
     void player.start();
@@ -78,6 +83,9 @@ export class PhrasePlayer {
       ttsSpeed: number;
       send: (ack: TtsAckMessage) => void;
       onDone: () => void;
+      /** Transport failures (non-OK / rejected fetch) surface here BEFORE
+       *  the settle ack — silence with a finished ack is the W0 defect. */
+      onError?: (message: string) => void;
     },
   ) {
     const audio = new Audio();
@@ -99,12 +107,21 @@ export class PhrasePlayer {
   async start(): Promise<void> {
     const { text, send } = this.opts;
     try {
-      const res = await fetch(TTS_URL, {
+      // GATE-3.5 (W0): the AUTHENTICATED transport — through the Electron
+      // bridge (window.arsvox.fetch) when present, so the per-launch token
+      // is attached by the main process. A raw fetch() here is the W0
+      // defect: unauthenticated in the packaged build (401, silent mute).
+      const res = await authenticatedFetch(TTS_URL, {
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
+        contentType: "application/json",
       });
-      if (!res.ok) throw new Error(`tts ${res.status}`);
+      if (!res.ok) {
+        // LOUD failure BEFORE the settle ack: a 401 must show a diagnostic
+        // on the error banner, not ack finished and disappear.
+        this.opts.onError?.(`El servicio de voz rechazó la solicitud (HTTP ${res.status})`);
+        throw new Error(`tts ${res.status}`);
+      }
       const blob = await res.blob();
       if (this.finished) return; // queue advanced while we were fetching
       this.objectUrl = URL.createObjectURL(blob);
