@@ -14,8 +14,10 @@
  *    close handshake, 7/16/64-bit payload lengths;
  *  - outgoing messages are queued while the socket is not open and
  *    flushed in order on open — R11: pre-connect input is delivered
- *    exactly once, no loss window;
- *  - automatic reconnect with backoff.
+ *    exactly once, no loss window. GATE-3.5 W3-TRANSPORT: this is the
+ *    surviving transport outbox (the store-level duplicate is gone);
+ *  - automatic reconnect with the ONE shared backoff policy
+ *    (electron/backoff.ts — same module the renderer client imports).
  *
  * The unit tests exercise this against a real loopback server
  * (tests/electron-wsclient.test.ts) and the launch integration test runs
@@ -24,6 +26,8 @@
 
 import * as crypto from "node:crypto";
 import * as net from "node:net";
+
+import { ReconnectBackoff, RECONNECT_BASE_MS } from "./backoff";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const HEAD_END = Buffer.from("\r\n\r\n");
@@ -39,6 +43,7 @@ export interface WsClientOptions {
   url: string;
   /** Extra request headers for the upgrade (e.g. Authorization). */
   headers?: Record<string, string>;
+  /** Base delay of the shared exponential backoff (default: RECONNECT_BASE_MS). */
   reconnectMs?: number;
   onOpen?: () => void;
   onMessage?: (text: string) => void;
@@ -48,16 +53,15 @@ export interface WsClientOptions {
 export class WsClient {
   private readonly url: string;
   private readonly headers: Record<string, string>;
-  private readonly reconnectMs: number;
   private readonly onOpen?: () => void;
   private readonly onMessage?: (text: string) => void;
   private readonly onClose?: (code?: number) => void;
+  private readonly backoff: ReconnectBackoff;
 
   private socket: net.Socket | null = null;
   private buffer: Buffer = Buffer.alloc(0);
   private handshakeDone = false;
   private closedByUser = false;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private outbox: string[] = [];
   /** Fragments of an in-flight fragmented text message. */
   private fragments: Buffer[] = [];
@@ -65,10 +69,18 @@ export class WsClient {
   constructor(options: WsClientOptions) {
     this.url = options.url;
     this.headers = options.headers ?? {};
-    this.reconnectMs = options.reconnectMs ?? 2000;
     this.onOpen = options.onOpen;
     this.onMessage = options.onMessage;
     this.onClose = options.onClose;
+    // W3-TRANSPORT: the ONE reconnect backoff policy, shared with the
+    // renderer client (src/ws/client.ts) via electron/backoff.ts.
+    this.backoff = new ReconnectBackoff(
+      {
+        setTimeout: (fn, ms) => setTimeout(fn, ms),
+        clearTimeout: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
+      },
+      options.reconnectMs ?? RECONNECT_BASE_MS,
+    );
   }
 
   get connected(): boolean {
@@ -93,10 +105,7 @@ export class WsClient {
 
   close(): void {
     this.closedByUser = true;
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.backoff.cancel();
     if (this.connected) {
       try {
         this.writeFrame(OP_CLOSE, Buffer.from([0x03, 0xe8])); // 1000
@@ -155,6 +164,8 @@ export class WsClient {
         this.buffer = this.buffer.subarray(idx + 4);
         if (!this.completeHandshake(head, key)) return;
         this.handshakeDone = true;
+        // A successful connection restarts the shared backoff curve.
+        this.backoff.reset();
         this.flushOutbox();
         this.onOpen?.();
       }
@@ -166,7 +177,6 @@ export class WsClient {
     });
 
     socket.on("close", (hadError: boolean) => {
-      const wasOpen = this.handshakeDone;
       this.socket = null;
       this.handshakeDone = false;
       this.fragments = [];
@@ -324,10 +334,9 @@ export class WsClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.closedByUser || this.reconnectTimer !== null) return;
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.open();
-    }, this.reconnectMs);
+    if (this.closedByUser) return;
+    // Single-flight scheduling + the ONE shared exponential policy
+    // (W3-TRANSPORT, electron/backoff.ts).
+    this.backoff.schedule(() => this.open());
   }
 }
