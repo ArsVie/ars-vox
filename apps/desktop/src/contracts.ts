@@ -5,7 +5,13 @@
  */
 
 import type { AnyTemplate, PanelId, SlotName } from "./layout/engine";
-import type { LayoutSpec } from "./adaptive/contracts";
+import type {
+  AdaptiveTemplate,
+  LayoutAssignment,
+  LayoutSpec,
+  Proportion,
+  SurfaceRole,
+} from "./adaptive/contracts";
 import type { OverrideSet } from "./adaptive/overrides";
 
 /** Wire shape of layout.apply `slots` (mirror of LayoutSlots in Python). */
@@ -14,6 +20,16 @@ export interface LayoutSlotsWire {
   side?: PanelId | null;
   rail?: PanelId | null;
   dock?: PanelId | null;
+}
+
+/** Wire shape of one layout.compose assignment (mirror of LayoutAssignment
+ *  in adaptive.py). The wire carries `surface_id`; the renderer's canonical
+ *  name is `surfaceId` (adaptive/contracts) — normalizeUiCommand converts
+ *  it ONCE at the frame-parse boundary, never in the store. */
+export interface LayoutComposeAssignmentWire {
+  surface_id: string;
+  role: SurfaceRole;
+  slot: string;
 }
 
 /**
@@ -211,6 +227,12 @@ export type UiCommand =
       preserve?: boolean;
     }
   | {
+      action: "layout.compose";
+      template: AdaptiveTemplate;
+      assignments: LayoutComposeAssignmentWire[];
+      proportion?: Proportion | null;
+    }
+  | {
       action: "panel.open";
       panel_type: WirePanelId;
       title?: string | null;
@@ -252,6 +274,44 @@ export type UiCommand =
   | { action: "tasks.toggle"; task_id: string }
   | { action: "tts.speak"; text: string; priority?: boolean }
   | { action: "audio.play"; asset: string };
+
+/** Canonical renderer form of layout.compose AFTER the one-time wire
+ *  normalization: assignments carry `surfaceId` (the adaptive choke's
+ *  vocabulary). Produced ONLY by normalizeUiCommand at the frame-parse
+ *  boundary — never constructed by hand. */
+export interface LayoutComposeCommand {
+  action: "layout.compose";
+  template: AdaptiveTemplate;
+  assignments: LayoutAssignment[];
+  proportion?: Proportion | null;
+}
+
+/** UiCommand with layout.compose normalized to the renderer vocabulary
+ *  (surfaceId); every other member stays the raw wire shape. */
+export type NormalizedUiCommand =
+  | Exclude<UiCommand, { action: "layout.compose" }>
+  | LayoutComposeCommand;
+
+/**
+ * C5/A3 (GATE-3.5): the SINGLE wire-boundary normalizer for UiCommand
+ * frames. The python emitter serializes LayoutAssignment as `surface_id`;
+ * the renderer's canonical name is `surfaceId` (adaptive/contracts). Every
+ * incoming ui_command frame passes through here EXACTLY once, before
+ * applyUiCommand sees it. All other actions pass through untouched.
+ */
+export function normalizeUiCommand(command: UiCommand): NormalizedUiCommand {
+  if (command.action !== "layout.compose") return command;
+  return {
+    action: "layout.compose",
+    template: command.template,
+    assignments: command.assignments.map((a) => ({
+      surfaceId: a.surface_id,
+      role: a.role,
+      slot: a.slot,
+    })),
+    proportion: command.proportion ?? null,
+  };
+}
 
 /**
  * C1 (GATE-3.5): the NARROWED client-sendable union — ONLY the actions
