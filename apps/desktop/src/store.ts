@@ -61,6 +61,7 @@ import {
   planLayout,
   type PlannerInput,
   type PlannerRejection,
+  type PlannerRejectionCode,
 } from "./adaptive/planner";
 import {
   mediaController,
@@ -536,6 +537,23 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
     };
 
     /**
+     * The ONE writer of adaptive.lastRejection for layout failures that
+     * arrive as thrown errors rather than as planner verdicts. A rejected
+     * composition must never crash the event path and must never vanish
+     * silently — every caller records through here so the two conditions
+     * cannot drift apart.
+     */
+    const recordLayoutRejection = (
+      code: PlannerRejectionCode,
+      where: string,
+      error: unknown,
+    ): void => {
+      const reason = (error as Error).message;
+      console.warn(`[adaptive] ${where}:`, reason);
+      set({ adaptive: { ...get().adaptive, lastRejection: { code, reason } } });
+    };
+
+    /**
      * UI-103: validate the adaptive LayoutSpec against the surface registry,
      * resolve every role through the deterministic fallback ladder, and
      * store the result. Invalid specs throw and never reach state.
@@ -596,19 +614,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         // triple fail the px floors here and the agent was told "aplicada".
         // Same structured code as the planner path (PlannerRejectionCode
         // includes "geometry").
-        console.warn(
-          "[adaptive] rejecting unrenderable spec:",
-          (error as Error).message,
-        );
-        set({
-          adaptive: {
-            ...state.adaptive,
-            lastRejection: {
-              code: "geometry",
-              reason: (error as Error).message,
-            },
-          },
-        });
+        recordLayoutRejection("geometry", "rejecting unrenderable spec", error);
         return;
       }
       const baseOverrides = options.overrides ?? state.adaptive.overrides;
@@ -1112,8 +1118,14 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
                 // config-default guard too — without this, a later
                 // config_update could land the default over the restored desk.
                 layoutApplied = true;
-              } catch {
-                // never crash the event path on an invalid composition
+              } catch (error) {
+                // The choke's geometry pre-check records its own rejection;
+                // a throw from the constraint/resolve stages lands here.
+                recordLayoutRejection(
+                  "invalid_shape",
+                  "snapshot composition rejected",
+                  error,
+                );
               }
             }
           }

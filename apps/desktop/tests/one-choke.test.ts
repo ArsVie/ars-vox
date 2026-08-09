@@ -185,6 +185,50 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
     });
   });
 
+  it("reconnect source: a composition that throws past the geometry gate is recorded, not swallowed", () => {
+    const store = createAppStore(() => {});
+    // The choke's geometry pre-check records its own rejection, but a throw
+    // from the constraint/resolve stages (applyOverrides, resolveLayout)
+    // lands in the restore's catch instead — the same path that
+    // white-screened the packaged build. It must never crash the event path
+    // and must never be silent either.
+    //
+    // "media" is registered for primary/companion/persistent — NOT support.
+    // The rail slot is geometrically fine (triple offers it), so this clears
+    // the geometry gate and dies in resolveLayout's fallback ladder.
+    store.getState().applyEvent({
+      type: "state_snapshot",
+      sequence: 1,
+      voice_state: "listening",
+      config: {} as never,
+      layout: { panels: [] },
+      pending_confirmation: null,
+      media: null,
+      notifications: [],
+      content_keys: [],
+      history: [],
+      adaptive: {
+        template: "triple",
+        assignments: [
+          { surface_id: "conversation", role: "primary", slot: "main" },
+          { surface_id: "browser", role: "companion", slot: "side" },
+          { surface_id: "media", role: "support", slot: "rail" },
+        ],
+        proportion: null,
+        overrides: {},
+      },
+      created_at: ts(),
+    } as unknown as ServerEvent);
+
+    // live desk kept (nothing half-applied)...
+    expect(store.getState().adaptive.spec).toBeNull();
+    // ...and the failure is observable, which the restore path claims
+    expect(store.getState().adaptive.lastRejection).not.toBeNull();
+    expect(store.getState().adaptive.lastRejection?.reason).toBeTruthy();
+    // the rest of the snapshot still applied — the restore is not aborted
+    expect(store.getState().voiceState).toBe("listening");
+  });
+
   it("reconnect source: a malformed snapshot composition is skipped, never thrown", () => {
     const store = createAppStore(() => {});
     expect(() =>
