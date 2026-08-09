@@ -2,9 +2,13 @@
  * Wire contracts — TypeScript mirror of the Python contracts
  * (packages/contracts/arsvox_contracts). Field names match the JSON
  * payloads exactly (snake_case).
+ *
+ * GATE-3.5 (W2-STORE): the panel-id vocabulary (KNOWN_PANELS / PanelId /
+ * AnyTemplate / DEFAULT_PRIMARY / isPanelId) moved here from the deleted
+ * legacy layout engine (src/layout/engine.ts) — this file is the
+ * contracts hub.
  */
 
-import type { AnyTemplate, PanelId, SlotName } from "./layout/engine";
 import type {
   AdaptiveTemplate,
   LayoutAssignment,
@@ -49,11 +53,59 @@ export type ConfirmationStatus =
   | "expired"
   | "superseded";
 
+/* ------------------------------------------------------------------ */
+/* Panel-id vocabulary (homed here after the legacy layout engine was  */
+/* deleted — GATE-3.5 W2-STORE).                                      */
+/* ------------------------------------------------------------------ */
+
+/** Panels the product can host. The adaptive stage renders registered
+ *  product surfaces; the layout panels listed here are the frozen wire
+ *  set the planner and the store's isPanelId gate accept. */
+export const KNOWN_PANELS = [
+  "conversation",
+  "document_editor",
+  "browser",
+  "youtube",
+  "media",
+  "book_reader",
+  "news",
+  "notes",
+  "tasks",
+  "reminders",
+  "telegram_preview",
+  "settings",
+] as const;
+
+export type PanelId = (typeof KNOWN_PANELS)[number];
+
+/** Legacy wire template vocabulary (layout.apply payloads) — the
+ *  adaptive planner (src/adaptive/planner.ts) maps these to frozen
+ *  AdaptiveTemplate ids; unknown ids degrade to the focus default. */
+export type AnyTemplate =
+  | "focus"
+  | "split"
+  | "reading"
+  | "dashboard"
+  | "reference"
+  | "background_media";
+
+/** The conversation panel is the app's constant anchor — the boot
+ *  default composition's primary (config-driven or fallback). */
+export const DEFAULT_PRIMARY: PanelId = "conversation";
+
+export function isPanelId(value: unknown): value is PanelId {
+  return (
+    typeof value === "string" &&
+    (KNOWN_PANELS as readonly string[]).includes(value)
+  );
+}
+
 /**
- * All panel values the Python side can emit (PanelType enum). The layout
- * engine only hosts KNOWN_PANELS; confirmation/notification are overlay
- * panels handled through their own channels (ConfirmationPanel /
- * notification events), so they exist on the wire but never in slots.
+ * All panel values the Python side can emit (PanelType enum). The
+ * adaptive stage only hosts registered surfaces among KNOWN_PANELS;
+ * confirmation/notification are overlay panels handled through their own
+ * channels (ConfirmationPanel / notification events), so they exist on
+ * the wire but never in slots.
  */
 export type WirePanelId = PanelId | "confirmation" | "notification";
 
