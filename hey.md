@@ -14,9 +14,9 @@ Purpose: agents working in this repo (possibly in parallel) announce what they a
 - task: A10 adversarial seam tests for R44-R47 (reminder snooze full path, voice-disabled reconnect, media=null + notification reconnect) + seam coverage of R01/R16/R17/R18/R20/R24/R25/R28/R29/R30/R32/R34/R35/R36/R39 — TEST FILES ONLY (apps/desktop/tests/, tests/python/), no feature fixes; expected-fails marked with owner.
 - files/dirs: tests/python/test_adversarial_*.py (new, 5 files), apps/desktop/tests/adversarial-reconnect.test.ts (new), apps/desktop/tests/overrides-store.test.ts (append R20 seam block), hey.md
 - boundaries: will NOT touch src/, services/, packages/ (feature code) — any needed code change goes to the handoff as a CROSS-OWNER note. node_modules junction — never npm install / git add -A.
-- status: in_progress
+- status: resolved (commits 48b0e97, 2066e91 — 26 python tests: 13 pass / 13 expected-fail with owners A3/A5/A6/A7; desktop: 19 pass / 3 expected-fail A6; typecheck clean. Gate rerun + integration is the orchestrator's.)
+### hermes (orchestrator — GATE-2.5 runtime contract hardening, 2026-08-08)
 - trigger: full-source advisor audit (GATE-2.5 review) — architecture strong, cross-layer seams weak; Wave 3 NOT dispatched yet per audit verdict
-- tracks (7 parallel, deleg_ed648132, all leaf): H1 bidirectional action protocol (P0), H2 reminder correctness (P0), H3 STOP+voice ownership (P0), H4 local service boundary (P0), H5 reconnect+confirmations (P1), H6 paths+lockfile (P1), H7 media wiring+adaptive corrections (P1/P2)
 - worktrees: /mnt/c/dev/ars-vox-worktrees/h{1..7}-*, branches wip/h{1..7}-* (briefs /tmp/gate25-briefs/)
 - status: DONE 2026-08-08 ~05:50Z (CST) — UI-301/302/303 merged --no-ff
   (store.ts applyAdaptiveSpec conflict resolved deliberately: planner
