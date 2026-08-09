@@ -15,7 +15,6 @@
  *    (R12) and desktop quit terminates the child process tree (R13).
  *  - The defaultSession media permission grant is scoped to the app's own
  *    WebContents (the one window we create).
-<<<<<<< HEAD
  *  - A8 (GATE-3.5): the hardened remote-content foundation lives in
  *    ./hardened-view.ts + ./security-policy.ts (R40-R42): isolated
  *    persistent partition, deny-by-default permissions, navigation

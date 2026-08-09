@@ -6,6 +6,28 @@ description: Roadmap and session history. CURRENT-STATE AUTHORITY is docs/STATUS
 
 # Ars-Vox handoff — 2026-08-07 (night session)
 
+> UPDATE (2026-08-09, GATE-3.5 consolidation CLOSED): the two-stage
+> consolidation program (`docs/plans/consolidation-program-2026-08-08.md`)
+> passed its first gate. All 10 wave-1 branches merged to main in the frozen
+> order A7→A1→A2→A6→A3→A4→A5→A8→A9→A10: voice lifecycle + TTS acks
+> (tts.started/finished/cancelled, speech-anchored silence timer), secure
+> Electron-owned launch (one per-launch token, authenticated handshake,
+> buffered pre-connect input, child-tree kill), native adaptive layout
+> contract (model speaks LayoutSpec, news removed from the model-visible
+> surface incl. PanelType.NEWS), single frontend layout choke with spoken
+> overrides, one MediaController for agent+human+player (real seek with
+> position on the wire), continuous snapshot tracker + authoritative
+> null/empty snapshot fields + sequence-gap resync, spoken confirmations +
+> narrowed ClientAction union with handler completeness, hardened
+> remote-content Electron foundation, R43 visual cleanup, adversarial suite.
+> Frozen contract: `docs/consolidation-contract-2026-08-08.md` (8 invariants,
+> R01–R47). Gate counts: pytest 308 / vitest 601 (see STATUS.md Test gates),
+> typecheck + build clean. Screenshots refreshed post-gate (see
+> screenshots/index.md). Wave 2 (MVP backlog: wake word, real browser
+> WebContentsView, DOM bridge, real media, reminders, reader persistence,
+> context timestamps, memory search, telegram/notes/tasks polish) is the next
+> phase — locked behind the gate hard rule.
+
 > UPDATE (2026-08-08, wave 2 / GATE-2 closed): UI-201..207 ALL merged —
 > browser, conversation, reading, tasks, media adaptive surfaces + motion
 > transitions + spatial inertia policy. Product surfaces now registered and

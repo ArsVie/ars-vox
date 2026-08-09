@@ -1,11 +1,11 @@
 ---
 type: status
 title: Ars-Vox current state
-description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-08.
-timestamp: 2026-08-08T06:15:00Z
+description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-09.
+timestamp: 2026-08-09T05:00:00Z
 ---
 
-# Ars-Vox — current state (2026-08-08)
+# Ars-Vox — current state (2026-08-09)
 THIS FILE IS THE SINGLE AUTHORITY for current implementation state.
 HANDOFF.md is roadmap + session history; ADRs are historical decisions;
 audits are snapshots. If any other doc contradicts this file, this file
@@ -17,15 +17,89 @@ wins.
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-08 ~06:11 CST, post GATE-2.5 + WAVE 3)
+## Test gates (last full run, 2026-08-09 ~00:00 CST, post GATE-3.5 consolidation)
 
-- vitest: 441 passed (35 files) — apps/desktop (306 baseline + 46 GATE-2.5
-  + 89 wave-3: 27 planner, 40 overrides, 22 a11y)
-- pytest: 194 passed — tests/python (110 baseline + 83 GATE-2.5
-  + youtube.play client-local ack)
+- vitest: 601 passed (48 files) — apps/desktop (441 post-wave-3 + GATE-3.5:
+  A1 TTS acks, A4 one-choke + spoken overrides, A5 media controller, A6
+  snapshot/sequence, A7 confirmation, A9 R43 visual, A10 adversarial TS)
+- pytest: 308 passed — tests/python (194 post-GATE-2.5 + GATE-3.5: A1 voice
+  lifecycle, A3 native layout, A5 media tools + honest seek, A6 tracker +
+  snapshot, A7 spoken confirmation + client actions, A10 adversarial python,
+  R18 no-news enum, G1/G2 gate fixes)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
-- OKF docs validator: 19 concepts validated (2026-08-08)
+- OKF docs validator: 23 concepts validated (2026-08-09)
+
+## GATE-3.5 consolidation (CLOSED 2026-08-09)
+
+Program: docs/plans/consolidation-program-2026-08-08.md (two-stage:
+consolidation → MVP backlog). Frozen contract:
+docs/consolidation-contract-2026-08-08.md — 8 invariants
+(VOICE/STOP/LAYOUT/MEDIA/CONFIRMATION/SERVICE/RECONNECT/CLIENT-ACTIONS),
+C1–C8 semantic deltas, R01–R47 regression freeze. All 10 wave-1 branches
+merged to main in the frozen order A7→A1→A2→A6→A3→A4→A5→A8→A9→A10 (S0 doc
+df48da6; last merge 3d74afb; gate fixes 14e36e0/c0f0526/3006b13/dbb5e5d).
+
+- VOICE (A1, R01–R08): tts.started/finished/cancelled acks; the renderer is
+  physical-playback authority; the turn stays THINKING until tts.started and
+  only tts.finished settles to LISTENING (or WAITING_FOR_CONFIRMATION);
+  silence timer anchored to speech end (SPEAKING is timer-free); late acks
+  after STOP are state-guarded no-ops; WS disconnect settles pending speech.
+- SERVICE (A2, R09–R15, the P0): Electron main generates ONE per-launch
+  token, spawns the Python service, completes an authenticated
+  /health→/config handshake; a foreign service holding the port returns 401
+  → "failed" (never silently adopted); pre-connect user input is buffered
+  and delivered exactly once (R11); startup failures surface as clear UI
+  errors (R12); desktop quit kills the child tree (R13); the renderer never
+  holds the token (R14 — token-exposing IPC retired); wildcard/empty origins
+  and PATCH-persisted auth.enabled=false are rejected (R15).
+- LAYOUT (A3+A4, R16–R23): the model speaks the native adaptive LayoutSpec
+  (focus/sidecar/stack/split/triple + primary/companion/support/persistent +
+  narrow/balanced/wide) through layout.compose; news is gone from every
+  model-visible surface incl. PanelType.NEWS (R18, gate-fixed); every layout
+  mutation enters ONE applyAdaptiveSpec choke; user overrides (pin/stick/
+  position/size/remove/fullscreen/showBoth) apply AFTER planner output and
+  beat later agent preferences; spoken override intents are deterministic.
+- MEDIA (A5, R24–R27): ONE MediaController for agent tools + human client
+  actions + player events; media.seek really changes position (position_s on
+  the wire) and answers honestly when nothing is loaded (failed verdict, no
+  "Posición cambiada" lie); media=null in the snapshot is authoritative
+  absence (player cleared through the controller); snapshot restore routes
+  through the same controller.
+- RECONNECT (A6, R28–R34): SnapshotTracker holds current state continuously
+  (listener-based; the 1000-cap starvation class is gone); authoritative
+  null/empty snapshot fields clear stale state; adaptive composition
+  (template/assignments/proportion/overrides) rides the snapshot and is
+  restored through the ONE choke; client-side sequence-gap detection fires
+  resyncHook → WsClient.forceReconnect (R29 — gap item 5 below is now DONE);
+  snapshot carries conversation history (reload no longer blanks the chat).
+- CONFIRMATION + CLIENT ACTIONS (A7, R35–R39, C1): spoken approve/reject
+  vocabulary (confirmar/confirmo/sí/sí enviar/aprobar · cancelar/rechazar/
+  no/no enviar) resolves the one global pending against its FROZEN SQLite
+  args; ambiguous sí/no with NO pending is ignored (no turn starts);
+  executing approved actions carry cancellation tokens + points of no
+  return; ClientAction is the narrowed human-initiated union (16 members,
+  all with authoritative handlers; tts.speak is server-originated and NOT a
+  client action).
+- ELECTRON SECURITY (A8, R40–R42): hardened remote-content foundation
+  (isolated persistent partition, deny-by-default permissions, navigation
+  filter, window-open denial, custom local-doc protocol, IPC sender
+  validation) — not wired to UI yet; Electron major upgrade lands BEFORE
+  arbitrary real browsing (migration-note-electron-upgrade-2026-08-08.md).
+- VISUAL (A9, R43): PLANTILLA combobox dev-gated (DEMO_TOGGLE_ENABLED),
+  redundant "agente conectado" gone, one status pill (role="status" with
+  STATUS_VOCABULARY), "Lee mis correos" fake suggestion removed, English mic
+  aria labels fixed, STOP ≥48px, status vocabulary consistent.
+- ADVERSARIAL (A10, R44–R47): cold secure startup, spoken STOP during TTS,
+  spoken confirmation, persistent override vs later agent layout, agent
+  media → human pause/seek → agent resume, restart with media=null,
+  notification reconnect, sequence-gap resync, tracker >1000 events, voice
+  disabled on fresh reconnect, client-action completeness, no-news surface.
+  20-item gate acceptance: PASSED.
+
+Seam lessons + test-discipline pitfalls (flattened-vs-dotted tool names,
+singleton pollution, R11 buffering test channels, merge-marker hygiene):
+skill reference gate35-merge-lessons-2026-08.md.
 
 ## Adaptive UI redesign (waves)
 
@@ -140,13 +214,16 @@ wins.
 - Events: youtube.search, browser.navigate, document.load (carries url),
   tasks.update, media.state + layout/panel/status/overlay events +
   action_result (H1) + state_snapshot (H5).
-- User commands: the FULL UiCommand surface is authoritative — browser
-  nav (navigate/back/forward/refresh), document.save, tasks.toggle,
-  media.play_pause/seek, audio.play, youtube.search, layout.apply —
-  every action string has a Python ClientAction union entry and an
-  authoritative handler; the UI receives action_result verdicts
-  (accepted/done/failed/unsupported) instead of optimistic silence
-  (GATE-2.5 H1).
+- User commands: ServerCommand = the full UiCommand surface (browser nav,
+  document.save, tasks.toggle, media.play_pause/seek, youtube.search,
+  layout.apply, panel.* — model + UI both) with authoritative handlers and
+  action_result verdicts. ClientAction (GATE-3.5 C1/R39) = the NARROWED
+  human-initiated union (16 members: browser.back/forward/navigate/refresh,
+  document.save, layout.apply/restore, media.play_pause/seek,
+  panel.close/fullscreen/open/set_primary, tasks.toggle, youtube.play/search)
+  — tts.speak and other server-originated commands are NOT client actions;
+  every declared ClientAction has an authoritative handler (enumeration
+  guard test).
 - Cross-language conformance: every TS UiCommand action has a Python-
   parseable fixture (packages/contracts/fixtures/); the bridge test
   fails if one side drifts.
@@ -165,35 +242,50 @@ wins.
   invalidates pendings.
 - Policy gate: deny-by-default; denied-always tools (shell.exec,
   file.write, file.delete, browser.generic_agent).
-- Local service boundary (GATE-2.5 H4): per-launch bearer token on HTTP
-  + WS (query param for WS), CORS locked to configured origins (no
-  wildcard), /tts is POST-only, STT upload capped, config validation
-  constrains model base_url (https / localhost-http only) and
-  system_prompt_file (repo docs/configs only). Electron main generates
-  and injects the token via preload. Dev/mock mode can disable auth via
-  config (auth.enabled=false).
+- Local service boundary (GATE-2.5 H4 + GATE-3.5 A2): per-launch bearer
+  token on HTTP + WS (query param for WS), CORS locked to configured
+  origins (no wildcard), /tts is POST-only, STT upload capped, config
+  validation constrains model base_url (https / localhost-http only) and
+  system_prompt_file (repo docs/configs only). Electron main GENERATES the
+  token, spawns the service with it, and owns the authenticated handshake;
+  the renderer NEVER holds the token (preload token IPC retired, R14);
+  wildcard/empty origins and PATCH-persisted auth.enabled=false are
+  rejected (R15). Dev/mock mode can disable auth via config
+  (auth.enabled=false).
 
-## Known gaps (next work, prioritized)
+## Known gaps (next work — WAVE 2 of the consolidation program, prioritized)
 
-0. GATE-3.5 consolidation (user-approved direction, 2026-08-08):
-   A single layout authority (native LayoutSpec vocabulary, delete news),
-   B single media authority (one MediaController; real YouTube search),
-   C authoritative snapshot (media state + adaptive composition persisted),
-   D secure launch (Electron generates one token), E execution
-   cancellation. Plus UI: confirmation popup-in-chat / voice-ask,
-   minimal state panel embedded near the gaze, remove PLANTILLA selector
-   and the "Lee mis correos" fake suggestion, one status indicator,
-   media-player progress bar tied to the YouTube iframe.
+0. GATE-3.5 is CLOSED (see above). Wave 2 = MVP backlog (program doc
+   `docs/plans/consolidation-program-2026-08-08.md`):
+   A real wake word / VAD physical voice loop (phrase UNDECIDED — "Ars" is
+   the family prefix, NOT the wake word; "Lily" is a candidate; no
+   training/benchmarking until Ars selects it),
+   B real browser WebContentsView (allowlist enforced, hardened partition,
+   Electron major upgrade FIRST),
+   C browser DOM interaction bridge (snapshot/find/click/fill/submit/scroll;
+   page content = untrusted),
+   D real media discovery/playback (real YouTube search + accurate metadata,
+   no fake fixtures),
+   E reminder/task notification integration (repeated snooze/dismiss/
+   restart reliability),
+   F reader persistence (book progress resume, PDF page/zoom restore),
+   G context timestamps + durable user state (time/activity/tasks in
+   runtime context, never dump the DB),
+   H memory-informed search with provenance (user/agent/web/document),
+   I telegram/notes/tasks end-to-end polish (no tool names visible to the
+   user), plus UI: confirmation popup-in-chat / voice-ask, minimal state
+   panel embedded near the gaze, media-player progress bar tied to the
+   YouTube iframe (R26), exit/home affordance + panel close X (backlog).
 1. Voice loop proof on the physical machine (wake/VAD/STT/TTS/barge-in/
    sleep/STOP) + latency + recovery measurements.
 2. Browser as security boundary: WebContentsView, allowlist enforced,
    remote content sandboxed (no Node), page text treated as untrusted.
-   (WS auth + Origin are DONE — GATE-2.5 H4.)
+   (WS auth + Origin are DONE — GATE-2.5 H4; hardened-view module exists
+   — GATE-3.5 A8 — wiring is Wave 2 B.)
 3. Product loops: reminder cron context injection, message timestamps
    in agent context, memory-informed search, book progress resume,
    unified media pipeline (real YouTube/local playback).
 4. Real-user observation pass — design polish is deferred until
    interaction problems are observed.
-5. Post-reconnect gap detection: state_snapshot carries the bus
-   sequence, but QueueFull-drop resync (requesting a replay on gap) is
-   not yet wired — reconnect is the sync mechanism today (H5).
+5. DONE (GATE-3.5 A6/R29): client-side sequence-gap detection fires
+   resyncHook → WsClient.forceReconnect on sequence jumps.
