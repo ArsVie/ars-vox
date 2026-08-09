@@ -93,10 +93,13 @@ completes the policy:
   login UX (one shared session vs per-site) and maps the
   provenance requirements (B3: origin/frame-tagged observations) onto
   this partition.
-- **IPC sender validation**: ships in the spike (`isTrustedIpcSender`;
-  applied to `arsvox:get-token` in main.ts). The milestone must apply it
-  to any NEW handlers the browser bridge adds (B3 DOM bridge) — no
-  unvalidated senders, ever.
+- **IPC sender validation**: ships in the spike (`isTrustedIpcSender`).
+  The old `arsvox:get-token` channel no longer exists — A2/R14 removed it
+  (token never enters the renderer; REST is main-proxied via
+  `arsvox:fetch`). The milestone must apply sender validation to every
+  handler on the current surface (`arsvox:fetch`, `arsvox:service-status`,
+  `arsvox:ws-*`) and to any NEW handlers the browser bridge adds (B3 DOM
+  bridge) — no unvalidated senders, ever.
 - **Allowlist policy**: `browser.allowlist`/`home_url` in
   `configs/app.yaml` still have ZERO readers in Electron (the Electron
   mirror lives in `security-policy.ts` as `DEFAULT_REMOTE_ALLOWLIST`).
@@ -162,7 +165,7 @@ the contract default before the media/browser milestone ships.
 | R40 isolated-world DOM execution, NO privileged preload | code + tests | `createHardenedRemoteView` webPreferences (sandbox, contextIsolation, no preload) |
 | R40 local/private + dangerous-scheme blocking independent of allowlist | code + tests | `security-policy.ts` (`BLOCKED_NAVIGATION_SCHEMES`, `isLocalOrPrivateHost`) |
 | R40 instantiable + migration note | done | this note + module |
-| R41 IPC sender validation | code + tests | `isTrustedIpcSender`; applied to the only handler (`arsvox:get-token`) in `main.ts` (A8-marked patch) |
+| R41 IPC sender validation | code + tests | `isTrustedIpcSender`; the old `arsvox:get-token` handler is gone (A2/R14 — token never enters the renderer; REST main-proxied via `arsvox:fetch`). Apply to every current and future handler. |
 | R42 upgrade feasibility + fold-in list | this note | §1-§3 |
 
 ## 6. Known limitations (spike scope)

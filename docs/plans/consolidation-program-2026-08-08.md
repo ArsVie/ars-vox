@@ -75,7 +75,8 @@ WAVE 3: target-user validation (4 implementation + 3 UX/a11y + 2 reliability/sec
 - Every brief (written to /tmp by the orchestrator, short pointers not
   inline payloads) carries: frozen-scope list (files the agent may touch),
   the R-scenarios it owns, its cross-owner boundary list, and the handoff
-  template. Workers announce on hey.md before starting.
+  template. Workers coordinate through the orchestrator (hey.md was
+  removed 2026-08-09 — see gate-4 remediation standing rules).
 - Mandatory context packet for every agent, read IN ORDER: STATUS.md →
   panel-vision.md → latest HANDOFF.md → packages/contracts → files directly
   relevant to the task → this program + the consolidation contract. Warnings

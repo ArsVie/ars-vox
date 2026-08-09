@@ -418,3 +418,12 @@ Nothing needs to be un-merged or reverted. The Wave-1 branches are sound. The
 failure was in reconciliation and in a gate that accepted green suites as proof
 of a working system — a 19-item checklist passed over a voice assistant that
 cannot speak.
+
+---
+
+## Tracking notes
+
+### hermes (GATE-3.5 Wave 1 — A2 secure launch, wip/g35-a2-launch, 2026-08-08)
+- task: R09-R15 process/auth lifecycle owner — Electron generates one per-launch token, spawns Python service, authenticated health handshake; renderer loses token access (R14); pre-first-connect buffering (R11); visible startup failure (R12); child kill on exit (R13); PATCH auth guards (R15).
+- files: apps/desktop/electron/{main,preload,service,wsclient}.ts, apps/desktop/src/{endpoints,store,main.tsx,ws/client.ts,arsvox-bridge.d.ts}, TtsPlayer.tsx, mic.ts, packages/contracts/arsvox_contracts/config.py, services/agent/arsvox_agent/app.py, tests (python + desktop).
+- status: RESOLVED 2026-08-08 — R09-R15 complete; desktop 468 tests (incl. launch-integration real-spawn suite), pytest 212, typecheck+build clean. Committed wip/g35-a2-launch.
