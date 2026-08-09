@@ -1,7 +1,7 @@
 ---
 type: plan
 title: Ars-Vox adaptive UI redesign — frozen contract
-description: Frozen shared contract for the adaptive UI redesign: one continuous application surface, 4 roles / 5 templates / 3 proportions, LayoutSpec semantics, invariants. The execution DAG (waves UI-000..UI-400) ran to completion 2026-08-08; wave/gate narrative lives in git history.
+description: "Frozen shared contract for the adaptive UI redesign: one continuous application surface, 4 roles / 5 templates / 3 proportions, LayoutSpec semantics, invariants. The execution DAG (waves UI-000..UI-400) ran to completion 2026-08-08; wave/gate narrative lives in git history."
 date: 2026-08-07
 status: frozen
 ---
