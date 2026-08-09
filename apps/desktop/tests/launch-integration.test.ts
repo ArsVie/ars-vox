@@ -108,7 +108,13 @@ function writeTempConfig(port: number): TempConfig {
   const res = spawnSync(
     PYTHON!,
     ["-c", script, path.join(REPO_ROOT, "configs", "app.yaml"), String(port), root, out],
-    { env: { ...process.env, PYTHONPATH }, stdio: "pipe", timeout: 60_000 },
+    {
+      env: { ...process.env, PYTHONPATH },
+      stdio: "pipe",
+      // Cold imports from the /mnt/c mount take 1-2 minutes on this
+      // machine (measured 61-85s); 60s was a flake source under load.
+      timeout: 180_000,
+    },
   );
   if (res.status !== 0) {
     throw new Error(
