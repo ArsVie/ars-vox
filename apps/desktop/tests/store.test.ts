@@ -713,6 +713,45 @@ describe("panel content events (content channel)", () => {
     });
   });
 
+  it("media.search_results event fills the youtube content bag (GATE-5 wire routing)", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "media.search_results",
+      query: "gatos",
+      results: [
+        {
+          id: "v1",
+          title: "Gatos jugando",
+          source: "youtube",
+          kind: "video",
+          channel: "Canal Mascotas",
+          duration_s: 95,
+          published: "2026-01-01",
+          thumbnail_url: null,
+          local_path: null,
+        },
+      ],
+      created_at: ts(),
+    });
+    expect(store.getState().content.youtube).toEqual({
+      query: "gatos",
+      loading: false,
+      results: [
+        {
+          id: "v1",
+          title: "Gatos jugando",
+          source: "youtube",
+          kind: "video",
+          channel: "Canal Mascotas",
+          duration_s: 95,
+          published: "2026-01-01",
+          thumbnail_url: null,
+          local_path: null,
+        },
+      ],
+    });
+  });
+
   it("browser.navigate event fills the browser content (snake_case -> camelCase)", () => {
     const store = createAppStore(() => {});
     store.getState().applyEvent({
