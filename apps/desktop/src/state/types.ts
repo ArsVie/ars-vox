@@ -11,6 +11,7 @@ import type {
   ClientCommand,
   DocumentKind,
   MediaSearchResult,
+  MemoryResult,
   NormalizedUiCommand,
   PanelId,
   ReminderItem,
@@ -62,7 +63,8 @@ export interface ErrorInfo {
 /* ------------------------------------------------------------ content */
 /* Panel content state — reduced from the panel content events. Keys are
    the panel ids that own content surfaces (youtube, browser,
-   document_editor, tasks, media). Absent key = panel has no content yet. */
+   document_editor, tasks, media, memory). Absent key = panel has no
+   content yet. */
 
 export interface YoutubeContent {
   query: string;
@@ -78,6 +80,16 @@ export interface BrowserContent {
   canGoBack: boolean;
   canGoForward: boolean;
   loading: boolean;
+  /** GATE-5 (routing-parity, defect #1): the last agent DOM action
+   *  (browser.dom_action) recorded on the bag — W2-DRIVE consumers read
+   *  the last action/result. Absent until the first dom_action frame. */
+  lastDomAction?: {
+    operation: "click" | "scroll" | "set_value" | "query";
+    target: string;
+    value: string | null;
+    result: string | null;
+    createdAt: string;
+  };
 }
 
 export interface DocumentContent {
@@ -95,12 +107,23 @@ export interface TasksContent {
   reminders: ReminderItem[];
 }
 
+/** GATE-5 (routing-parity, defect #1): semantic/FTS recall results from
+ *  the memory.search_results wire event (W1-MEMORY producer). No memory
+ *  surface is rendered yet (adaptive/surfaces.ts has none) — the slice
+ *  gives the wire an honest consumer; W3 can surface content.memory. */
+export interface MemoryContent {
+  query: string;
+  results: MemoryResult[];
+  createdAt: string;
+}
+
 export interface PanelContent {
   youtube?: YoutubeContent;
   browser?: BrowserContent;
   document_editor?: DocumentContent;
   tasks?: TasksContent;
   media?: MediaState;
+  memory?: MemoryContent;
 }
 
 /**

@@ -8,6 +8,11 @@
  * the last known nav capability (behavior preserved from the pre-slice
  * store — `can_go_back`/`can_go_forward` stay wired, W2 will replace the
  * hardcoded backend values).
+ *
+ * GATE-5 (routing-parity, defect #1): `browser.dom_action` frames (the
+ * agent driving the SAME view the user manipulates) are routed here too —
+ * the last action/result is recorded on the bag (never faked), so
+ * W2-DRIVE producers land visible frames instead of being dropped.
  */
 
 import type { ClientCommand, ServerEvent } from "../contracts";
@@ -16,7 +21,7 @@ import type { BrowserContent } from "./types";
 
 export const browserSlice: SurfaceSlice<BrowserContent> = {
   panelId: "browser",
-  eventTypes: ["browser.navigate"],
+  eventTypes: ["browser.navigate", "browser.dom_action"],
   commandActions: [
     "browser.navigate",
     "browser.back",
@@ -32,6 +37,26 @@ export const browserSlice: SurfaceSlice<BrowserContent> = {
           canGoBack: event.can_go_back,
           canGoForward: event.can_go_forward,
           loading: event.loading,
+        };
+      case "browser.dom_action":
+        // GATE-5 (routing-parity, defect #1): the agent's DOM action lands
+        // on the SAME bag the user sees — record the last action/result,
+        // never fake. Without a prior navigate the nav fields stay the
+        // honest "unknown page" truth (empty url renders the same empty
+        // state, and the frame is still recorded).
+        return {
+          url: bag?.url ?? "",
+          title: bag?.title ?? "",
+          canGoBack: bag?.canGoBack ?? false,
+          canGoForward: bag?.canGoForward ?? false,
+          loading: bag?.loading ?? false,
+          lastDomAction: {
+            operation: event.operation,
+            target: event.target,
+            value: event.value,
+            result: event.result,
+            createdAt: event.created_at,
+          },
         };
       default:
         return bag;
