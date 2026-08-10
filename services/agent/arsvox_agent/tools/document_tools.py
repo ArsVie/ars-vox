@@ -5,7 +5,8 @@ from pathlib import Path
 
 from arsvox_contracts import PanelType
 from arsvox_contracts.commands import PanelOpen
-from arsvox_contracts.events import DocumentChangedEvent, UiCommandEvent
+from arsvox_contracts.enums import DocumentKind
+from arsvox_contracts.events import DocumentChangedEvent, DocumentLoadEvent, UiCommandEvent
 
 from arsvox_agent.tools.context import ToolContext
 
@@ -20,6 +21,35 @@ def _safe_title(title: str) -> bool:
 
 def _doc_path(tctx: ToolContext, title: str) -> Path:
     return _documents_dir(tctx) / f"{title.strip()}.md"
+
+
+def _kind_for_path(path: Path) -> DocumentKind:
+    suffix = path.suffix.lower()
+    if suffix == ".txt":
+        return DocumentKind.TXT
+    if suffix == ".pdf":
+        return DocumentKind.PDF
+    if suffix == ".epub":
+        return DocumentKind.EPUB
+    return DocumentKind.MD
+
+
+def _load_event(doc: dict) -> DocumentLoadEvent:
+    """document.load payload for create/open: file content plus kind from
+    the path suffix, so the renderer forms the editor bag. Without it the
+    bag stays undefined and document.changed merges are dropped."""
+    path = Path(doc["path"])
+    kind = _kind_for_path(path)
+    content = ""
+    if kind in (DocumentKind.TXT, DocumentKind.MD) and path.is_file():
+        content = path.read_text(encoding="utf-8")
+    return DocumentLoadEvent(
+        title=doc["title"],
+        kind=kind,
+        path=doc["path"],
+        content=content,
+        chapters=[],
+    )
 
 
 async def document_create(tctx: ToolContext, title: str) -> str:
@@ -42,6 +72,8 @@ async def document_create(tctx: ToolContext, title: str) -> str:
             )
         )
     )
+    doc = tctx.deps.documents.get(doc_id)
+    await tctx.emit(_load_event(doc))
     return f"Documento '{title}' creado y abierto."
 
 
@@ -82,6 +114,7 @@ async def document_open(tctx: ToolContext, title: str) -> str:
             )
         )
     )
+    await tctx.emit(_load_event(doc))
     return f"Documento '{doc['title']}' abierto."
 
 
