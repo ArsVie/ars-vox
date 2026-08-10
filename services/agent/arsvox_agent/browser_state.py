@@ -18,8 +18,10 @@ live state on the next did-* event, so the mirror self-heals without
 snapshot participation.
 """
 
+import asyncio
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -71,3 +73,76 @@ class BrowserStateStore:
     def get(self) -> BrowserState:
         with self._lock:
             return self._state
+
+
+# --------------------------------------------------------------------- #
+# W2-DRIVE (GATE-5): the dom_action execution round-trip.
+#
+# The browser.dom_action TOOL emits the frozen wire event (the request);
+# the renderer forwards it to Electron main via arsvox:browser-dom-action
+# IPC; main executes against the browser view's webContents and PUTs the
+# REAL result back here (authenticated /api/browser-dom-result, echo of
+# the request's created_at). The tool awaits wait_for() keyed by the
+# SAME created_at, so the agent sees the actual page result — never a
+# fake "done".
+# --------------------------------------------------------------------- #
+
+
+class DomActionResultPayload(BaseModel):
+    """Service-internal channel payload (main -> service). NOT part of the
+    frozen client wire — mirrors BrowserStatePayload's role for the
+    browser-state channel."""
+
+    created_at: datetime
+    result: str
+
+
+# Results older than this are evicted (unmatched/never-awaited requests).
+_DOM_RESULT_CAP = 64
+
+
+class DomActionResultStore:
+    """Latest dom_action execution results, keyed by the request's
+    created_at (the browser.dom_action wire event's own timestamp).
+
+    Thread-safe + loop-agnostic (mirrors BrowserStateStore's threading
+    design): update() may be called from any thread/loop (the FastAPI
+    PUT handler), wait_for() from any loop (the tool handler). Waiters
+    are woken via call_soon_threadsafe so no loop affinity leaks.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._results: dict[datetime, str] = {}
+        self._waiters: dict[datetime, list[tuple[asyncio.AbstractEventLoop, asyncio.Future]]] = {}
+
+    def update(self, created_at: datetime, result: str) -> None:
+        with self._lock:
+            self._results[created_at] = result
+            if len(self._results) > _DOM_RESULT_CAP:
+                # Evict oldest unmatched entries (dict = insertion order).
+                for key in list(self._results)[: len(self._results) - _DOM_RESULT_CAP]:
+                    del self._results[key]
+            for loop, fut in self._waiters.pop(created_at, []):
+                if not fut.done():
+                    loop.call_soon_threadsafe(fut.set_result, result)
+
+    async def wait_for(self, created_at: datetime, timeout_s: float) -> str | None:
+        """Resolve with the result for this request, or None on timeout."""
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        with self._lock:
+            if created_at in self._results:
+                return self._results.pop(created_at)
+            self._waiters.setdefault(created_at, []).append((loop, fut))
+        try:
+            return await asyncio.wait_for(fut, timeout_s)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            with self._lock:
+                waiters = self._waiters.get(created_at)
+                if waiters:
+                    waiters[:] = [(l, f) for (l, f) in waiters if f is not fut]
+                    if not waiters:
+                        del self._waiters[created_at]

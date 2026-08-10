@@ -30,6 +30,8 @@ interface FakeWebContents {
   isLoading: Mock;
   loadURL: Mock;
   reload: Mock;
+  executeJavaScript: Mock;
+  isDestroyed: Mock;
   navigationHistory: {
     canGoBack: Mock;
     goBack: Mock;
@@ -62,6 +64,8 @@ vi.mock("electron", () => {
       isLoading: vi.fn(() => false),
       loadURL: vi.fn(async () => undefined),
       reload: vi.fn(),
+      executeJavaScript: vi.fn(async () => "ok"),
+      isDestroyed: vi.fn(() => false),
       navigationHistory: {
         canGoBack: vi.fn(() => false),
         goBack: vi.fn(),
@@ -346,5 +350,39 @@ describe("allowlist enforcement on main-owned navigate", () => {
     const addChildView = vi.fn();
     view.attach({ contentView: { addChildView } } as unknown as Electron.BrowserWindow);
     expect(addChildView).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("W2-DRIVE: domAction executes against THIS view's webContents", () => {
+  it("runs the driver script on the view's own cached webContents and returns its result", async () => {
+    const { view, wc } = makeView();
+    wc.getURL.mockReturnValue("https://example.com/");
+    wc.executeJavaScript.mockResolvedValue("clicked a#go");
+
+    const result = await view.domAction({
+      operation: "click",
+      target: "a#go",
+      value: null,
+    });
+
+    expect(result).toBe("clicked a#go");
+    expect(wc.executeJavaScript).toHaveBeenCalledTimes(1);
+    const [script] = wc.executeJavaScript.mock.calls[0];
+    expect(script).toContain("document.querySelector");
+    expect(script).toContain(".click()");
+  });
+
+  it("is honest about a view with no loaded page (no executeJavaScript)", async () => {
+    const { view, wc } = makeView();
+    wc.getURL.mockReturnValue("");
+
+    const result = await view.domAction({
+      operation: "query",
+      target: "",
+      value: null,
+    });
+
+    expect(result).toBe("no page");
+    expect(wc.executeJavaScript).not.toHaveBeenCalled();
   });
 });

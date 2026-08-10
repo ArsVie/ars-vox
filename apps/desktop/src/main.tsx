@@ -18,6 +18,19 @@ const ws = new WsClient({
     if (event.type === "browser.navigate" && window.arsvox) {
       void window.arsvox.browserNavigate(event.url);
     }
+    // W2-DRIVE (GATE-5): the agent's DOM actions are EXECUTED BY MAIN
+    // against the browser view's webContents. The renderer routes the
+    // frame into the store (visible lastDomAction) and asks main to
+    // apply it; main pushes the real result back to the service so the
+    // awaiting browser.dom_action tool returns it to the agent.
+    if (event.type === "browser.dom_action" && window.arsvox) {
+      void window.arsvox.browserDomAction({
+        operation: event.operation,
+        target: event.target,
+        value: event.value,
+        createdAt: event.created_at,
+      });
+    }
   },
   onStatus: (connected) => appStore.getState().setConnected(connected),
 });

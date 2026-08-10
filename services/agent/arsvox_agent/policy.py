@@ -68,6 +68,9 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     # media (GATE-5 W1)
     "media.search_local": PolicyKind.READ_ONLY,
     "media.play_local": PolicyKind.REVERSIBLE,
+    # browser (GATE-5 W2-DRIVE): drives the SAME WebContentsView the
+    # user manipulates — reversible (navigate back / re-scroll)
+    "browser.dom_action": PolicyKind.REVERSIBLE,
     # demo (mock mode only — the handler guards itself)
     "demo_populate": PolicyKind.REVERSIBLE,
 }

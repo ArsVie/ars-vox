@@ -43,6 +43,19 @@ export interface BridgeBrowserState {
   loading: boolean;
 }
 
+/**
+ * W2-DRIVE: a DOM action for main to apply to the BROWSER VIEW's
+ * webContents (frozen operation set — BrowserDomActionEvent fields).
+ * createdAt is the browser.dom_action wire event's created_at, echoed
+ * back to the service so the awaiting tool matches its own request.
+ */
+export interface BridgeDomActionRequest {
+  operation: "click" | "scroll" | "set_value" | "query";
+  target: string;
+  value: string | null;
+  createdAt: string;
+}
+
 export interface BridgeBrowserBounds {
   x: number;
   y: number;

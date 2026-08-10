@@ -147,6 +147,28 @@ function pushBrowserState(state: BrowserViewState): void {
 }
 
 /**
+ * W2-DRIVE (GATE-5): push a dom_action EXECUTION RESULT back to the
+ * agent service (pushBrowserState-like path: main owns the token, the
+ * renderer never holds it). The service's browser.dom_action tool
+ * awaits this round-trip keyed by the request's created_at, so the
+ * agent sees the REAL page result (query text, click verdict, ...) —
+ * never a fake "done".
+ */
+function pushDomActionResult(createdAt: string, result: string): void {
+  if (serviceStatus.state !== "ready") return;
+  void fetch(`${AGENT_BASE_URL}/api/browser-dom-result`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ created_at: createdAt, result }),
+  }).catch((err: unknown) => {
+    console.warn("[main] browser-dom-result PUT failed", err);
+  });
+}
+
+/**
  * Main-owned WebSocket to the agent service (R14: the renderer cannot
  * authenticate a browser WebSocket without holding the token). Incoming
  * frames are forwarded as structured events; outbound frames arrive via
@@ -322,6 +344,40 @@ function setupIpc(): void {
   ipcMain.on("arsvox:browser-refresh", (event) => {
     if (!isTrustedIpcSender(event, isAppWebContents)) return;
     browserView?.refresh();
+  });
+
+  // ---- W2-DRIVE (GATE-5): the agent DOM bridge (main executes) ----
+  // The renderer forwards browser.dom_action wire events here; main
+  // applies the action to the BROWSER VIEW's webContents (never the app
+  // window's) and pushes the real result back to the service
+  // (pushDomActionResult -> the awaiting browser.dom_action tool).
+  ipcMain.handle("arsvox:browser-dom-action", async (event, request: unknown) => {
+    if (!isTrustedIpcSender(event, isAppWebContents)) throw new Error("unauthorized");
+    if (!browserView) return "no view";
+    const r = request as {
+      operation?: unknown;
+      target?: unknown;
+      value?: unknown;
+      createdAt?: unknown;
+    };
+    const operation = r?.operation;
+    if (
+      operation !== "click" &&
+      operation !== "scroll" &&
+      operation !== "set_value" &&
+      operation !== "query"
+    ) {
+      return `invalid operation: ${String(operation)}`;
+    }
+    const target = typeof r?.target === "string" ? r.target : "";
+    const value = typeof r?.value === "string" ? r.value : null;
+    const createdAt =
+      typeof r?.createdAt === "string" && r.createdAt
+        ? r.createdAt
+        : new Date().toISOString();
+    const result = await browserView.domAction({ operation, target, value });
+    pushDomActionResult(createdAt, result);
+    return result;
   });
 
   ipcMain.on("arsvox:browser-set-bounds", (event, bounds: unknown) => {
