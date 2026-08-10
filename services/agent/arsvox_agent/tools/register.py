@@ -21,6 +21,7 @@ _MODULES = [
     "arsvox_agent.tools.local_media_tools",
     "arsvox_agent.tools.reminder_tools",
     "arsvox_agent.tools.demo_tools",
+    "arsvox_agent.tools.browser_tools",
 ]
 
 
