@@ -97,12 +97,18 @@ async def demo_populate(tctx: ToolContext) -> str:
     )
 
     # Browser: local demo news page (same chrome the real webview uses).
+    # W2-VIEW (ADR 0007): read the SAME browser-state store the real
+    # path uses — the desktop view's real can_go_back/can_go_forward
+    # when it has reported (fallback: contract defaults False), so the
+    # demo and real paths agree. The demo URL/title stay demo content.
+    view = tctx.deps.browser_state
+    view_state = view.get() if view is not None else None
     await tctx.emit(
         BrowserNavigateEvent(
             url=DEMO_NEWS_URL,
             title="El Diario — Noticias locales",
-            can_go_back=False,
-            can_go_forward=False,
+            can_go_back=view_state.can_go_back if view_state is not None else False,
+            can_go_forward=view_state.can_go_forward if view_state is not None else False,
             loading=False,
         )
     )

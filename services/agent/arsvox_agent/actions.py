@@ -17,8 +17,9 @@ Backend capabilities implemented here:
                           ONE media controller plays it (youtube or local
                           — same player), then the media panel opens
   * browser.navigate   -> authoritative browser.navigate event
-  * browser.back/forward/refresh -> client-local iframe operations;
-                          acknowledged (done) — no backend browser yet
+  * browser.back/forward/refresh -> performed by the MAIN-owned
+                          WebContentsView (ADR 0007); acknowledged
+                          (done) — no backend browser to drive
   * media.play_pause / media.seek / audio.play -> authoritative
                           media.state events from the service-side
                           media controller
@@ -89,6 +90,7 @@ from arsvox_contracts.events import (
     YoutubeVideoResult,
 )
 
+from arsvox_agent.browser_state import BrowserState
 from arsvox_agent.deps import Deps
 from arsvox_agent.media import media_controller
 from arsvox_agent.tools import ToolRegistry
@@ -374,21 +376,23 @@ async def _select_media_result(deps: Deps, command: MediaSelectResult) -> Action
 
 async def _navigate_browser(deps: Deps, command: BrowserNavigate) -> ActionResultEvent:
     url = command.url
-    # GATE-3.5 (reported to W2-BROWSER by g35r-dispatch): title,
-    # can_go_back and can_go_forward stay at the contract defaults
-    # because the agent service has NO browser-state source — the
-    # browser surface lives client-side (apps/desktop) and no
-    # browser-state channel exists back to the service (the only other
-    # emitter, demo_tools.py, hardcodes the same defaults). The UI must
-    # not believe history navigation is available.
-    # TODO(g35r-dispatch, remove when W2-BROWSER adds a browser-state channel):
-    #   feed real title/can_go_back/can_go_forward into this event.
+    # W2-VIEW (GATE-5, ADR 0007, plan §Wave 2 W2-VIEW): the agent
+    # service now HAS a browser-state source — the Electron main process
+    # publishes the WebContentsView's REAL navigation state via
+    # authenticated PUT /api/browser-state into deps.browser_state.
+    # can_go_back/can_go_forward are the view's actual navigationHistory
+    # values (no more hardcoded False); title is real only when the view
+    # already shows the requested URL (a brand-new target's title is
+    # unknown until it loads — did-navigate pushes the loaded title as
+    # the next state). demo_tools.py reads the SAME store. The view is
+    # the navigation authority; this event rides the frozen wire shape.
+    view = _view_state(deps)
     await deps.bus.publish(
         BrowserNavigateEvent(
             url=url,
-            title="",
-            can_go_back=False,
-            can_go_forward=False,
+            title=view.title if view.url == url else "",
+            can_go_back=view.can_go_back,
+            can_go_forward=view.can_go_forward,
             loading=True,
         )
     )
@@ -396,14 +400,23 @@ async def _navigate_browser(deps: Deps, command: BrowserNavigate) -> ActionResul
     return ActionResultEvent(action="browser.navigate", status="done", detail=url)
 
 
+def _view_state(deps: Deps) -> BrowserState:
+    """The view's latest real navigation state, or the contract defaults
+    when the store is absent (unit tests) or the view never reported
+    (service restarted before the next did-* push)."""
+    store = deps.browser_state
+    return store.get() if store is not None else BrowserState()
+
+
 def _acknowledge_local(action: str) -> ActionResultEvent:
-    """browser.back/forward/refresh are client-local iframe operations;
-    the backend has no browser to drive, so it acknowledges receipt and
-    the UI keeps performing them locally."""
+    """browser.back/forward/refresh are performed by the MAIN-owned
+    WebContentsView (W2-VIEW, ADR 0007) — the renderer drives it via
+    arsvox:browser-* IPC; the backend has no browser to drive, so it
+    acknowledges receipt and the UI keeps performing them locally."""
     return ActionResultEvent(
         action=action,
         status="done",
-        detail="client-local operation (no backend browser)",
+        detail="client-local operation (main-owned view)",
     )
 
 
