@@ -735,6 +735,7 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         }
         case "youtube.search":
+        case "media.search_results":
         case "browser.navigate":
         case "document.load":
         case "document.changed":
