@@ -26,6 +26,7 @@
 import { WebContentsView, type BrowserWindow, type Rectangle, type WebContents } from "electron";
 import { createHardenedRemoteView } from "./hardened-view";
 import { DEFAULT_REMOTE_ALLOWLIST, decideRemoteNavigation } from "./security-policy";
+import { executeDomAction, type DomActionRequest } from "./dom-driver";
 
 /** Real navigation state of the view (frozen wire shape — BrowserNavigateEvent fields). */
 export interface BrowserViewState {
@@ -152,6 +153,19 @@ export class BrowserView {
 
   refresh(): void {
     this.wc.reload();
+  }
+
+  /**
+   * W2-DRIVE (GATE-5): apply a DOM action (click/scroll/set_value/
+   * query) to THIS view's webContents. The driver module
+   * (./dom-driver.ts) owns the semantics; this is the ONLY path to the
+   * view's webContents, so the executor can never target the app
+   * window's page or any other WebContents (one browser state, one
+   * authority). Returns the honest result string ("no page" when the
+   * view has no loaded page).
+   */
+  domAction(action: DomActionRequest): Promise<string> {
+    return executeDomAction(this.wc, action);
   }
 
   /** The view lives inside the app window's contentView (above the page). */

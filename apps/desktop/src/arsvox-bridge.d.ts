@@ -24,6 +24,7 @@
 import type {
   BridgeBrowserBounds,
   BridgeBrowserState,
+  BridgeDomActionRequest,
   BridgeFetchRequest,
   BridgeFetchResponse,
 } from "../electron/bridge-types";
@@ -31,6 +32,7 @@ import type {
 export type {
   BridgeBrowserBounds,
   BridgeBrowserState,
+  BridgeDomActionRequest,
   BridgeFetchRequest,
   BridgeFetchResponse,
 };
@@ -57,6 +59,8 @@ export interface ArsvoxBridge {
   browserRefresh(): void;
   browserSetBounds(bounds: BridgeBrowserBounds): void;
   onBrowserState(callback: (state: BridgeBrowserState) => void): () => void;
+  /** W2-DRIVE: ask main to apply a DOM action to the browser view (returns the real result). */
+  browserDomAction(request: BridgeDomActionRequest): Promise<string>;
 }
 
 declare global {

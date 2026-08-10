@@ -35,7 +35,12 @@ from arsvox_memory import (
     ToolCallStore,
 )
 
-from arsvox_agent.browser_state import BrowserStatePayload, BrowserStateStore
+from arsvox_agent.browser_state import (
+    BrowserStatePayload,
+    BrowserStateStore,
+    DomActionResultPayload,
+    DomActionResultStore,
+)
 from arsvox_agent.config_loader import load_config, save_config
 from arsvox_agent.confirmations import ConfirmationCoordinator
 from arsvox_agent.deps import Deps
@@ -140,6 +145,10 @@ class AppServices:
         # W2-VIEW (ADR 0007): in-process mirror of the desktop
         # WebContentsView's real navigation state (PUT /api/browser-state).
         self.browser_state = BrowserStateStore()
+        # W2-DRIVE (GATE-5): dom_action execution results pushed back by
+        # Electron main (PUT /api/browser-dom-result) for the awaiting
+        # browser.dom_action tool.
+        self.browser_dom = DomActionResultStore()
         self.bus = EventBus()
         # H5: reconnect snapshots need the latest media/voice state; the
         # tracker records it from the bus without a background task.
@@ -178,6 +187,9 @@ class AppServices:
             confirmations=self.confirmations,
             # W2-VIEW (ADR 0007): real view navigation state for emitters.
             browser_state=self.browser_state,
+            # W2-DRIVE (GATE-5): dom_action execution results for the
+            # browser.dom_action tool's await round-trip.
+            browser_dom=self.browser_dom,
             tts=self.tts,
             telegram=self.telegram,
         )
@@ -341,6 +353,15 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
     @app.put("/api/browser-state")
     async def api_browser_state(payload: BrowserStatePayload):
         services.browser_state.update(payload)
+        return {"ok": True}
+
+    # W2-DRIVE (GATE-5): Electron main pushes the REAL execution result
+    # of a browser.dom_action back here (echo of the request's
+    # created_at). The awaiting browser.dom_action tool resolves with
+    # this text, so the agent sees the actual page result.
+    @app.put("/api/browser-dom-result")
+    def api_browser_dom_result(payload: DomActionResultPayload):
+        services.browser_dom.update(payload.created_at, payload.result)
         return {"ok": True}
 
     @app.get("/api/notes")

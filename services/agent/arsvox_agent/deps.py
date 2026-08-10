@@ -24,7 +24,7 @@ from arsvox_memory import (
 )
 from arsvox_tts import TTSProvider
 
-from arsvox_agent.browser_state import BrowserStateStore
+from arsvox_agent.browser_state import BrowserStateStore, DomActionResultStore
 from arsvox_agent.confirmations import ConfirmationCoordinator
 from arsvox_agent.events import EventBus
 from arsvox_agent.policy import PolicyEngine
@@ -57,6 +57,10 @@ class Deps:
     # WebContentsView (in-process mirror; None in unit tests that never
     # emit browser events — emitters fall back to the contract defaults).
     browser_state: BrowserStateStore | None = None
+    # W2-DRIVE (GATE-5): dom_action execution results pushed back by
+    # Electron main (keyed by the request's created_at; None in unit
+    # tests that never run the browser tool).
+    browser_dom: DomActionResultStore | None = None
     # per-run
     run_id: str = ""
     session_id: str = ""

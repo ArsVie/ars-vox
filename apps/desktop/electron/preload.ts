@@ -36,6 +36,7 @@ import type { ServiceStatus } from "./service";
 import type {
   BridgeBrowserBounds,
   BridgeBrowserState,
+  BridgeDomActionRequest,
   BridgeFetchRequest,
   BridgeFetchResponse,
 } from "./bridge-types";
@@ -93,4 +94,7 @@ contextBridge.exposeInMainWorld("arsvox", {
   },
   onBrowserState: (callback: (state: BridgeBrowserState) => void): (() => void) =>
     subscribe("arsvox:browser-state", callback as (payload: unknown) => void),
+  // ---- W2-DRIVE (GATE-5): the agent DOM bridge (main executes) ----
+  browserDomAction: (request: BridgeDomActionRequest): Promise<string> =>
+    ipcRenderer.invoke("arsvox:browser-dom-action", request) as Promise<string>,
 });
