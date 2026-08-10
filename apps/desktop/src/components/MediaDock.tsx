@@ -295,6 +295,17 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
 
   const m = media ?? EMPTY_MEDIA;
   const hasTrack = m.title !== "" || m.videoId !== null || m.url !== null;
+  // GATE-5 (reoffer): the server's stopped event RETAINS the track
+  // metadata, so hasTrack alone would keep the dead player mounted and
+  // hide every later offer for the rest of the session. A STOPPED track
+  // plus an offer in the bag (media.search_results cards) renders the
+  // selectable-card search surface again — click-picking works at EVERY
+  // offer, not just the first. An active track (playing/paused) always
+  // keeps the player: playing is the vision-line playback state, paused
+  // is a deliberate resume point.
+  const youtubeContent = useStore(appStore, (s) => s.content.youtube);
+  const showSearchSurface =
+    !hasTrack || (m.state === "stopped" && (youtubeContent?.results.length ?? 0) > 0);
   const isVideo = m.kind === "video";
   const isPlaying = m.state === "playing";
   const progress = m.durationS > 0 ? Math.min(100, (m.positionS / m.durationS) * 100) : 0;
@@ -402,14 +413,16 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
           {title}
         </PanelHeader>
       ) : null}
-      {!hasTrack ? (
+      {showSearchSurface ? (
         <div className="media-dock-body media-dock-body--search">
           {/* GATE-5 (W1 seam): the media surface's idle state IS the
               selectable-card search surface — the agent's search results
               mount here as cards (embedded YoutubePanel: search box +
               cards) and the user picks by click (media.select_result ->
               ONE controller -> player) or by voice. An active track
-              swaps in the unified player below. */}
+              swaps in the unified player below. GATE-5 (reoffer): a
+              STOPPED track with an offer in the bag returns HERE too —
+              every offer is clickable, not just the first per session. */}
           <YoutubePanel meta={meta} embedded />
         </div>
       ) : (
