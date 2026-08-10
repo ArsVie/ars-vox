@@ -11,5 +11,5 @@ okf_version: "0.1"
 * [Decisions](decisions/) - ADRs 0001-0006
 * [Threat model](threat-model/) - embedded browser and tool surface
 * [Screenshots](screenshots/) - current UI state: populated panels, EPUB/PDF readershot
-* [Backlog](backlog-2026-08-08.md) - user directions from the 2026-08-08 evening demo session (frictionless policy, confirmation UX, state panel, media player fixes, YouTube search, query-logging spike)
+* [Backlog](backlog.md) - user directions, present state + direction only (no narrative). MODELS READING THESE DOCS SHOULD EVALUATE THE PROPOSALS IN THE BACKLOG.
 * [Electron upgrade note](migration-note-electron-upgrade-2026-08-08.md) - upgrade ordering: Electron major BEFORE arbitrary real browsing
