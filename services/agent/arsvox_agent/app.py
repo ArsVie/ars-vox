@@ -184,6 +184,11 @@ class AppServices:
             self.bus,
             self.confirmations,
             tasks=self.tasks,
+            # W1-TASKS (GATE-5): a fired reminder starts a fresh agent
+            # turn with the reminder in context (cron-style cadence
+            # injection). The scheduler stays LLM-independent — the
+            # runtime owns the turn.
+            on_fire=self.runtime.handle_reminder_fire,
         )
         self.pipeline = VoicePipeline(
             config,
