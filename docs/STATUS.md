@@ -1,11 +1,11 @@
 ---
 type: status
 title: Ars-Vox current state
-description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-09.
-timestamp: 2026-08-09T23:00:00Z
+description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-10.
+timestamp: 2026-08-10T03:10:00Z
 ---
 
-# Ars-Vox — current state (2026-08-09)
+# Ars-Vox — current state (2026-08-10)
 THIS FILE IS THE SINGLE AUTHORITY for current implementation state.
 HANDOFF.md is the roadmap (guidance, not history); ADRs are historical
 decisions; audits are snapshots. If any other doc contradicts this file,
@@ -91,21 +91,64 @@ through takeover after connection losses; the conformance lane's checklist
   word-boundary), launch-integration timeouts 60s/120s → 180s/200s (cold
   /mnt/c imports measure 2m10s), store.test.ts youtube pin → unified card.
 
+## GATE-5 GATE-1 (PACKAGED VERIFICATION 2026-08-10; three seam fixes merged)
+
+GATE-1 = the built app + real model (deepseek-v4-flash, mock:false,
+edge TTS, auto_speak, CDP 9222) exercising every panel-vision row with
+screenshots. Packaged verification FOUND three real product defects
+living in the seams between merged lanes — the exact GATE-4 failure
+class the program exists to catch. Each was dispatched to a lane leaf
+(never orchestrator surgery), merged with ancestry verified, then the
+gate re-ran.
+
+- SEAM 1 (offer cards never mounted): YoutubePanel was dead code — the
+  media surface only mounted MediaDock, whose idle state was an empty
+  span. MediaDock idle now renders the embedded selectable-card search
+  surface (YoutubePanel embedded prop + 2 layout CSS rules);
+  `media.search_results` routes to content.youtube (ONE insertion in the
+  frozen store switch, same class as the authorized document.changed
+  case); system.md rule 10: after a search, open the media panel, list
+  options, never auto-play. Verified live: 10 real cards, click →
+  media.select_result → ONE controller → iframe.
+- SEAM 2 (document editor blind): document.create/open emitted
+  panel.open + document.changed but NEVER document.load — the renderer
+  bag never formed, editor showed "No hay documento abierto" forever.
+  document_tools.py now emits DocumentLoadEvent (content from the file,
+  kind from suffix) after panel.open; the changed merge lands live.
+  Verified live: create → editor shows title/path/kind + content;
+  insert → content updates in place.
+- SEAM 3 (offer once per session; dispatch 2026-08-10, reoffer-fix):
+  after a stop, the dock keeps hasTrack=true (stopped events retain
+  title/videoId/url), so the search surface only ever renders for the
+  FIRST offer; click-picking dies after any playback (voice still
+  works). Fix in flight as leaf wip/gate5-reoffer-fix.
+- Also fixed at gate: r45 snooze test was wall-clock dependent
+  (snooze_top now accepts a deterministic `now`), launch-integration
+  beforeAll hook cap 150s → 240s (the hook, not the probe, was the
+  binding constraint under contention).
+- Verified live at GATE-1: cold start (hero only), OFFER flow (search →
+  cards → click pick → play; multi-turn voice steering "la segunda,
+  por favor" → plays second result — backlog requirement), memory
+  (preference saved → recall shapes search query "jazz suave para
+  concentrarse"), tasks (reminder scheduled → exactly ONE notification
+  event → notification in UI → one-shot consumed), document editor
+  (create → live content; change → live merge). Screenshots:
+  docs/screenshots/gate1-{cold-start,youtube-offer-cards,
+  document-editor}.png.
+
 ## Target hardware
 
 - Physical Windows 11 desktop (mic + speakers), WSL for dev, Windows
   git/gh. The 2014 MacBook Air / Big Sur was an early compatibility
   eval only (ADR 0001 status note).
 
-## Test gates (last full run, 2026-08-09, post GATE-5 W1 merge)
+## Test gates (last full run, 2026-08-10, post GATE-1 seam fixes)
 
-- vitest: 614 passed + 5 skipped (50 files) — apps/desktop (post-W1:
-  youtube cards, local player, document.changed, tasks/notifications,
-  unified media card in store pins)
-- pytest: 366 passed — tests/python (post-W1: +memory FTS, +local media,
-  +doc-shared emit, +tasks fire pins; registry 46)
-- e2e harness (tests/e2e): 12 passed + consistency gate (probes boot the
-  real app with a scripted model — deterministic, no live model)
+- vitest: 621 passed (50 files) — apps/desktop (incl. launch-integration
+  booting the real service; hook cap 240s)
+- pytest: 370 passed — tests/python (incl. deterministic r45 snooze)
+- e2e harness (tests/e2e): 13 passed (probes boot the real app with a
+  scripted model — deterministic, no live model)
 - typecheck: clean (tsconfig.json + tsconfig.electron.json)
 - build: clean (vite build + tsc electron)
 - OKF docs validator: 23 concepts validated (2026-08-09)
