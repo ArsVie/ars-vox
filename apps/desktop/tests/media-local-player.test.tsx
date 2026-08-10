@@ -85,6 +85,53 @@ function seedYoutubeTrack(): void {
   });
 }
 
+/** GATE-5 (reoffer): the server's stopped event RETAINS the track
+ *  metadata (title/videoId/url) — the exact packaged-app defect
+ *  condition that kept hasTrack true forever. */
+function stopCurrentTrack(): void {
+  const m = mediaController.getState();
+  appStore.getState().applyEvent({
+    type: "media.state",
+    state: "stopped",
+    source: m.source,
+    kind: m.kind,
+    title: m.title,
+    video_id: m.videoId,
+    url: m.url,
+    local_path: m.localPath,
+    position_s: m.positionS,
+    duration_s: m.durationS,
+    volume: m.volume,
+    created_at: ts(),
+  });
+}
+
+/** A fresh media.search_results offer (the W1 tool's real cards). */
+function seedOffer(): void {
+  appStore.setState((s) => ({
+    content: {
+      ...s.content,
+      youtube: {
+        query: "guitarra",
+        loading: false,
+        results: [
+          {
+            id: "v1",
+            title: "Clases de guitarra",
+            source: "youtube",
+            kind: "video",
+            channel: "Marta",
+            duration_s: 600,
+            published: "hace 2 días",
+            thumbnail_url: null,
+            local_path: null,
+          },
+        ],
+      },
+    },
+  }));
+}
+
 /** Extract the controls block (play button + progress + source badge) —
  *  the part that must be identical across sources. The time label shows
  *  REAL per-track durations (12s of 180 vs 742), so it is normalized:
@@ -244,5 +291,89 @@ describe("GATE-5 W1-MEDIA-LOCAL: one unified player", () => {
     expect(html).toContain('aria-label="Buscar en YouTube"');
     expect(html).not.toContain("media-player-local-audio");
     expect(html).not.toContain("media-player");
+  });
+});
+
+describe("GATE-5 reoffer: a stopped track + a new offer returns the selectable-card surface", () => {
+  it("stopped track (metadata retained) + search results -> cards render again", () => {
+    seedYoutubeTrack();
+    stopCurrentTrack(); // stopped event RETAINS title/videoId/url
+    seedOffer(); // fresh media.search_results
+
+    const html = renderPrimary();
+    expect(html).toContain("youtube-panel");
+    expect(html).toContain("youtube-card");
+    expect(html).toContain("Clases de guitarra");
+    expect(html).not.toContain("media-player");
+    expect(html).not.toContain("youtube.com/embed");
+  });
+
+  it("playing track keeps the player even when results are in the bag", () => {
+    seedYoutubeTrack();
+    seedOffer();
+
+    const html = renderPrimary();
+    expect(html).toContain("media-player");
+    expect(html).toContain("youtube.com/embed");
+    expect(html).not.toContain("youtube-card");
+  });
+
+  it("pick -> player returns: the stopped+results surface becomes the player on play", () => {
+    seedYoutubeTrack();
+    stopCurrentTrack();
+    seedOffer();
+    expect(renderPrimary()).toContain("youtube-card"); // cards NOW
+
+    // The pick's outcome on the ONE controller: media.state playing.
+    appStore.getState().applyEvent({
+      type: "media.state",
+      state: "playing",
+      source: "youtube",
+      kind: "video",
+      title: "Taller de carpintería",
+      video_id: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      position_s: 0,
+      duration_s: 742,
+      volume: 1,
+      created_at: ts(),
+    });
+
+    const html = renderPrimary();
+    expect(html).toContain("media-player");
+    expect(html).toContain('aria-label="Pausar"');
+    expect(html).not.toContain("youtube-card");
+  });
+
+  it("stopped track WITHOUT results keeps the stopped player (no offer, no takeover)", () => {
+    seedYoutubeTrack();
+    stopCurrentTrack();
+
+    const html = renderPrimary();
+    expect(html).toContain("media-player");
+    expect(html).toContain("youtube.com/embed");
+    expect(html).not.toContain("youtube-card");
+  });
+
+  it("paused track + results keeps the player (paused is a deliberate resume point)", () => {
+    seedYoutubeTrack();
+    appStore.getState().applyEvent({
+      type: "media.state",
+      state: "paused",
+      source: "youtube",
+      kind: "video",
+      title: "Taller de carpintería",
+      video_id: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      position_s: 12,
+      duration_s: 742,
+      volume: 1,
+      created_at: ts(),
+    });
+    seedOffer();
+
+    const html = renderPrimary();
+    expect(html).toContain("media-player");
+    expect(html).not.toContain("youtube-card");
   });
 });
