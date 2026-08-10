@@ -91,8 +91,12 @@ def test_r45_recurring_snooze_top_keeps_daily_anchor():
     assert reminders.get(rid)["occ_status"] == "active"  # advanced to tomorrow
     assert len(notifications.list_active()) == 1  # today's occurrence fired
 
-    # spoken snooze: occurrence -> now+10m, recurrence rule untouched
-    asyncio.run(scheduler.snooze_top(600))
+    # spoken snooze: occurrence -> now+10m, recurrence rule untouched.
+    # Deterministic: pass the fixed fire instant (the tool defaults to the
+    # real wall clock; the real-clock window flips the final assertion
+    # depending on when the suite runs vs the 02:30 UTC daily anchor).
+    fire_instant = datetime(2026, 8, 6, 2, 30, 1, tzinfo=timezone.utc)
+    asyncio.run(scheduler.snooze_top(600, now=fire_instant))
     row = reminders.get(rid)
     assert row["occ_status"] == "snoozed"
     assert row["repeat_rule"] == "daily"

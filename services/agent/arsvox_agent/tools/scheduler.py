@@ -143,11 +143,13 @@ class ReminderScheduler:
         ]
         await self.bus.publish(TasksUpdateEvent(todos=todos, reminders=reminders))
 
-    async def snooze_top(self, seconds: int) -> str:
+    async def snooze_top(self, seconds: int, now: datetime | None = None) -> str:
         n = self.notifications.latest_active()
         if not n or not n["reminder_id"]:
             return "No hay ningún recordatorio activo para posponer."
-        ok = self.reminders.snooze(n["reminder_id"], seconds, datetime.now(timezone.utc))
+        ok = self.reminders.snooze(
+            n["reminder_id"], seconds, now or datetime.now(timezone.utc)
+        )
         if not ok:
             return "No pude posponer el recordatorio."
         self.notifications.resolve(n["id"], NotificationStatus.SNOOZED.value)

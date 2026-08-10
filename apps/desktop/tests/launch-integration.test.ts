@@ -149,11 +149,11 @@ describe.skipIf(!canRunIntegration)("launch integration (real Python service)", 
       configPath: config.path,
       serviceMode: "auto",
       healthIntervalMs: 150,
-      healthTimeoutMs: 150_000, // cold import on /mnt/c takes ~35s+
+      healthTimeoutMs: 240_000, // cold import on /mnt/c measures 2m10s; allow boot headroom
       onStatus: (s) => statuses.push(s),
     });
-    await waitForState(statuses, "ready", 120_000);
-  }, 150_000);
+    await waitForState(statuses, "ready", 210_000);
+  }, 240_000);
 
   afterAll(async () => {
     await handle?.terminate();
