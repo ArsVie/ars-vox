@@ -54,11 +54,19 @@ class BrowserStateStore:
     In-process only (no DB): a live mirror of a client-owned view, not
     authoritative history. Thread-safe: the PUT handler and agent-tool
     emitters may run on different threads/loops.
+
+    The browser.navigate TOOL awaits the round-trip through
+    ``wait_for_update()``: main's PUT /api/browser-state lands here on
+    every did-* navigation event of the view, so a waiter resolves with
+    the REAL post-navigation state (url/title) — never a fabricated
+    success. Waiters are woken via call_soon_threadsafe (no loop
+    affinity), mirroring DomActionResultStore's design.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._state = BrowserState()
+        self._waiters: list[tuple[asyncio.AbstractEventLoop, asyncio.Future]] = []
 
     def update(self, payload: BrowserStatePayload) -> None:
         with self._lock:
@@ -69,10 +77,33 @@ class BrowserStateStore:
                 can_go_forward=payload.can_go_forward,
                 loading=payload.loading,
             )
+            waiters, self._waiters = self._waiters, []
+        for loop, fut in waiters:
+            if not fut.done():
+                loop.call_soon_threadsafe(fut.set_result, self._state)
 
     def get(self) -> BrowserState:
         with self._lock:
             return self._state
+
+    async def wait_for_update(self, timeout_s: float) -> BrowserState | None:
+        """Resolve with the next navigation-state report main pushes
+        (any did-* navigation completion), or None on timeout.
+
+        Bounded like DomActionResultStore.wait_for — a missing desktop
+        must not eat the turn.
+        """
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        with self._lock:
+            self._waiters.append((loop, fut))
+        try:
+            return await asyncio.wait_for(fut, timeout_s)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            with self._lock:
+                self._waiters = [(l, f) for (l, f) in self._waiters if f is not fut]
 
 
 # --------------------------------------------------------------------- #

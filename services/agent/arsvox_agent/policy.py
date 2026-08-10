@@ -71,6 +71,9 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     # browser (GATE-5 W2-DRIVE): drives the SAME WebContentsView the
     # user manipulates — reversible (navigate back / re-scroll)
     "browser.dom_action": PolicyKind.REVERSIBLE,
+    # browser.navigate (GATE-5 W2-NAVIGATE): opens a page in the same
+    # main-owned view — reversible (the user can navigate back)
+    "browser.navigate": PolicyKind.REVERSIBLE,
     # demo (mock mode only — the handler guards itself)
     "demo_populate": PolicyKind.REVERSIBLE,
 }

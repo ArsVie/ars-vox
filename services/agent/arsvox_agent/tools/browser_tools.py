@@ -1,4 +1,4 @@
-"""browser.dom_action — the agent drives the integrated browser.
+"""browser.dom_action + browser.navigate — the agent drives the integrated browser.
 
 GATE-5 W2-DRIVE: the agent's DOM bridge. The tool emits the FROZEN
 ``browser.dom_action`` wire event (operation click|scroll|set_value|
@@ -11,6 +11,17 @@ by the event's own ``created_at``, so the model sees the ACTUAL page
 result (query text, click verdict) — not a canned "done". If the
 desktop never answers (no Electron, view unattached), the handler
 returns an honest no-response message after a bounded wait.
+
+GATE-5 W2-NAVIGATE: the agent's navigation tool. ``browser.navigate``
+emits the FROZEN ``browser.navigate`` wire event (url, title,
+can_go_back, can_go_forward, loading) — the same event the user's own
+address-bar command emits. The renderer routes it to main
+(window.arsvox.browserNavigate → WebContentsView, allowlist-pre-checked
+in browser-view.ts), and main PUTs the view's REAL post-navigation
+state via /api/browser-state into the browser-state store. The handler
+AWAITS that store update (bounded window), so the model sees the real
+resulting url/title — including redirects. Never a fake success:
+timeouts / no store / blocked pages answer honestly in Spanish.
 
 SEARCH-BAR SINGLE PATH (one browser state, one authority): the agent
 NAVIGATES — it never types into the renderer's address bar. The address
@@ -30,8 +41,9 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from arsvox_contracts import PolicyKind
-from arsvox_contracts.events import BrowserDomActionEvent
+from arsvox_contracts.events import BrowserDomActionEvent, BrowserNavigateEvent
 
+from arsvox_agent.browser_state import BrowserState
 from arsvox_agent.tools import ToolSpec
 from arsvox_agent.tools.context import ToolContext
 
@@ -43,9 +55,20 @@ _OPERATIONS: tuple[str, ...] = ("click", "scroll", "set_value", "query")
 # the turn).
 DOM_ACTION_TIMEOUT_S = 10.0
 
+# Same bounded window for browser.navigate: main PUTs the view's
+# post-navigation state (url/title) on every did-* event; if it never
+# reports (no Electron, view unattached, allowlist-blocked, failed
+# load) the handler answers honestly after this wait.
+NAVIGATE_TIMEOUT_S = 10.0
+
 _NO_RESPONSE = (
     "El escritorio no respondió a la acción de navegador "
     "(¿está abierta la app?)."
+)
+
+_NAV_NO_RESPONSE = (
+    "El escritorio no respondió a la navegación "
+    "(¿está abierta la app? ¿la página fue bloqueada?)."
 )
 
 
@@ -108,6 +131,72 @@ async def browser_dom_action(
     return result
 
 
+def _landing_detail(state: BrowserState, requested: str) -> str:
+    """The REAL post-navigation state, so the agent sees where it
+    landed — including redirects/blocked loads (never a fake success)."""
+    where = state.url or "página vacía"
+    title = f" — {state.title}" if state.title else ""
+    if state.url == requested:
+        return f"Navegación completada: {where}{title}"
+    return (
+        f"La navegación terminó en {where}{title} "
+        f"(la dirección pedida era {requested})."
+    )
+
+
+async def browser_navigate(tctx: ToolContext, url: str) -> str:
+    """Open a new page in the integrated browser.
+
+    Navigates the SAME WebContentsView the user manipulates (main-owned,
+    allowlist-pre-checked). Emits the frozen ``browser.navigate`` wire
+    event and AWAITS the post-navigation state the desktop pushes back
+    (``/api/browser-state``), so the agent sees the REAL resulting
+    url/title — never a canned \"done\". If the desktop never reports
+    (no Electron, view unattached, page blocked, failed load), the
+    handler answers honestly after a bounded wait.
+    """
+    url = (url or "").strip()
+    if not url:
+        return (
+            "URL no válida: no puedo navegar a una dirección vacía. "
+            "Pásame la dirección completa (p. ej. https://...)."
+        )
+
+    # Demo/mock path: same frozen shape, canned result marked as mock.
+    if tctx.deps.config.agent.mock:
+        result = f"[mock] Navegación a {url}"
+        await tctx.emit(
+            BrowserNavigateEvent(
+                url=url,
+                title="[mock] Página simulada",
+                loading=False,
+            )
+        )
+        return result
+
+    # Real path: snapshot the view's current state, emit the REQUEST,
+    # then await the post-navigation state Electron main pushes back.
+    store = tctx.deps.browser_state
+    baseline = store.get() if store is not None else None
+    created_at = datetime.now(timezone.utc)
+    await tctx.emit(
+        BrowserNavigateEvent(
+            url=url,
+            title=baseline.title if baseline is not None and baseline.url == url else "",
+            can_go_back=baseline.can_go_back if baseline is not None else False,
+            can_go_forward=baseline.can_go_forward if baseline is not None else False,
+            loading=True,
+            created_at=created_at,
+        )
+    )
+    if store is None:
+        return _NAV_NO_RESPONSE
+    state = await store.wait_for_update(NAVIGATE_TIMEOUT_S)
+    if state is None:
+        return _NAV_NO_RESPONSE
+    return _landing_detail(state, url)
+
+
 # --------------------------------------------------------------------- #
 SPECS = [
     ToolSpec(
@@ -117,6 +206,16 @@ SPECS = [
         "target), set_value (fill a page input), or query (read the "
         "page text, truncated). To open a new page use browser.navigate.",
         browser_dom_action,
+        PolicyKind.REVERSIBLE,
+    ),
+    ToolSpec(
+        "browser.navigate",
+        "Open a new page in the integrated browser: navigate the SAME "
+        "WebContentsView the user manipulates to the given URL "
+        "(allowlist-pre-checked by the view). Returns the real "
+        "resulting url/title, or an honest no-response if the desktop "
+        "does not confirm the navigation.",
+        browser_navigate,
         PolicyKind.REVERSIBLE,
     ),
 ]
