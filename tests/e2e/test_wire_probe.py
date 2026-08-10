@@ -14,7 +14,7 @@ Rows covered (checklist ids in parentheses):
 - L3 document reader wire ......... test_document_kind_wire
 - L5 media one player ............. test_media_select_result_local_routes_unified_controller
 - L8 agent behavior/memory ........ test_memory_search_honest_verdict
-- L7 browser (NOT_YET evidence) ... test_browser_navigate_can_go_back_false
+- L7 browser (NOT_YET evidence) ... test_browser_navigate_carries_store_nav_state
 - P1 fresh-start hero (wire part) . test_snapshot_stashes_history
 - P5 confirm-in-chat (wire part) .. test_confirm_flow_roundtrip
 - wire surface (all rows) ......... test_frozen_wire_surface_present
@@ -345,10 +345,12 @@ def test_media_select_result_local_routes_unified_controller(client):
 # --------------------------------------------------------------------------- #
 
 
-def test_browser_navigate_can_go_back_false(client):
-    """Records the Wave-2 gap on the wire: browser.navigate exists but the
-    service has no browser-state source — can_go_back/can_go_forward stay
-    False (actions.py hardcodes them). The checklist row stays NOT_YET."""
+def test_browser_navigate_carries_store_nav_state(client):
+    """Browser nav state comes from the browser-state store (W2-VIEW): the
+    desktop PUTs real url/title/can_go_back/can_go_forward; actions.py emits
+    those values instead of hardcoded False. Empty store → honest defaults
+    (False), populated store → real values. Checklist row: NOT_YET until the
+    packaged GATE-2 verification (W2 built, probe records built facts)."""
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()
@@ -359,6 +361,7 @@ def test_browser_navigate_can_go_back_false(client):
             events.extend(collect_for(ws, 0.5))
         navs = frames_of(events, "browser.navigate")
         assert navs, "expected a browser.navigate event"
+        # Empty store: honest defaults (no fabricated navigation history).
         assert navs[-1]["can_go_back"] is False
         assert navs[-1]["can_go_forward"] is False
 
