@@ -9,7 +9,16 @@ import "./styles.css";
 import "./content.css";
 
 const ws = new WsClient({
-  onEvent: (event) => appStore.getState().applyEvent(event),
+  onEvent: (event) => {
+    appStore.getState().applyEvent(event);
+    // W2-VIEW (ADR 0007): the browser is MAIN-owned. Agent-issued
+    // browser.navigate events (and the service echo of the user's own
+    // command) drive the WebContentsView through the bridge; main
+    // dedupes a re-load of the URL already displayed.
+    if (event.type === "browser.navigate" && window.arsvox) {
+      void window.arsvox.browserNavigate(event.url);
+    }
+  },
   onStatus: (connected) => appStore.getState().setConnected(connected),
 });
 
@@ -25,6 +34,14 @@ ws.connect();
 // service-origin error so a recovered launch does not leave a stale banner.
 if (window.arsvox) {
   const store = appStore.getState();
+  // W2-VIEW (ADR 0007): the main process owns the WebContentsView and
+  // publishes its REAL navigation state (url/title/can_go_back/
+  // can_go_forward/loading) — the VIEW is the navigation authority; the
+  // store reduces the same frozen field set the browser.navigate events
+  // carry, so both pipes converge.
+  window.arsvox.onBrowserState((state) => {
+    appStore.getState().browserViewState(state);
+  });
   let serviceErrorShown = false;
   window.arsvox.onServiceEvent((status) => {
     if (status.state === "failed") {

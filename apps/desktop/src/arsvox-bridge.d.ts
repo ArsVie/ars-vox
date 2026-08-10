@@ -11,31 +11,35 @@
  *    are queued in main and delivered exactly once (R11).
  *  - serviceStatus()/onServiceEvent(): startup lifecycle (R12 — visible
  *    failure instead of a silent disconnected state).
+ *  - browserNavigate()/browserBack()/browserForward()/browserRefresh()/
+ *    browserSetBounds()/onBrowserState() — W2-VIEW (ADR 0007): the
+ *    integrated browser is MAIN-owned; the renderer drives the hardened
+ *    WebContentsView through these and receives its REAL navigation
+ *    state (url/title/can_go_back/can_go_forward/loading).
  */
+
+// Bridge surface types: ONE declaration site — electron/bridge-types.ts.
+// Re-exported here so the renderer program sees the exact same types the
+// preload bridge uses (no duplicate declarations to drift apart).
+import type {
+  BridgeBrowserBounds,
+  BridgeBrowserState,
+  BridgeFetchRequest,
+  BridgeFetchResponse,
+} from "../electron/bridge-types";
+
+export type {
+  BridgeBrowserBounds,
+  BridgeBrowserState,
+  BridgeFetchRequest,
+  BridgeFetchResponse,
+};
 
 export type ServiceState = "starting" | "ready" | "failed" | "stopped";
 
 export interface ServiceStatus {
   state: ServiceState;
   detail?: string;
-}
-
-export interface BridgeFetchRequest {
-  url: string;
-  method?: string;
-  headers?: Record<string, string>;
-  /** ArrayBuffer for binary bodies (STT upload), string for JSON. */
-  body?: ArrayBuffer | string;
-  contentType?: string;
-  /** When set, the body is sent as multipart/form-data (UploadFile). */
-  filename?: string;
-}
-
-export interface BridgeFetchResponse {
-  ok: boolean;
-  status: number;
-  contentType: string;
-  body: ArrayBuffer;
 }
 
 export interface ArsvoxBridge {
@@ -47,6 +51,12 @@ export interface ArsvoxBridge {
   wsSend(message: string): void;
   onWsMessage(callback: (event: unknown) => void): () => void;
   onWsStatus(callback: (connected: boolean) => void): () => void;
+  browserNavigate(url: string): Promise<{ ok: boolean; reason: string }>;
+  browserBack(): void;
+  browserForward(): void;
+  browserRefresh(): void;
+  browserSetBounds(bounds: BridgeBrowserBounds): void;
+  onBrowserState(callback: (state: BridgeBrowserState) => void): () => void;
 }
 
 declare global {
