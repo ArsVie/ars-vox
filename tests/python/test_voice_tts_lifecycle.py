@@ -37,7 +37,7 @@ from arsvox_agent.app import create_app
 from arsvox_contracts import AppConfig, VoiceState, parse_client_message
 from arsvox_contracts.config import VoiceSection
 from arsvox_voice import VoicePipeline
-from tests.python.conftest import base_config, ws_collect
+from tests.python.harness_fixtures import base_config, ws_collect
 
 _real_sleep = asyncio.sleep
 

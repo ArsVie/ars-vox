@@ -17,7 +17,7 @@ import arsvox_agent.app as app_module
 from arsvox_agent.app import create_app
 from arsvox_contracts import AppConfig
 
-from tests.python.conftest import base_config
+from tests.python.harness_fixtures import base_config
 
 TEST_TOKEN = "test-secret-token"
 AUTH = {"Authorization": f"Bearer {TEST_TOKEN}"}

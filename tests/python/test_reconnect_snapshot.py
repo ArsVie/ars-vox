@@ -15,7 +15,7 @@ from arsvox_contracts.events import (
     StateSnapshotEvent,
 )
 
-from tests.python.conftest import ws_collect
+from tests.python.harness_fixtures import ws_collect
 
 
 @pytest.fixture

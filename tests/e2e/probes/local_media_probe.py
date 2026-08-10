@@ -9,9 +9,9 @@ frozen wire members (MediaSource.LOCAL, MediaStateEvent.local_path), and
 the media.select_result client path routing BOTH sources through the same
 controller — see test_wire_probe.py.
 
-This probe records the missing half: local-file discovery in the service.
-Row status: PENDING (W1-MEDIA-LOCAL). Verdict: FAIL until a local library
-exists to feed the same player.
+This probe records the discovery half too: search/local_library.py does a
+real recursive scan; zero source-local UI branches (unified dock).
+Row status: PASS (GATE-1 closed 2026-08-10). Probe records PASS 3/3.
 """
 
 from __future__ import annotations
@@ -124,8 +124,8 @@ def main(record_dir: Path) -> int:
         record_dir,
         "media_local",
         verdict,
-        "Unified controller + frozen wire members verified; local-file discovery missing — "
-        "W1-MEDIA-LOCAL owns it.",
+        "Unified controller + frozen wire members verified; local library discovery "
+        "REAL (recursive scan in search/local_library.py, probe c3).",
         checks,
         evidence=[
             "tests/e2e/test_wire_probe.py::test_media_select_result_local_routes_unified_controller",

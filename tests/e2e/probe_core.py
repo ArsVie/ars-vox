@@ -71,11 +71,11 @@ def ensure_worktree_paths() -> None:
 def make_app(tmp_root: Path | None = None):
     """Boot the real app with the shared mock config (no live model).
 
-    Uses tests/python/conftest.base_config (the single source of truth for
+    Uses tests/python/harness_fixtures.base_config (the single source of truth for
     test overrides) so the harness exercises the same app the python suite
     does. Returns (app, tmp_root).
     """
-    from tests.python.conftest import base_config
+    from tests.python.harness_fixtures import base_config
 
     import yaml
 
@@ -129,7 +129,7 @@ def run_scripted_turn(
     Returns the collected event list (list[dict]).
     """
     import arsvox_agent.runtime as runtime
-    from tests.python.conftest import ws_collect
+    from tests.python.harness_fixtures import ws_collect
 
     from fastapi.testclient import TestClient
 

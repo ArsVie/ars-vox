@@ -24,8 +24,12 @@ confirmation — screenshots 29–33).
   local-source media members, document.changed, browser.dom_action +
   real can_go_back/can_go_forward in state shape, memory.search_results
   (semantic/FTS recall, distinct from memory.recall); actions.py union
-  narrowed; schemas regenerated + diffed. Handlers are honest no-ops
-  ("not implemented"), never fake success. THE WIRE IS FROZEN.
+  narrowed; schemas regenerated + diffed. Server-side handlers are honest
+  no-ops ("not implemented"), never fake success. Review finding #1
+  (memory.search_results + browser.dom_action dropped silently in
+  applyEvent) fixed in wip/gate5-routing-parity — applyEvent gains a
+  logging default so an event with no consumer is visible, never silent.
+  THE WIRE IS FROZEN.
 - W0-SLICE (f782d7f): store.ts 1,485 → 971 lines (−36.2% of the 1,420
   baseline — the one-third gate signal, MET this time). Content bags
   carved into state/ slices with ONE registration seam

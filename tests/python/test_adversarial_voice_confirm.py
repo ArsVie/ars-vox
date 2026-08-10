@@ -45,7 +45,7 @@ from arsvox_agent.app import create_app
 from arsvox_agent.local_intents import match_intent
 from arsvox_contracts import VoiceState
 
-from tests.python.conftest import base_config, ws_collect
+from tests.python.harness_fixtures import base_config, ws_collect
 from tests.python.test_reconnect_snapshot import _scripted
 
 

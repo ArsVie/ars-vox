@@ -8,7 +8,8 @@ The OFFER channel itself is verified by test_wire_probe.py
 REALNESS half: no FIXTURE_RESULTS, a real provider seam, and honest
 zero-result answers ("no encontré nada", never a fixture fallback).
 
-Row status today: PENDING (W1-YOUTUBE). Verdict: FAIL until the lane lands.
+Row status: PASS (GATE-1 closed 2026-08-10). Probe records PASS 3/3;
+packaged GATE-1 verified the real search live (10 cards, click-to-play).
 """
 
 from __future__ import annotations
@@ -101,7 +102,8 @@ def main(record_dir: Path) -> int:
         record_dir,
         "youtube",
         verdict,
-        "Agent OFFER channel verified; REAL search pending W1-YOUTUBE (fixture list still present).",
+        "Agent OFFER channel verified; REAL provider seam — FIXTURE_RESULTS deleted, "
+        "zero-result query answered honestly (packaged GATE-1: real search, 10 cards).",
         checks,
         evidence=[
             "tests/e2e/test_wire_probe.py::test_agent_search_emits_youtube_search_offer",

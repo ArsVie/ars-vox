@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from tests.python.test_reminder_lifecycle import TZ, TZ_NAME, _setup
-from tests.python.conftest import ws_collect
+from tests.python.harness_fixtures import ws_collect
 
 
 def _drain(q) -> list[dict]:

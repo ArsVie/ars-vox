@@ -9,9 +9,13 @@ agent's only memory tools (memory.remember/memory.recall) are exact-key
 k/v lookups against the PreferenceStore. "Knows preferences from memories"
 cannot be built on memory.recall(key).
 
-This probe records: the frozen wire member exists (PASS), the tool is not
-wired (FAIL), the authoritative store is unreached (FAIL), the k/v second
-authority is still live (FAIL). Row status: PENDING (W1-MEMORY).
+This probe records: the frozen wire member exists (PASS), the agent tool
+memory.search is defined + registered (PASS — server-originated, emits
+memory.search_results), the authoritative search_all is consumed (PASS),
+the k/v second authority is retired (PASS — definitions only; docstring
+mentions of the retirement don't count). Row status: PASS (GATE-1 closed
+2026-08-10); packaged GATE-1 verified a stated preference shaping the
+agent's next search query.
 """
 
 from __future__ import annotations

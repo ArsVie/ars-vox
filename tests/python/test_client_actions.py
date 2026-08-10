@@ -51,7 +51,7 @@ from arsvox_contracts.enums import LayoutTemplate, MediaState, NotificationKind,
 from arsvox_agent.actions import handle_ui_command, reset_media_state
 from arsvox_agent.tools.media_tools import reset_offered_results
 
-from tests.python.conftest import ws_collect
+from tests.python.harness_fixtures import ws_collect
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = REPO_ROOT / "packages" / "contracts" / "fixtures" / "client_actions.json"

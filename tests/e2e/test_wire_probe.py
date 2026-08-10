@@ -428,7 +428,7 @@ def test_confirm_flow_roundtrip(client, monkeypatch):
     packaged restart-with-pending check exercises."""
     import arsvox_agent.runtime as runtime
 
-    from tests.python.conftest import ws_collect
+    from tests.python.harness_fixtures import ws_collect
     from tests.e2e.probe_core import scripted_model
 
     monkeypatch.setattr(

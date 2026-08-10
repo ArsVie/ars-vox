@@ -33,7 +33,7 @@ from arsvox_contracts.events import MediaStateEvent
 from arsvox_agent.events import EventBus
 from arsvox_agent.snapshot import SnapshotTracker
 
-from tests.python.conftest import ws_collect
+from tests.python.harness_fixtures import ws_collect
 
 # --------------------------------------------------------------------- #
 # R28 — SnapshotTracker starvation beyond the subscriber cap
@@ -223,7 +223,7 @@ def voice_client(tmp_path):
     from fastapi.testclient import TestClient
 
     from arsvox_agent.app import create_app
-    from tests.python.conftest import base_config
+    from tests.python.harness_fixtures import base_config
 
     cfg = base_config(tmp_path)
     cfg["voice"]["enabled"] = True

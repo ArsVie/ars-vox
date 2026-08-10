@@ -6,7 +6,7 @@ import pytest
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
-from tests.python.conftest import ws_collect
+from tests.python.harness_fixtures import ws_collect
 
 
 def _scripted(tool_name: str, args: dict, text: str = "Listo."):

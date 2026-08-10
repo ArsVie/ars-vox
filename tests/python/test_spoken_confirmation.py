@@ -18,7 +18,7 @@ import pytest
 
 from arsvox_agent.local_intents import match_confirmation_utterance
 
-from tests.python.conftest import ws_collect
+from tests.python.harness_fixtures import ws_collect
 
 APPROVE_UTTERANCES = [
     "sí",

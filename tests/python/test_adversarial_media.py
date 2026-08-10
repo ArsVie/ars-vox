@@ -34,7 +34,7 @@ from arsvox_agent.media import media_controller
 from arsvox_agent.tools.media_tools import media_play, media_seek
 
 from tests.python.test_media_tools import _make_context, seed_offered
-from tests.python.conftest import ws_collect
+from tests.python.harness_fixtures import ws_collect
 from tests.python.test_reconnect_snapshot import _scripted
 
 
