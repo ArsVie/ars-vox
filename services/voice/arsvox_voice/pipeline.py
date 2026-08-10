@@ -23,6 +23,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from arsvox_contracts import AppConfig, VoiceState
+from arsvox_voice.providers import (
+    MockWakeWordDetector,
+    Vad,
+    WakeWordDetector,
+    build_vad,
+    build_wake_word_detector,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +61,8 @@ class VoicePipeline:
         on_user_text: UserTextCallback,
         on_stop: StopCallback,
         on_state_change: StateCallback,
+        vad: Vad | None = None,
+        wake_word: WakeWordDetector | None = None,
     ):
         self.config = config
         self.on_user_text = on_user_text
@@ -62,6 +71,18 @@ class VoicePipeline:
         self._sleep_task: asyncio.Task | None = None
         self._silence_deadline: datetime | None = None
         self.state = VoiceState.SLEEPING
+        # W3-VOICE (GATE-5): real providers behind config (mock default).
+        # The wake detector owns the mic stream and feeds BOTH the wake
+        # path (on_wake) and the barge-in path (VAD speech-start while
+        # TTS is playing). Tests inject mocks; production builds from
+        # config.voice.vad / config.voice.wake_word.
+        self.vad = vad if vad is not None else build_vad(config)
+        self._wake_word = wake_word or build_wake_word_detector(
+            config,
+            vad=self.vad,
+            on_speech_start=self.handle_user_speech_started,
+        )
+        self._wake_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------ #
     async def start(self) -> None:
@@ -69,11 +90,47 @@ class VoicePipeline:
             VoiceState.LISTENING if self.config.voice.enabled else VoiceState.SLEEPING
         )
         self._reset_silence_timer()
+        if self.config.voice.enabled:
+            await self._start_wake_stream()
 
     async def stop(self) -> None:
         if self._sleep_task:
             self._sleep_task.cancel()
             self._sleep_task = None
+        await self._stop_wake_stream()
+
+    # ------------------------------------------------------------------ #
+    async def _start_wake_stream(self) -> None:
+        """Open the mic stream when a real detector is configured.
+
+        The mock detector never streams (wake stays simulated). A real
+        detector that cannot start (missing deps / no mic device) fails
+        loud: the pipeline logs it, and the operator sees the reason in
+        the stream task result. Voice remains enabled — the failure is
+        confined to the wake path.
+        """
+        if isinstance(self._wake_word, MockWakeWordDetector):
+            return
+        if self._wake_task is not None:
+            return
+
+        async def _run() -> None:
+            try:
+                await self._wake_word.start(on_wake=self.handle_wake)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — surface, keep pipeline alive
+                log.error("wake-word stream failed: %s", exc)
+            finally:
+                self._wake_task = None
+
+        self._wake_task = asyncio.create_task(_run())
+
+    async def _stop_wake_stream(self) -> None:
+        if self._wake_task is not None:
+            self._wake_task.cancel()
+            self._wake_task = None
+        await self._wake_word.stop()
 
     # ------------------------------------------------------------------ #
     def _reset_silence_timer(self) -> None:
@@ -134,3 +191,48 @@ class VoicePipeline:
         await self.on_stop()
         self._reset_silence_timer()
         self.set_state(VoiceState.SLEEPING)
+
+    # ------------------------------------------------------------------ #
+    # W3-VOICE (GATE-5): wake + barge-in — the two live-mic entries.
+    # Both route through EXISTING wire members: on_stop (the STOP cancel
+    # path: cancels the turn, invalidates confirmations, clears the TTS
+    # queue — the renderer interrupts physical playback on STOPPING) and
+    # on_user_text (the utterance -> turn funnel). No new events.
+
+    async def handle_wake(self) -> None:
+        """Wake word fired (real detector or simulated): SLEEPING -> LISTENING.
+
+        Debounced twice: the detector's own cooldown suppresses re-fires
+        inside one phrase, and this guard only acts from SLEEPING — a
+        wake hit while a turn is active (THINKING/SPEAKING/LISTENING) is
+        a no-op and can never restart or disturb the turn.
+        """
+        if self.state != VoiceState.SLEEPING:
+            return
+        self.set_state(VoiceState.LISTENING, activity="wake-word")
+        self._reset_silence_timer()
+
+    async def handle_user_speech_started(self) -> None:
+        """VAD speech-start routing — barge-in while TTS is playing.
+
+        SPEAKING (TTS physically playing): the user interrupted. Cancel
+        the utterance through the existing STOP path (on_stop), then arm
+        a fresh LISTENING turn: the rest of the utterance is recorded,
+        STT'd, and reaches the runtime via on_user_text as the next turn.
+        The STOPPING publish is what makes the renderer clear its TTS
+        queue, so physical playback stops (existing wire, no new events).
+
+        LISTENING: the user is mid-utterance — just reset the silence
+        timer so the watcher never sleeps under speech.
+
+        Any other state (SLEEPING, THINKING, ...): no-op. SLEEPING is
+        gated by the wake word; THINKING is model time and is not
+        preempted by bare speech.
+        """
+        if self.state == VoiceState.SPEAKING:
+            self.set_state(VoiceState.STOPPING, activity="barge-in")
+            await self.on_stop()
+            self._reset_silence_timer()
+            self.set_state(VoiceState.LISTENING, activity="barge-in")
+        elif self.state == VoiceState.LISTENING:
+            self._reset_silence_timer()
