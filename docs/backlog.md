@@ -59,6 +59,18 @@ The backlog is always the present state; it is not tied to a date.
 - **User-friendly, human-readable.** Replies are written for a casual
   user, not as tool-output dumps.
 
+## Data persistence
+
+- **Conversation history must survive.** The database is currently
+  reachable through config-relative paths: with the rig config in /tmp,
+  history lives in /tmp/data and is lost when /tmp is cleaned. The
+  app's data directory must be a stable, user-owned location (not the
+  config file's directory, not /tmp), so chat history, sessions, and
+  tool records persist across restarts and cleanup.
+- **The app must not lose the live session on crash.** An Electron
+  crash currently takes the conversation with it; recovery must come
+  from persisted history, not from in-memory state.
+
 ## Analytics / personalization
 
 - SPIKE: logging of user queries to derive personalized behavior — what
