@@ -835,6 +835,43 @@ describe("panel content events (content channel)", () => {
     });
   });
 
+  it("browserViewState preserves lastDomAction alongside the view state (W2-DRIVE wire pin)", () => {
+    const store = createAppStore(() => {});
+    const createdAt = ts();
+    store.getState().applyEvent({
+      type: "browser.dom_action",
+      operation: "query",
+      target: "body",
+      value: null,
+      result: "page text",
+      created_at: createdAt,
+    });
+    // The view (main-owned WebContentsView) pushes fresher navigation
+    // truth — it must converge on the same bag WITHOUT dropping the
+    // agent's last DOM action (one browser state, one authority).
+    store.getState().browserViewState({
+      url: "https://example.com",
+      title: "Example",
+      canGoBack: true,
+      canGoForward: false,
+      loading: false,
+    });
+    expect(store.getState().content.browser).toEqual({
+      url: "https://example.com",
+      title: "Example",
+      canGoBack: true,
+      canGoForward: false,
+      loading: false,
+      lastDomAction: {
+        operation: "query",
+        target: "body",
+        value: null,
+        result: "page text",
+        createdAt,
+      },
+    });
+  });
+
   it("memory.search_results event fills the memory content bag (GATE-5 routing-parity, defect #1)", () => {
     const store = createAppStore(() => {});
     const createdAt = ts();

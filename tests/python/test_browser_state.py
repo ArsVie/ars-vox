@@ -152,3 +152,43 @@ def test_browser_navigate_falls_back_to_defaults_when_store_empty(client):
         assert emitted["can_go_back"] is False
         assert emitted["can_go_forward"] is False
         assert emitted["loading"] is True
+
+
+# --------------------------------------------------- dom-action results #
+
+
+def test_browser_dom_result_put_stores_result_for_the_awaiting_tool(auth_client):
+    """W2-DRIVE: Electron main pushes the REAL execution result of a
+    browser.dom_action here (echo of the request's created_at); the
+    awaiting tool resolves with this exact text."""
+    from datetime import datetime, timezone
+
+    from arsvox_agent.browser_state import DomActionResultStore
+
+    store: DomActionResultStore = auth_client.app.state.services.browser_dom
+    created_at = datetime.now(timezone.utc)
+
+    resp = auth_client.put(
+        "/api/browser-dom-result",
+        json={
+            "created_at": created_at.isoformat(),
+            "result": "Noticias locales: mercado, clima...",
+        },
+        headers=AUTH,
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+
+    # The tool's wait_for (keyed by the same created_at) resolves with
+    # the exact page text — the agent sees the page.
+    import asyncio
+
+    assert asyncio.run(store.wait_for(created_at, 0.5)) == "Noticias locales: mercado, clima..."
+
+
+def test_browser_dom_result_requires_auth(auth_client):
+    resp = auth_client.put(
+        "/api/browser-dom-result",
+        json={"created_at": "2026-08-10T00:00:00Z", "result": "x"},
+    )
+    assert resp.status_code == 401
