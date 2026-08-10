@@ -163,17 +163,19 @@ WIRING was not — this wave did the wiring only.
   Deps declared in services/voice/pyproject.toml (openwakeword 0.4.0,
   sounddevice 0.5.5, onnxruntime already present).
 
-**Verified (merged main, 2026-08-10):** pytest 425/425 (397 baseline +
-28 new: provider selection, barge-in pipeline behavior, smoke honesty),
-e2e harness 14/14, vitest 719/719, typecheck + build clean.
-Physical-mic smoke script RAN LIVE on this machine: **PASS 4/4**
-(real mic capture 4.00 s/128000 bytes, real silero VAD verdicts,
-openwakeword scores computed — honest 0.000 on silence; the packaged
-service started the wake stream without errors, voice state machine
-live). The human-voice packaged round-trip (wake word spoken → turn →
-STOP interrupting mid-speech, in Spanish) still needs a person at the
-mic — the phrase choice is Ars's; this is the plan's named partial
-blocker, recorded, not a defect.
+**Verified (merged main, 2026-08-10):** pytest 439/439 in ONE command
+(425 python + 14 e2e), vitest 719/719 (56 files), typecheck + build
+clean. NOTE: the first closing run showed 438+1 — reproduced as an
+environment collision (the live voice-enabled GATE-3 service held the
+mic stream/SQLite during the suite); with no service running the
+single command is fully green. Physical-mic smoke script RAN LIVE on
+this machine: **PASS 4/4** (real mic capture 4.00 s/128000 bytes, real
+silero VAD verdicts, openwakeword scores computed — honest 0.000 on
+silence; the packaged service started the wake stream without errors,
+voice state machine live). The human-voice packaged round-trip (wake
+word spoken → turn → STOP interrupting mid-speech, in Spanish) still
+needs a person at the mic — the phrase choice is Ars's; this is the
+plan's named partial blocker, recorded, not a defect.
 
 ## GATE-5 GATE-2 (INTEGRATED BROWSER — CLOSED 2026-08-10)
 
