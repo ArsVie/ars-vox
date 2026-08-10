@@ -315,10 +315,12 @@ describe("MediaDock", () => {
     expect(html).not.toContain("Reproducción en espera");
   });
 
-  it("renders the waiting text when there is no media content", () => {
+  it("idle media dock IS the search surface (W1 seam): search box, no empty chrome, no player", () => {
     const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
-    expect(html).toContain("media-dock-empty");
-    expect(html).toContain("Reproducción en espera.");
+    expect(html).toContain("youtube-panel");
+    expect(html).toContain('aria-label="Buscar en YouTube"');
+    expect(html).not.toContain("media-dock-empty");
+    expect(html).not.toContain("Reproducción en espera.");
     expect(html).not.toContain("media-player");
   });
 });

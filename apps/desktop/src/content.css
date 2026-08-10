@@ -164,6 +164,16 @@
   color: var(--accent);
 }
 
+/* GATE-5 (W1 seam): the embedded YoutubePanel (media dock idle state)
+   drops the absolute .panel shell — keep the same flex-column fill so
+   the results list scrolls inside the dock. */
+.youtube-panel--embedded {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .content-loading {
   flex: 1;
   display: flex;

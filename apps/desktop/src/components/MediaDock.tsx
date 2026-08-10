@@ -8,6 +8,7 @@ import { appStore, EMPTY_MEDIA } from "../store";
 import { useLocalPlayer, localPlayableSrc } from "../media/localPlayer";
 import { useSurfaceRole } from "../roles/context";
 import { PanelHeader } from "./PanelHeader";
+import { YoutubePanel } from "./YoutubePanel";
 import { PauseIcon, PlayIcon, WaveformIcon, YoutubeIcon } from "./icons";
 
 function fmtTime(total: number): string {
@@ -402,8 +403,14 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
         </PanelHeader>
       ) : null}
       {!hasTrack ? (
-        <div className="media-dock-body">
-          <span className="media-dock-empty">Reproducción en espera.</span>
+        <div className="media-dock-body media-dock-body--search">
+          {/* GATE-5 (W1 seam): the media surface's idle state IS the
+              selectable-card search surface — the agent's search results
+              mount here as cards (embedded YoutubePanel: search box +
+              cards) and the user picks by click (media.select_result ->
+              ONE controller -> player) or by voice. An active track
+              swaps in the unified player below. */}
+          <YoutubePanel meta={meta} embedded />
         </div>
       ) : (
         <div className="media-player">

@@ -1341,6 +1341,17 @@ body,
   font-size: 14px;
 }
 
+/* GATE-5 (W1 seam): the idle dock hosts the embedded selectable-card
+   search surface — column layout (search bar on top, cards scroll
+   below) replaces the centered empty-state row. */
+.media-dock-body--search {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 12px 0 0;
+}
+
 .media-dock-title {
   color: var(--text);
   overflow: hidden;

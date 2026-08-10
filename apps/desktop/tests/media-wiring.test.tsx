@@ -210,9 +210,12 @@ describe("H7: the media surface renders backend-commanded state", () => {
     expect(html).not.toContain("Reproducción en espera.");
   });
 
-  it("empty surface still shows the waiting state", () => {
+  it("empty surface hosts the selectable-card search surface (W1 seam: idle dock = search)", () => {
     const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
-    expect(html).toContain("Reproducción en espera.");
+    expect(html).toContain("youtube-panel");
+    expect(html).toContain('aria-label="Buscar en YouTube"');
+    expect(html).not.toContain("Reproducción en espera.");
+    expect(html).not.toContain("media-player");
   });
 });
 

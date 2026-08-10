@@ -238,9 +238,11 @@ describe("GATE-5 W1-MEDIA-LOCAL: one unified player", () => {
     expect(html).not.toContain("youtube.com/embed");
   });
 
-  it("no track -> art-free waiting state (nothing to play)", () => {
+  it("no track -> search surface (W1 seam: idle dock hosts the cards), no player", () => {
     const html = renderPrimary();
-    expect(html).toContain("Reproducción en espera.");
+    expect(html).toContain("youtube-panel");
+    expect(html).toContain('aria-label="Buscar en YouTube"');
     expect(html).not.toContain("media-player-local-audio");
+    expect(html).not.toContain("media-player");
   });
 });
