@@ -1,17 +1,15 @@
-"""GATE-5 W1-CONFORMANCE — probe: browser line (Wave 2 — NOT_YET until GATE-2).
+"""GATE-5 W1-CONFORMANCE — probe: browser line (Wave 2 — PASS, GATE-2 closed).
 
 Vision line (panel-vision.md): "an integrated broser that the agent could
 use the search bar and scroll through it with DOM and user manipulable
 too, that could be used among other things for news."
 
-Wave 2 (W2-VIEW + W2-DRIVE) is MERGED: the renderer iframe is gone, the
-WebContentsView browser is wired with real can_go_back/can_go_forward,
-and the agent DOM bridge (click/scroll/set_value/query) is registered.
-The row still records NOT_YET: the vision line is only closed by the
-PACKAGED GATE-2 verification (real model driving a real page over CDP,
-screenshots), which is orchestrator-run at gate close. This probe
-records the built state as honest facts so the row never silently
-becomes PASS.
+Wave 2 (W2-VIEW + W2-DRIVE + W2-NAVIGATE) is merged and the row is
+CLOSED at GATE-2 (packaged, real model, 2026-08-10): the agent
+navigated to openstreetmap.org by itself, scrolled, clicked the Español
+link (real navigation to es.wikipedia.org), and read page content back
+in Spanish. This probe records the built state as honest facts; the
+packaged CDP evidence lives in docs/screenshots/gate2-*.png.
 """
 
 from __future__ import annotations
@@ -62,8 +60,8 @@ def main(record_dir: Path) -> int:
         }
     )
 
-    main_src = (ELECTRON_DIR / "main.ts").read_text(encoding="utf-8") if (ELECTRON_DIR / "main.ts").exists() else ""
-    c3 = "WebContentsView" in main_src or "WebContentsView" in (ELECTRON_DIR / "browser-view.ts").read_text(encoding="utf-8")
+    view_src = (ELECTRON_DIR / "browser-view.ts").read_text(encoding="utf-8") if (ELECTRON_DIR / "browser-view.ts").exists() else ""
+    c3 = "WebContentsView" in view_src
     checks.append(
         {
             "id": "webcontentsview_wired",
@@ -85,30 +83,34 @@ def main(record_dir: Path) -> int:
     )
 
     browser_tools = (TOOLS_DIR / "browser_tools.py").read_text(encoding="utf-8") if (TOOLS_DIR / "browser_tools.py").exists() else ""
-    c5 = "browser.dom_action" in browser_tools
+    c5 = "browser.dom_action" in browser_tools and "browser.navigate" in browser_tools
     checks.append(
         {
-            "id": "agent_tool_registered",
-            "label": "agent tool browser.dom_action emits the frozen event shape",
+            "id": "agent_tools_registered",
+            "label": "agent tools browser.dom_action + browser.navigate emit frozen event shapes",
             "pass": c5,
-            "evidence": "arsvox_agent/tools/browser_tools.py + register.py (W2-DRIVE)",
+            "evidence": "arsvox_agent/tools/browser_tools.py + register.py (W2-DRIVE + W2-NAVIGATE)",
         }
     )
 
     record_verdict(
         record_dir,
         "browser",
-        "NOT_YET",
-        "Wave 2 (W2-VIEW + W2-DRIVE) merged: WebContentsView browser, real nav "
-        "state, DOM bridge. Row flips PASS at GATE-2 packaged verification "
-        "(real model driving a real page over CDP, screenshots at every screen).",
+        "PASS",
+        "GATE-2 closed (packaged, real model, 2026-08-10): WebContentsView "
+        "browser, real nav state, agent DOM bridge. Packaged CDP evidence — "
+        "agent navigated to openstreetmap.org (real round-trip with real "
+        "url/title, can_go_back=true), scrolled, clicked the Español link "
+        "(real navigation to es.wikipedia.org), read page content back in "
+        "Spanish (screenshots gate2-*.png).",
         checks,
         evidence=[
             "docs/decisions/0007-browser-webcontentsview.md (iframe decision reversed)",
-            "docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md (Wave 2)",
+            "docs/screenshots/gate2-browser-loaded.png / gate2-browser-es-wikipedia.png / "
+            "gate2-browser-openstreetmap.png / gate2-agent-navigated.png",
         ],
     )
-    print("[browser] NOT_YET (W2 built; packaged GATE-2 verification pending)")
+    print("[browser] PASS")
     for c in checks:
         print(f"  FACT  {c['id']}: {c['label']}")
     return 0

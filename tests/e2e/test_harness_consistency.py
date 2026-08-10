@@ -40,7 +40,7 @@ PROBE_FILES = {
     "media_local": "local_media_probe",
     "youtube": "youtube_realness",
     "memory": "memory_probe",
-    "browser": "browser_notyet",
+    "browser": "browser_probe",
 }
 
 # probe id -> checklist row status (docs/vision-conformance.md)
@@ -57,8 +57,9 @@ EXPECTED_STATUS = {
     # W1-TASKS (GATE-5): fire → fresh agent turn with the reminder in
     # context (cadence injection) — probe PASS enforced
     "tasks": "PASS",
-    # Wave 2 — NOT_YET enforced
-    "browser": "NOT_YET",
+    # GATE-2 closed row (W2-VIEW + W2-DRIVE + W2-NAVIGATE; packaged
+    # real-model CDP evidence; PASS enforced)
+    "browser": "PASS",
 }
 
 VERDICTS = ("PASS", "FAIL", "NOT_YET")

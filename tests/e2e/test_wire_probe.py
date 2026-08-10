@@ -14,7 +14,7 @@ Rows covered (checklist ids in parentheses):
 - L3 document reader wire ......... test_document_kind_wire
 - L5 media one player ............. test_media_select_result_local_routes_unified_controller
 - L8 agent behavior/memory ........ test_memory_search_honest_verdict
-- L7 browser (NOT_YET evidence) ... test_browser_navigate_carries_store_nav_state
+- L7 browser (GATE-2 PASS) ....... test_browser_navigate_carries_store_nav_state
 - P1 fresh-start hero (wire part) . test_snapshot_stashes_history
 - P5 confirm-in-chat (wire part) .. test_confirm_flow_roundtrip
 - wire surface (all rows) ......... test_frozen_wire_surface_present
