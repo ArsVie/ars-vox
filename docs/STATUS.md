@@ -131,6 +131,50 @@ Post-review gates: pytest 386/386 (single command), targeted vitest
 81/81 on parity files (full 636 verified by the parity leaf on branch),
 typecheck + build clean.
 
+## GATE-5 W3-VOICE (wiring wave — merged 2026-08-10)
+
+Program: Wave 3 of docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
+"Wire `WakeWordDetector` and `Vad` behind config; barge-in during TTS;
+then the smoke test that has never been run: a physical microphone, in
+the packaged build, in Spanish, with STOP interrupting mid-speech."
+The plan names the phrase choice and benchmark as Ars-blocked; the
+WIRING was not — this wave did the wiring only.
+
+**Merged** (81f5be5 + 80c4008): real providers behind config.
+- `OpenWakeWordDetector` (`voice.wake_word.provider: mock|openwakeword`,
+  mock default): sounddevice mic stream (16 kHz/80 ms), torch-free ONNX
+  models, debounced on_wake (2 s cooldown + SLEEPING-only guard); same
+  stream feeds the VAD for barge-in. `model: null` = bundled defaults.
+- `SileroVad` (`voice.vad.provider: mock|silero`, mock default): onnxruntime
+  path (torch verified absent), 512-sample windows, h/c state carried,
+  `reset()`. Model: explicit path → openwakeword-bundled → one-time
+  download to cache.
+- **Barge-in**: `handle_user_speech_started()` (VAD edge on the detector
+  stream): SPEAKING → STOPPING publish (renderer clears TTS queue —
+  existing wire) → `on_stop()` (the existing STOP cancel path) → fresh
+  LISTENING turn; LISTENING → timer reset; THINKING/SLEEPING → no-op.
+  Wake: SLEEPING → LISTENING, debounced.
+- `scripts/voice_mic_smoke.py`: records ~4 s, per-chunk silero VAD
+  verdicts, optional wake scores (`--wake openwakeword`), honest
+  PASS/FAIL/SKIP per stage, exit 0 on skip.
+- Frozen wire untouched. Only additive config schema:
+  `WakeWordSection.provider` (default mock) + `VadSection.provider`
+  default moved silero→mock (a bare config never loads a model).
+  Deps declared in services/voice/pyproject.toml (openwakeword 0.4.0,
+  sounddevice 0.5.5, onnxruntime already present).
+
+**Verified (merged main, 2026-08-10):** pytest 425/425 (397 baseline +
+28 new: provider selection, barge-in pipeline behavior, smoke honesty),
+e2e harness 14/14, vitest 719/719, typecheck + build clean.
+Physical-mic smoke script RAN LIVE on this machine: **PASS 4/4**
+(real mic capture 4.00 s/128000 bytes, real silero VAD verdicts,
+openwakeword scores computed — honest 0.000 on silence; the packaged
+service started the wake stream without errors, voice state machine
+live). The human-voice packaged round-trip (wake word spoken → turn →
+STOP interrupting mid-speech, in Spanish) still needs a person at the
+mic — the phrase choice is Ars's; this is the plan's named partial
+blocker, recorded, not a defect.
+
 ## GATE-5 GATE-2 (INTEGRATED BROWSER — CLOSED 2026-08-10)
 
 Program: Wave 2 of docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md
