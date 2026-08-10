@@ -323,4 +323,50 @@ describe("MediaDock", () => {
     expect(html).not.toContain("Reproducción en espera.");
     expect(html).not.toContain("media-player");
   });
+
+  it("stopped track + new search results -> search surface again (GATE-5 reoffer)", () => {
+    // The server's stopped event RETAINS the track metadata, so the
+    // dock must return to the cards on the NEXT offer — not pin the
+    // dead player for the rest of the session.
+    appStore.getState().applyEvent({
+      type: "media.state",
+      state: "stopped",
+      source: "youtube",
+      kind: "video",
+      title: "Sinfonía",
+      video_id: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      position_s: 60,
+      duration_s: 300,
+      volume: 0.8,
+      created_at: ts(),
+    });
+    appStore.setState((s) => ({
+      content: {
+        ...s.content,
+        youtube: {
+          query: "guitarra",
+          loading: false,
+          results: [
+            {
+              id: "v1",
+              title: "Clases de guitarra",
+              source: "youtube",
+              kind: "video",
+              channel: "Marta",
+              duration_s: 600,
+              published: "hace 2 días",
+              thumbnail_url: null,
+              local_path: null,
+            },
+          ],
+        },
+      },
+    }));
+
+    const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
+    expect(html).toContain("youtube-card");
+    expect(html).toContain("Clases de guitarra");
+    expect(html).not.toContain("media-player");
+  });
 });
