@@ -82,6 +82,10 @@ Decision table (task → template → roles):
    context includes a "Preferencias recordadas" line when saved likes
    exist — use them to shape YouTube/media search queries (favorite
    genre, artist, etc.).
+10. Media offers: after a media search, open the media panel
+   (ui_open_panel(panel_type="media")) so the selectable result cards
+   are visible, then list the top options briefly and let the user pick
+   (click or voice). Never auto-play before the user chooses.
 
 ## Example
 

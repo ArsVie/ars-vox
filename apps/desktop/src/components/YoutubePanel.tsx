@@ -58,7 +58,16 @@ function VideoCard({
  * also search directly here. A performed search with zero results is an
  * honest "no encontré nada" — never a fixture.
  */
-export function YoutubePanel({ meta }: { meta?: { title?: string } }) {
+export function YoutubePanel({
+  meta,
+  embedded,
+}: {
+  meta?: { title?: string };
+  /** Mounted inside an existing panel surface (the media dock's idle
+   * state): skip the outer panel shell + header — the dock provides its
+   * own header. Search box + selectable cards stay. */
+  embedded?: boolean;
+}) {
   const youtube = useStore(appStore, (s) => s.content.youtube);
   const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
   const [query, setQuery] = useState("");
@@ -90,10 +99,14 @@ export function YoutubePanel({ meta }: { meta?: { title?: string } }) {
   };
 
   return (
-    <section className="panel youtube-panel">
-      <PanelHeader panelId="youtube" icon={<YoutubeIcon size={15} />}>
-        {meta?.title ?? "YouTube"}
-      </PanelHeader>
+    <section
+      className={embedded ? "youtube-panel youtube-panel--embedded" : "panel youtube-panel"}
+    >
+      {!embedded ? (
+        <PanelHeader panelId="youtube" icon={<YoutubeIcon size={15} />}>
+          {meta?.title ?? "YouTube"}
+        </PanelHeader>
+      ) : null}
       <div className="youtube-search">
         <SearchIcon size={15} className="youtube-search-icon" />
         <input
