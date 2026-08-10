@@ -61,15 +61,17 @@ The backlog is always the present state; it is not tied to a date.
 
 ## Data persistence
 
-- **Conversation history must survive.** The database is currently
-  reachable through config-relative paths: with the rig config in /tmp,
-  history lives in /tmp/data and is lost when /tmp is cleaned. The
-  app's data directory must be a stable, user-owned location (not the
-  config file's directory, not /tmp), so chat history, sessions, and
-  tool records persist across restarts and cleanup.
-- **The app must not lose the live session on crash.** An Electron
-  crash currently takes the conversation with it; recovery must come
-  from persisted history, not from in-memory state.
+- **Logs must never be lost.** Every session's record — turns, tool
+  calls, audit events, reminders fired — must survive app restarts,
+  crashes, and cleanup. The log database is currently reachable through
+  config-relative paths: with the rig config in /tmp, history lives in
+  /tmp/data and is wiped when /tmp is cleaned. The log store must live
+  in a stable, user-owned location (not the config file's directory,
+  not /tmp).
+- **Session state may reset.** A reset that starts the app fresh (no
+  restored conversation) is acceptable — the session itself does not
+  need to persist. What must persist is the log of what happened, so
+  nothing that occurred is unrecoverable.
 
 ## Analytics / personalization
 
