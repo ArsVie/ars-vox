@@ -95,6 +95,42 @@ through takeover after connection losses; the conformance lane's checklist
   word-boundary), launch-integration timeouts 60s/120s → 180s/200s (cold
   /mnt/c imports measure 2m10s), store.test.ts youtube pin → unified card.
 
+## GATE-5 REVIEW RESPONSE (external review @ c1429ba; all findings closed 2026-08-10)
+
+Review verdict: Architecture 8/10, Simplicity 7/10, Product 6/10 — first
+program in this repo that moved the product; every claim verified at
+source. All findings addressed:
+
+1. memory.search_results + browser.dom_action dead on the wire (no
+   applyEvent case, no default) → FIXED (wip/gate5-routing-parity merged):
+   dom_action routed through contentRegistry + browserSlice; new
+   memorySlice consumes search_results; applyEvent gained a logging
+   default (silence was the defect).
+2. Registry↔store two sources of truth → FIXED: exported
+   CONTENT_ROUTED_EVENTS single source; registry-store-parity.test.ts
+   fails on drift (every slice-claimed eventType routed, every routed
+   case owned by exactly one slice).
+3. Three probes recorded PASS with stale FAIL summaries → FIXED:
+   youtube_realness, local_media_probe, memory_probe summaries +
+   docstrings honest (probe/evidence columns now agree).
+4. Harness certifies source shape not behavior (3 rows) → documented
+   intent: deterministic CI shape checks + behavioral packaged gate
+   (tasks_cadence probe = the behavioral standard; GATE-1 ran the real
+   model against the real implementations).
+5. `pytest tests/python tests/e2e` died in collection (conftest plugin
+   double-registration) → FIXED: shared fixtures moved to
+   tests/python/harness_fixtures.py; both suites declare the same
+   plugin. ONE command now collects and passes 386 (372 + 14).
+6. gate5-seam-fix-reference dangling at gate close → DELETED (verified
+   superseded by the merged seam fix, which added the CSS rules the
+   reference lacked).
+7. STATUS.md "handlers honest no-ops" overclaim → corrected: server-side
+   no-ops vs renderer routing (now exhaustive with logging default).
+
+Post-review gates: pytest 386/386 (single command), targeted vitest
+81/81 on parity files (full 636 verified by the parity leaf on branch),
+typecheck + build clean.
+
 ## GATE-5 GATE-1 (PACKAGED VERIFICATION 2026-08-10; three seam fixes merged)
 
 STATUS: **CLOSED** — closing suite 2026-08-10: pytest 372/372 + e2e
