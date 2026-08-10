@@ -5,9 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "arsvox-voice"
 version = "0.1.0"
-description = "Ars-Vox voice gateway: wake word, VAD, STT, pipeline (provider-stubbed)"
+description = "Ars-Vox voice gateway: wake word, VAD, STT, pipeline (providers behind config)"
 requires-python = ">=3.11"
-dependencies = ["arsvox-contracts==0.1.0"]
+dependencies = [
+    "arsvox-contracts==0.1.0",
+    # W3-VOICE (GATE-5): real provider deps. All opt-in at runtime via
+    # voice.wake_word.provider / voice.vad.provider (mock is the default),
+    # but declared here so a real deployment resolves them.
+    "numpy>=1.21",
+    "onnxruntime>=1.17",
+    "openwakeword>=0.4,<0.6",
+    "sounddevice>=0.4.6",
+]
 
 [tool.setuptools.packages.find]
 include = ["arsvox_voice*"]

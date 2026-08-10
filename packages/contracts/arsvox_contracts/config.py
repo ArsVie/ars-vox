@@ -154,12 +154,19 @@ class AgentSection(BaseModel):
 class WakeWordSection(BaseModel):
     model_config = _STRICT
     enabled: bool = False
-    model: str | None = None
+    # W3-VOICE (GATE-5): provider seam behind config — mock | openwakeword.
+    # The mock stays the default: nothing opens the microphone unless the
+    # operator explicitly opts in (enabled: true + provider: openwakeword).
+    provider: str = "mock"
+    model: str | None = None  # openWakeWord model name or .onnx path (None = library default set)
 
 
 class VadSection(BaseModel):
     model_config = _STRICT
-    provider: str = "silero"
+    # W3-VOICE (GATE-5): provider seam behind config — mock | silero.
+    # The mock stays the default so a bare config never tries to load a
+    # real model; silero (ONNX, torch-free) is the opt-in real provider.
+    provider: str = "mock"
 
 
 class SttSection(BaseModel):

@@ -39,9 +39,10 @@ voice:
   enabled: false        # microphone pipeline is provider-stubbed in iteration 1
   wake_word:
     enabled: false
-    model: null         # openWakeWord model name
+    provider: mock      # mock | openwakeword (real detector is opt-in)
+    model: null         # openWakeWord model name or .onnx path (null = library default set)
   vad:
-    provider: silero
+    provider: mock      # mock | silero (real VAD is opt-in; silero runs torch-free via ONNX)
   stt:
     provider: mock      # mock | faster-whisper
     model: tiny

@@ -10,17 +10,27 @@ from arsvox_voice.providers import (
     MockSpeechToText,
     MockVad,
     MockWakeWordDetector,
+    OpenWakeWordDetector,
+    SileroVad,
     SpeechToText,
     Vad,
     WakeWordDetector,
+    build_stt,
+    build_vad,
+    build_wake_word_detector,
 )
 
 __all__ = [
     "MockSpeechToText",
     "MockVad",
     "MockWakeWordDetector",
+    "OpenWakeWordDetector",
+    "SileroVad",
     "SpeechToText",
     "Vad",
     "VoicePipeline",
     "WakeWordDetector",
+    "build_stt",
+    "build_vad",
+    "build_wake_word_detector",
 ]
