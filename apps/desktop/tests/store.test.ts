@@ -4,7 +4,7 @@
  * handling, error surfacing, and layout restoration.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ServerEvent, UiCommand } from "../src/contracts";
 import { registerProductSurfaces } from "../src/adaptive/surfaces";
@@ -770,6 +770,115 @@ describe("panel content events (content channel)", () => {
       canGoForward: false,
       loading: false,
     });
+  });
+
+  it("browser.dom_action event is routed to the browser slice and recorded (GATE-5 routing-parity, defect #1)", () => {
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "browser.navigate",
+      url: "https://example.com",
+      title: "Example",
+      can_go_back: true,
+      can_go_forward: false,
+      loading: false,
+      created_at: ts(),
+    });
+    const createdAt = ts();
+    store.getState().applyEvent({
+      type: "browser.dom_action",
+      operation: "click",
+      target: "button#go",
+      value: null,
+      result: "clicked",
+      created_at: createdAt,
+    });
+    expect(store.getState().content.browser).toEqual({
+      url: "https://example.com",
+      title: "Example",
+      canGoBack: true,
+      canGoForward: false,
+      loading: false,
+      lastDomAction: {
+        operation: "click",
+        target: "button#go",
+        value: null,
+        result: "clicked",
+        createdAt,
+      },
+    });
+  });
+
+  it("browser.dom_action before any navigate still records the frame (honest empty nav, GATE-5 routing-parity)", () => {
+    const store = createAppStore(() => {});
+    const createdAt = ts();
+    store.getState().applyEvent({
+      type: "browser.dom_action",
+      operation: "query",
+      target: "body",
+      value: null,
+      result: "page text",
+      created_at: createdAt,
+    });
+    expect(store.getState().content.browser).toEqual({
+      url: "",
+      title: "",
+      canGoBack: false,
+      canGoForward: false,
+      loading: false,
+      lastDomAction: {
+        operation: "query",
+        target: "body",
+        value: null,
+        result: "page text",
+        createdAt,
+      },
+    });
+  });
+
+  it("memory.search_results event fills the memory content bag (GATE-5 routing-parity, defect #1)", () => {
+    const store = createAppStore(() => {});
+    const createdAt = ts();
+    store.getState().applyEvent({
+      type: "memory.search_results",
+      query: "guitarra",
+      results: [
+        {
+          id: "m1",
+          kind: "note",
+          text: "La guitarra de la abuela",
+          created_at: "2026-01-01T00:00:00Z",
+          source: "memory",
+        },
+      ],
+      created_at: createdAt,
+    });
+    expect(store.getState().content.memory).toEqual({
+      query: "guitarra",
+      results: [
+        {
+          id: "m1",
+          kind: "note",
+          text: "La guitarra de la abuela",
+          created_at: "2026-01-01T00:00:00Z",
+          source: "memory",
+        },
+      ],
+      createdAt,
+    });
+  });
+
+  it("applyEvent default logs unknown event types instead of dropping silently (GATE-5 routing-parity, defect #1)", () => {
+    const store = createAppStore(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      store.getState().applyEvent({
+        type: "bogus.event",
+      } as unknown as ServerEvent);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("bogus.event");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("document.load event fills the document editor panel content", () => {

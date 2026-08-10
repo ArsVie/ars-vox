@@ -27,7 +27,7 @@ import type { PanelContent } from "./types";
  *  and the pure reducers for its server events and client commands. */
 export interface SurfaceSlice<Bag = unknown> {
   /** PanelContent key this slice owns (youtube | browser |
-   *  document_editor | tasks | media). */
+   *  document_editor | tasks | media | memory). */
   panelId: keyof PanelContent & string;
   /** Server event types this slice reduces. */
   eventTypes: readonly ServerEvent["type"][];

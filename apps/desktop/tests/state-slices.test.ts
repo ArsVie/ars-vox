@@ -153,9 +153,17 @@ describe("content registry (ONE registration seam)", () => {
     expect(registry.registered()).toHaveLength(1);
   });
 
-  it("the singleton is seeded with the four product slices", () => {
+  it("the singleton is seeded with the five product slices", () => {
     const ids = contentRegistry.registered().map((s) => s.panelId);
-    expect(ids).toEqual(["youtube", "browser", "document_editor", "tasks"]);
+    expect(ids).toEqual([
+      "youtube",
+      "browser",
+      "document_editor",
+      "tasks",
+      // GATE-5 (routing-parity): memory slice added — memory.search_results
+      // now has an honest consumer (content.memory) instead of being dead.
+      "memory",
+    ]);
   });
 });
 

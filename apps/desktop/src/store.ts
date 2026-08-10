@@ -132,6 +132,27 @@ export type {
 export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 800 };
 
 /**
+ * GATE-5 (routing-parity, finding #2) — the ONE list of server event
+ * types applyEvent routes to contentRegistry. The switch derives from
+ * this constant and the registry<->store parity test
+ * (tests/registry-store-parity.test.ts) cross-checks it against the
+ * slices' claims in BOTH directions — a slice-claimed event type the
+ * store never routes is dead on the wire, and a routed event nobody
+ * claims is a silent no-op. This is the guard that makes the
+ * "never edit store.ts" promise enforceable.
+ */
+export const CONTENT_ROUTED_EVENTS: readonly ServerEvent["type"][] = [
+  "youtube.search",
+  "media.search_results",
+  "browser.navigate",
+  "browser.dom_action",
+  "memory.search_results",
+  "document.load",
+  "document.changed",
+  "tasks.update",
+];
+
+/**
  * GATE-3.5 (R24-R27 + W3-MEDIA): the H7 media-command merge helpers live
  * in src/state/media.ts — ALL media mutations (server events, server
  * commands, user commands, player callbacks, snapshot restore) route
@@ -612,6 +633,17 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         lastSeq = seq;
       }
       const state = get();
+      // GATE-5 (W0-SLICE + routing-parity): panel content events reduce
+      // through the ONE content registry — the store routes, the owning
+      // slice reduces. CONTENT_ROUTED_EVENTS is the single source of truth
+      // shared with the parity test: every slice-claimed event type must
+      // be routed here, every routed event must be claimed by exactly one
+      // slice (tests/registry-store-parity.test.ts).
+      if (CONTENT_ROUTED_EVENTS.includes(event.type)) {
+        const content = contentRegistry.applyEvent(state.content, event);
+        if (content !== state.content) set({ content });
+        return;
+      }
       switch (event.type) {
         case "state_update":
           set({
@@ -734,18 +766,6 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           set(patch);
           return;
         }
-        case "youtube.search":
-        case "media.search_results":
-        case "browser.navigate":
-        case "document.load":
-        case "document.changed":
-        case "tasks.update": {
-          // GATE-5 (W0-SLICE): panel content events reduce through the ONE
-          // content registry — the store routes, the owning slice reduces.
-          const content = contentRegistry.applyEvent(state.content, event);
-          if (content !== state.content) set({ content });
-          return;
-        }
         case "media.state": {
           // GATE-3.5 (R24-R27 + W3-MEDIA): the authoritative server state
           // (agent tool / client action verdict) feeds the single
@@ -765,6 +785,21 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         case "tool_call":
         case "pong":
           return;
+        default: {
+          // GATE-5 (routing-parity, defect #1): an unknown event type must
+          // NEVER be silently swallowed — the pre-fix switch had NO default
+          // and dropped unlisted wire members (memory.search_results,
+          // browser.dom_action) with no trace. Mirrors the applyUiCommand
+          // default (C5/GATE-3.5): records visibly, NEVER throws, content
+          // untouched. The union is exhaustive at compile time; this
+          // catches runtime frames that bypass the type (ws JSON.parse as
+          // ServerEvent) and future wire members waiting on a slice.
+          const type = (event as { type?: unknown }).type;
+          console.warn(
+            `[store] unhandled ServerEvent type: ${typeof type === "string" ? type : String(type)}`,
+          );
+          return;
+        }
       }
     };
 
