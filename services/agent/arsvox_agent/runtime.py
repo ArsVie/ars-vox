@@ -119,6 +119,43 @@ class AgentRuntime:
         self._active_task = asyncio.create_task(self._run_turn(text))
 
     # ------------------------------------------------------------------ #
+    async def handle_reminder_fire(self, reminder: dict) -> None:
+        """W1-TASKS (GATE-5): a fired reminder starts EXACTLY ONE fresh
+        agent turn (cron-style cadence injection) with the reminder in
+        context.
+
+        Wired by the app as the scheduler's ``on_fire`` hook, so the
+        scheduler stays LLM-independent. The turn prompt carries the
+        reminder text verbatim — the model sees it even though one-shot
+        reminders leave ``list_active`` once fired. TTS: the turn rides
+        the exact ``_turn`` path, so it respects ``tts.auto_speak``
+        (default off -> fires stay silent, matching the notification
+        path which never speaks on its own).
+
+        Busy guard: while a turn is already running, the fire never
+        stacks a second turn (the double-trigger hazard) — the reminder
+        already reached the UI via the notification event, and recurring
+        reminders refire on their own cadence.
+        """
+        if self._busy or (self._active_task and not self._active_task.done()):
+            if self.deps_base.audit is not None:
+                self.deps_base.audit.log(
+                    "reminders",
+                    "fire_turn_skipped",
+                    {"reminder_id": reminder["id"], "reason": "busy"},
+                )
+            return
+        if self.deps_base.audit is not None:
+            self.deps_base.audit.log(
+                "reminders",
+                "fire_turn_started",
+                {"reminder_id": reminder["id"], "text": reminder["text"][:120]},
+            )
+        self._busy = True
+        text = f"Recordatorio activado: {reminder['text']}"
+        self._active_task = asyncio.create_task(self._run_turn(text))
+
+    # ------------------------------------------------------------------ #
     async def _handle_confirmation_utterance(self, decision: str, text: str) -> None:
         """R35: approve/reject the single global pending confirmation.
 

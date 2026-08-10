@@ -54,9 +54,9 @@ EXPECTED_STATUS = {
     "media_local": "PASS",
     "youtube": "PASS",
     "memory": "PASS",
-    # W1-TASKS: fire → notification verified; fresh-turn cadence injection
-    # STILL MISSING (probe FAIL on fire_triggers_turn) — leaf dispatched
-    "tasks": "PENDING",
+    # W1-TASKS (GATE-5): fire → fresh agent turn with the reminder in
+    # context (cadence injection) — probe PASS enforced
+    "tasks": "PASS",
     # Wave 2 — NOT_YET enforced
     "browser": "NOT_YET",
 }

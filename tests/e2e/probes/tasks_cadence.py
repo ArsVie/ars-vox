@@ -4,13 +4,11 @@ Vision line (panel-vision.md): "the task bar should have some to do's but
 also be able to have some constant/permanent reminders, the agent should
 get them injected like cronjobs every certain amount of time in context."
 
-Verified halves (this lane): active reminders ride every turn's context
-(constant/permanent half) and the scheduler fires ONE event per reminder
-(double-publish VERIFIED fixed — common-brief instruction).
-
-Remaining (W1-TASKS): a fired reminder must START a fresh agent turn
-(cadence injection), not just notify. Row status: PENDING. Verdict: FAIL
-until the fire→turn path exists.
+Verified (this lane): active reminders ride every turn's context
+(constant/permanent half), the scheduler fires ONE event per reminder
+(double-publish VERIFIED fixed — common-brief instruction), and a fired
+reminder STARTS a fresh agent turn with the reminder in context
+(cadence-injection half — W1-TASKS). Row status: PASS.
 """
 
 from __future__ import annotations
@@ -101,14 +99,16 @@ def main(record_dir: Path) -> int:
                 }
             )
 
-            # the fire's tasks.update refresh lands right after the
-            # notification in the same tick — drain a little more, then
-            # keep watching for any fresh-turn activity (c4)
-            events.extend(_collect_for(ws, 1.0))
-            post = _collect_for(ws, 3.0)
+            # The fire tick continues in the same deterministic bus order:
+            # notification -> tasks.update refresh (ADV-F2) -> the injected
+            # fresh agent turn (W1-TASKS). The mock turn completes in
+            # milliseconds, so ONE generous collect window captures the
+            # whole fire sequence — no drain/watch race, and the checks
+            # below key off FIFO frame order, never wall-clock luck.
+            events.extend(_collect_for(ws, 6.0))
 
             # c3 — the fire refreshes content.tasks (notification→panel seam)
-            tasks_updates = frames_of(events + post, "tasks.update")
+            tasks_updates = frames_of(events, "tasks.update")
             c3 = bool(tasks_updates)
             checks.append(
                 {
@@ -119,22 +119,35 @@ def main(record_dir: Path) -> int:
                 }
             )
 
-            # c4 — the fire STARTS a fresh agent turn (cron-style cadence injection)
+            # c4 — the fire STARTS a fresh agent turn (cron-style cadence
+            # injection). Deterministic: the bus is FIFO, so any turn
+            # activity AFTER the notification frame belongs to the fire's
+            # injected turn (state_update thinking + user_message with the
+            # reminder text + the mock agent's tool_call/agent_message).
+            notif_idx = next(i for i, e in enumerate(events) if e["type"] == "notification")
+            after = events[notif_idx + 1 :]
             turn_started = any(
-                e["type"] in ("agent_message", "tool_call")
+                e["type"] in ("agent_message", "tool_call", "user_message")
                 or (e["type"] == "state_update" and e["voice_state"] == "thinking")
-                for e in post
+                for e in after
+            )
+            reminder_in_turn = any(
+                e["type"] == "user_message" and "Alarma cadencia W1" in e["text"]
+                for e in after
             )
             checks.append(
                 {
                     "id": "fire_triggers_turn",
                     "label": "a fired reminder starts a fresh agent turn (cadence injection)",
-                    "pass": turn_started,
+                    "pass": turn_started and reminder_in_turn,
                     "evidence": (
-                        "turn activity observed after the fire"
-                        if turn_started
-                        else "no turn activity within 3s of the fire — reminders notify the panel but "
-                        "are not injected into a fresh turn yet (W1-TASKS)"
+                        "turn activity after the notification frame: "
+                        + ", ".join(f"{e['type']}" for e in after if e["type"] in (
+                            "user_message", "tool_call", "agent_message", "state_update"
+                        ))[:400]
+                        if (turn_started or reminder_in_turn)
+                        else "no turn activity after the notification frame — reminders "
+                        "notify the panel but are not injected into a fresh turn yet (W1-TASKS)"
                     ),
                 }
             )
@@ -144,11 +157,13 @@ def main(record_dir: Path) -> int:
         record_dir,
         "tasks",
         verdict,
-        "Context injection + single publish verified; fire→fresh-turn cadence missing — W1-TASKS.",
+        "Context injection + single publish verified; fire→fresh-turn cadence injection WIRED (W1-TASKS).",
         checks,
         evidence=[
             "tests/e2e/test_wire_probe.py::test_reminder_fire_publishes_once",
+            "tests/e2e/test_wire_probe.py::test_reminder_fire_starts_fresh_turn",
             "tests/e2e/probes/tasks_cadence.py",
+            "services/agent/arsvox_agent/runtime.py::AgentRuntime.handle_reminder_fire",
         ],
     )
     print(f"[tasks] {verdict}")

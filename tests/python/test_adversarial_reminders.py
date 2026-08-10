@@ -126,6 +126,22 @@ def _wait_fired(services, deadline_s=6):
     assert services.notifications.list_active(), "scheduler never fired the reminder"
 
 
+def _drain_fired_turn(ws, max_events=60):
+    """W1-TASKS (GATE-5): a fire now ALSO starts a fresh agent turn
+    (cadence injection), whose frames land on the bus right after the
+    notification. Drain them before the snooze exchange so the collected
+    stream starts at the exchange: snapshot -> notification ->
+    tasks.update -> thinking -> user_message -> tool_call -> agent_message
+    -> listening (the fired turn settles)."""
+    events = []
+    for _ in range(max_events):
+        ev = ws.receive_json()
+        events.append(ev)
+        if ev["type"] == "state_update" and ev["voice_state"] == "listening":
+            break
+    return events
+
+
 def test_r44_spoken_snooze_one_shot_full_path(script_client):
     """One-shot reminder -> real scheduler fires -> spoken 'posponer' ->
     occurrence snoozed, notification resolved, message spoken."""
@@ -144,6 +160,8 @@ def test_r44_spoken_snooze_one_shot_full_path(script_client):
         )
         _wait_fired(services)
         assert services.reminders.get(rid)["occ_status"] == "fired"
+        # the fire's injected fresh turn (cadence) precedes the exchange
+        _drain_fired_turn(ws)
 
         ws.send_json({"type": "user_text", "text": "posponer"})
         events = ws_collect(
@@ -176,6 +194,8 @@ def test_r45_spoken_snooze_recurring_full_path(script_client):
             "daily",
         )
         _wait_fired(services)
+        # the fire's injected fresh turn (cadence) precedes the exchange
+        _drain_fired_turn(ws)
         ws.send_json({"type": "user_text", "text": "snooze diez minutos"})
         events = ws_collect(
             client=c, ws=ws,

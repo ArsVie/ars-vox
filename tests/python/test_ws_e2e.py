@@ -215,6 +215,13 @@ def test_local_intents_snooze_dismiss(script_client):
         while not services.notifications.list_active() and time.time() < deadline:
             time.sleep(0.2)
         assert services.notifications.list_active()
+        # W1-TASKS (GATE-5): the fire ALSO starts a fresh agent turn
+        # (cadence injection) — drain its frames (until the turn settles
+        # back to listening) so the exchange below starts at the exchange.
+        for _ in range(60):
+            ev = ws.receive_json()
+            if ev["type"] == "state_update" and ev["voice_state"] == "listening":
+                break
         ws.send_json({"type": "user_text", "text": "posponer diez minutos"})
         events = ws_collect(client=c, ws=ws, expected_break=lambda e: e["type"] == "agent_message")
         texts = [e["text"] for e in events if e["type"] == "agent_message"]

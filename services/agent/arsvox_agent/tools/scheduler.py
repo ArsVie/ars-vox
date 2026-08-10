@@ -7,7 +7,9 @@ which are local intents, never model-dependent.
 """
 
 import asyncio
+import inspect
 import logging
+from collections.abc import Callable, Awaitable
 from datetime import datetime, timezone
 
 from arsvox_contracts import (
@@ -38,6 +40,7 @@ class ReminderScheduler:
         bus: EventBus,
         confirmations: ConfirmationCoordinator,
         tasks: TaskStore | None = None,
+        on_fire: Callable[[dict], Awaitable[None] | None] | None = None,
     ):
         self.interval_s = interval_s
         self.reminders = reminders
@@ -48,6 +51,12 @@ class ReminderScheduler:
         # TasksUpdateEvent the agent actions emit (W2), so the renderer's
         # content.tasks stays fresh. The app wires it; tests may omit it.
         self.tasks = tasks
+        # W1-TASKS (GATE-5): cadence-injection hook — called once per
+        # fired reminder AFTER the fire's own events (notification,
+        # tasks.update) so the agent turn the app wires here starts with
+        # the reminder in context. The scheduler never owns the turn;
+        # the app decides (runtime.handle_reminder_fire).
+        self.on_fire = on_fire
         self._task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------ #
@@ -75,8 +84,10 @@ class ReminderScheduler:
         now = now_iso or _utcnow()
         # snoozed occurrences whose snoozed_until passed become active
         self.reminders.promote_snoozed(now)
+        fired: list[dict] = []
         for reminder in self.reminders.due(now):
             self.reminders.mark_fired(reminder["id"], now)
+            fired.append(reminder)
             nid = self.notifications.insert(
                 NotificationKind.REMINDER.value,
                 "Recordatorio",
@@ -108,6 +119,23 @@ class ReminderScheduler:
         # tasks-None-guarded: inert without the store, as _emit_tasks_update
         # documents.
         await self._emit_tasks_update()
+        # W1-TASKS (GATE-5): cadence injection — AFTER the fire's own
+        # frames (notification, tasks.update) so the wired hook starts a
+        # fresh agent turn with the reminder in context, exactly once per
+        # fired reminder. The hook is app-wired (runtime) and must stay
+        # optional here: unit tests and LLM-free deployments omit it.
+        for reminder in fired:
+            await self._invoke_on_fire(reminder)
+
+    async def _invoke_on_fire(self, reminder: dict) -> None:
+        if self.on_fire is None:
+            return
+        try:
+            result = self.on_fire(reminder)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:  # noqa: BLE001 — a broken hook must never kill the tick
+            log.exception("reminder %s on_fire hook failed", reminder["id"])
 
     # ------------------------------------------------------------------ #
     async def _emit_tasks_update(self) -> None:
