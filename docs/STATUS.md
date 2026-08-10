@@ -93,6 +93,11 @@ through takeover after connection losses; the conformance lane's checklist
 
 ## GATE-5 GATE-1 (PACKAGED VERIFICATION 2026-08-10; three seam fixes merged)
 
+STATUS: **CLOSED** — closing suite 2026-08-10: pytest 372/372 + e2e
+harness 14/14 (EXPECTED_STATUS enforces PASS on document_editor,
+media_local, youtube, memory, tasks), vitest 627/627, typecheck + build
+clean.
+
 GATE-1 = the built app + real model (deepseek-v4-flash, mock:false,
 edge TTS, auto_speak, CDP 9222) exercising every panel-vision row with
 screenshots. Packaged verification FOUND three real product defects
