@@ -28,6 +28,34 @@ real model (deepseek-v4-flash, mock off).
 * [Final state](33-gate5-final-state.png) — split layout held, no error
   panel, no stale confirmation
 
+## GATE-5 GATE-2 — integrated browser (closed 2026-08-10, packaged build, real model)
+
+W2-VIEW + W2-DRIVE + W2-NAVIGATE merged; ADR 0007 reversed the iframe
+decision (WebContentsView is the browser). Captured from the packaged
+Electron 42 app over CDP with the real model (deepseek-v4-flash, mock
+off). The WebContentsView is a native layer (not part of the renderer's
+compositor), so each screen has a pair: the app window (chrome +
+conversation) and the view's own target capture (the actual page).
+
+* [Browser panel (empty viewport)](gate2-browser-panel.png) — browser
+  surface after W2-VIEW: nav buttons (Atrás/Adelante/Recargar), address
+  bar ("Busca o escribe una dirección…"), empty-state hint; conversation
+  shows the agent's honest "no veo ninguna página cargada" (no page yet)
+* [Browser loaded](gate2-browser-loaded.png) — user-path navigate →
+  WebContentsView loaded wikipedia.org (allowlist passed); view target
+  capture shows the real Wikipedia landing page
+* [Agent read the page](gate2-agent-navigated.png) — conversation shows
+  the agent summarizing the open page; view target capture shows the
+  Spanish Wikipedia portada after the agent CLICKED the Español link
+  (`#js-link-box-es` → real navigation to es.wikipedia.org)
+* [Agent navigated alone](gate2-browser-openstreetmap.png) — "Navegá a
+  openstreetmap.org" → browser.navigate tool → real view load → round-trip
+  returned the REAL url/title ("…terminó en
+  https://www.openstreetmap.org/#map=3/23.94/-102.58 — OpenStreetMap")
+  with can_go_back: true on the wire; view capture shows the OSM map
+* Allowlist working: example.com (not listed) blocked; wikipedia.org /
+  openstreetmap.org / youtube.com pass — the hardened view governs
+
 ## GATE-3.5 consolidation (closed 2026-08-09)
 
 Post-consolidation state: R43 status bar (brand + ONE status pill

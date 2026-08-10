@@ -131,6 +131,62 @@ Post-review gates: pytest 386/386 (single command), targeted vitest
 81/81 on parity files (full 636 verified by the parity leaf on branch),
 typecheck + build clean.
 
+## GATE-5 GATE-2 (INTEGRATED BROWSER — CLOSED 2026-08-10)
+
+Program: Wave 2 of docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md
+(W2-VIEW → W2-DRIVE → W2-NAVIGATE, SERIAL). ADR 0007
+(docs/decisions/0007-browser-webcontentsview.md) formally reverses the
+8d1fb3f "browser story = renderer iframe" decision: the integrated
+browser the agent can drive cannot be an iframe. The browser panel now
+IS a main-process WebContentsView.
+
+**W2-VIEW** (merged 4c052f3): Electron 33→42.8.1 (E33 was EOL'd; the
+migration note's hardening checklist landed WITH the upgrade — CSP
+injection, webRequest allowlist, permission handling, isolated session);
+security-policy.ts + hardened-view.ts restored from 8d1fb3f^ and WIRED
+this time; real can_go_back/can_go_forward from the view (actions.py no
+longer hardcodes False — plan-authorized exception); nav controls back
+in BrowserPanel; renderer iframe REMOVED. 701 vitest / 379 pytest.
+
+**W2-DRIVE** (merged 9fbfd32): the agent DOM bridge. Main-process
+executor (electron/dom-driver.ts) applies click/scroll/set_value/query
+to the browser view's webContents ONLY (app window unreachable by
+construction), native-setter input filling, 8000-char bounded query with
+honest truncation marker, isTrustedIpcSender-guarded IPC. Agent tool
+browser.dom_action emits the FROZEN event shape and awaits the real
+result (DomActionResultStore). Single-path decision: the agent
+NAVIGATES — it never types into renderer chrome; set_value is for the
+page's own inputs. 719 vitest / 379 pytest.
+
+**W2-NAVIGATE** (merged, GATE-2 packaged defect fix): the agent had
+browser.dom_action but no navigate tool (its own docstring promised
+one; live agent said "No tengo forma de navegar"). Added
+browser.navigate: emits frozen BrowserNavigateEvent, awaits the
+browser-state store (10s bounded), returns the REAL landing url/title
+("La navegación terminó en … — …"), honest timeout/blocked in Spanish,
+mock path same shape marked [mock]. 719 vitest / 397 pytest.
+
+**GATE-2 packaged verification (real model, Spanish, CDP, Electron 42):**
+- Agent NAVIGATED by itself: "Navegá a openstreetmap.org" →
+  browser.navigate → view loaded → round-trip returned the real
+  url/title with can_go_back: true on the wire; agent: "Listo, ya está
+  abierto OpenStreetMap."
+- Agent READ the page: dom_action(query) returned real Wikipedia text;
+  agent summarized it in Spanish.
+- Agent SCROLLED (600px) and CLICKED the Español link (#js-link-box-es)
+  → real navigation to es.wikipedia.org → agent read the new page.
+- User-path navigate works on the SAME view (one browser state, one
+  authority — the store's content.browser).
+- Allowlist verified live: example.com (not listed) BLOCKED;
+  wikipedia.org / openstreetmap.org pass.
+- Screenshots: docs/screenshots/gate2-*.png (index updated).
+
+STATUS: **CLOSED** — closing suite 2026-08-10: pytest 411/411 (397
+python + 14 e2e in ONE command; e2e now ENFORCES PASS on the browser
+row too), vitest 719/719 (56 files), typecheck + build clean. The
+browser row in docs/vision-conformance.md flipped NOT_YET → PASS with
+packaged evidence; the drift guard enforces it (regression goes red).
+
 ## GATE-5 GATE-1 (PACKAGED VERIFICATION 2026-08-10; three seam fixes merged)
 
 STATUS: **CLOSED** — closing suite 2026-08-10: pytest 372/372 + e2e
