@@ -5,6 +5,13 @@
  * useStore snapshots via `api.getServerState || api.getInitialState`,
  * so we attach a live getServerState in beforeEach and seed the
  * singleton store through the real event path (applyEvent).
+ *
+ * W2-VIEW (GATE-5, ADR 0007): the browser surface is a MAIN-owned
+ * WebContentsView — BrowserPanel is its chrome + transparent viewport
+ * placeholder. The renderer IFRAME PATH IS REMOVED: no <iframe>, no
+ * src= anywhere; back/forward/refresh are LIVE nav controls driven by
+ * the real can_go_back/can_go_forward the view publishes (they exist
+ * again — the GATE-3.5 dead-button regression is reversed).
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -36,13 +43,13 @@ function renderAs(role: SurfaceRole): string {
   );
 }
 
-function seedBrowser(): void {
+function seedBrowser(overrides: Partial<{ can_go_back: boolean; can_go_forward: boolean }> = {}): void {
   appStore.getState().applyEvent({
     type: "browser.navigate",
     url: DEMO_URL,
     title: "Demo News",
-    can_go_back: true,
-    can_go_forward: false,
+    can_go_back: overrides.can_go_back ?? true,
+    can_go_forward: overrides.can_go_forward ?? false,
     loading: false,
     created_at: ts(),
   });
@@ -56,15 +63,19 @@ beforeEach(() => {
 });
 
 describe("BrowserPanel adaptive roles (UI-201)", () => {
-  it("primary: full browsing experience — toolbar, address entry, viewport iframe", () => {
+  it("primary: full browsing experience — toolbar, address entry, live nav buttons, viewport", () => {
     seedBrowser();
     const html = renderAs("primary");
     expect(html).toContain("browser-surface--primary");
     expect(html).toContain("browser-toolbar");
     expect(html).toContain("browser-address");
     expect(html).toContain("browser-viewport");
-    expect(html).toContain(`src="${DEMO_URL}"`);
+    expect(html).toContain("browser-nav-btn");
     expect(html).toContain("Demo News");
+    // W2-VIEW: the WebContentsView IS the browser surface — no iframe,
+    // no src= attribute anywhere in the panel.
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("src=");
   });
 
   it("companion: full chrome preserved but rendered with the subdued variant", () => {
@@ -74,7 +85,9 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
     expect(html).toContain("browser-toolbar");
     expect(html).toContain("browser-address");
     expect(html).toContain("browser-viewport");
+    expect(html).toContain("browser-nav-btn");
     expect(html).toContain("Demo News");
+    expect(html).not.toContain("<iframe");
   });
 
   it("support: compact contextual representation — viewport only, no toolbar", () => {
@@ -83,26 +96,38 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
     expect(html).toContain("browser-surface--support");
     expect(html).not.toContain("browser-toolbar");
     expect(html).not.toContain("browser-address");
+    expect(html).not.toContain("browser-nav-btn");
     expect(html).toContain("browser-viewport");
-    expect(html).toContain(`src="${DEMO_URL}"`);
+    expect(html).not.toContain("<iframe");
   });
 
-  it("kills the dead nav controls: no back/forward/refresh buttons in any variant", () => {
-    // GATE-3.5 (W3-BROWSER): the toolbar buttons were permanently dead —
-    // the service hardcodes can_go_back=false and the cross-origin
-    // sandbox forbids driving the iframe's history from the parent.
-    // Regression: they must not render, and must not come back.
-    seedBrowser();
-    for (const role of ["primary", "companion", "support"] as const) {
-      const html = renderAs(role);
-      expect(html).not.toContain("browser-nav-btn");
-      expect(html).not.toContain('aria-label="Atrás"');
-      expect(html).not.toContain('aria-label="Adelante"');
-      expect(html).not.toContain('aria-label="Recargar"');
-    }
-    // Navigation lives in the address bar (browser.navigate) — it stays.
-    expect(renderAs("primary")).toContain("browser-address");
-    expect(renderAs("primary")).toContain('aria-label="Dirección web"');
+  it("live nav controls: back/forward enabled exactly per the view's real state", () => {
+    // Real can_go_back/can_go_forward from the WebContentsView drive the
+    // buttons — W2-VIEW (ADR 0007) reverses the GATE-3.5 dead controls.
+    seedBrowser({ can_go_back: true, can_go_forward: true });
+    const html = renderAs("primary");
+    expect(html).toContain('aria-label="Atrás"');
+    expect(html).toContain('aria-label="Adelante"');
+    expect(html).toContain('aria-label="Recargar"');
+    // enabled: no disabled attribute on back/forward; refresh never disabled
+    const back = html.match(/<button[^>]*aria-label="Atrás"[^>]*>/)?.[0] ?? "";
+    const fwd = html.match(/<button[^>]*aria-label="Adelante"[^>]*>/)?.[0] ?? "";
+    const reload = html.match(/<button[^>]*aria-label="Recargar"[^>]*>/)?.[0] ?? "";
+    expect(back).not.toContain("disabled");
+    expect(fwd).not.toContain("disabled");
+    expect(reload).not.toContain("disabled");
+  });
+
+  it("nav controls disable when the view reports no history", () => {
+    seedBrowser({ can_go_back: false, can_go_forward: false });
+    const html = renderAs("primary");
+    const back = html.match(/<button[^>]*aria-label="Atrás"[^>]*>/)?.[0] ?? "";
+    const fwd = html.match(/<button[^>]*aria-label="Adelante"[^>]*>/)?.[0] ?? "";
+    expect(back).toContain("disabled");
+    expect(fwd).toContain("disabled");
+    // refresh is always available (reload of the current page)
+    const reload = html.match(/<button[^>]*aria-label="Recargar"[^>]*>/)?.[0] ?? "";
+    expect(reload).not.toContain("disabled");
   });
 
   it("no outer card and no permanent surface-name label", () => {
@@ -121,6 +146,7 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
       );
       expect(html).toContain("browser-viewport");
       expect(html).not.toContain("<iframe");
+      expect(html).not.toContain("src=");
     }
   });
 
@@ -131,11 +157,31 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
     for (const role of ["primary", "companion", "support"] as const) {
       const html = renderAs(role);
       expect(html).toContain("Demo News");
-      expect(html).toContain(`src="${DEMO_URL}"`);
       expect(html).toContain("browser-viewport");
+      expect(html).not.toContain("<iframe");
     }
     // The role still shapes the presentation.
     expect(renderAs("primary")).toContain("browser-address");
     expect(renderAs("support")).not.toContain("browser-address");
+  });
+
+  it("view state reduced from the bridge (applyBrowserViewState) drives the same panel", () => {
+    // The main process publishes REAL WebContentsView state over
+    // arsvox:browser-state; the store reduces the same frozen field set
+    // the browser.navigate events carry — the panel must render it.
+    appStore.getState().browserViewState({
+      url: DEMO_URL,
+      title: "Demo News",
+      canGoBack: true,
+      canGoForward: true,
+      loading: true,
+    });
+    const html = renderAs("primary");
+    expect(html).toContain("Demo News");
+    expect(html).toContain("browser-viewport");
+    const back = html.match(/<button[^>]*aria-label="Atrás"[^>]*>/)?.[0] ?? "";
+    expect(back).not.toContain("disabled");
+    // loading=true renders the spinner affordance
+    expect(html).toContain("browser-spinner");
   });
 });

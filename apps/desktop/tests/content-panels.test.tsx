@@ -181,7 +181,7 @@ describe("YoutubePanel", () => {
 });
 
 describe("BrowserPanel", () => {
-  it("renders the toolbar and an iframe with the current url", () => {
+  it("renders the toolbar, live nav controls and the viewport (no iframe)", () => {
     appStore.getState().applyEvent({
       type: "browser.navigate",
       url: "http://127.0.0.1:5173/demo-news.html",
@@ -194,13 +194,20 @@ describe("BrowserPanel", () => {
 
     const html = renderPrimary(<BrowserPanel />, "browser", STANDARD_ROLES);
     expect(html).toContain("browser-toolbar");
-    // W3-BROWSER (2026-08-09): back/forward/refresh controls were removed —
-    // the iframe sandbox cannot navigate cross-origin content, so dead
-    // buttons were honest. The address bar is the live navigation surface.
-    expect(html).not.toContain('aria-label="Atrás"');
-    expect(html).not.toContain('aria-label="Recargar"');
-    expect(html).toContain('src="http://127.0.0.1:5173/demo-news.html"');
-    expect(html).toContain('title="Página web"');
+    expect(html).toContain("browser-viewport");
+    // W2-VIEW (ADR 0007): back/forward/refresh are LIVE again — the
+    // WebContentsView reports real can_go_back/can_go_forward, so the
+    // buttons exist and are enabled exactly per that state.
+    expect(html).toContain('aria-label="Atrás"');
+    expect(html).toContain('aria-label="Adelante"');
+    expect(html).toContain('aria-label="Recargar"');
+    const back = html.match(/<button[^>]*aria-label="Atrás"[^>]*>/)?.[0] ?? "";
+    expect(back).not.toContain("disabled");
+    // The WebContentsView IS the browser surface — no iframe, no src=.
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("src=");
+    // The header label is the PAGE title.
+    expect(html).toContain("Demo News");
     expect(html).not.toContain("Pídeme que abra una página");
   });
 
@@ -209,6 +216,7 @@ describe("BrowserPanel", () => {
     expect(html).toContain("content-panel-empty-text");
     expect(html).toContain("Pídeme que abra una página o escribe una dirección arriba.");
     expect(html).not.toContain("<iframe");
+    expect(html).toContain("browser-viewport");
   });
 });
 

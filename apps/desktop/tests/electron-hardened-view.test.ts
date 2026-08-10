@@ -247,7 +247,7 @@ describe("session webRequest allowlist enforcement (W2-VIEW)", () => {
     for (const url of ["file:///etc/passwd", "http://127.0.0.1:8765/", "https://localhost/"]) {
       const result: unknown[] = [];
       handler({ url, resourceType: "mainFrame" }, (r) => result.push(r));
-      expect(result).toEqual([{ cancel: true }], `expected ${url} to be cancelled`);
+      expect(result).toEqual([{ cancel: true }]);
     }
   });
 
@@ -263,7 +263,7 @@ describe("session webRequest allowlist enforcement (W2-VIEW)", () => {
     for (const resourceType of ["subFrame", "script", "image", "stylesheet", "xhr", "media"]) {
       const result: unknown[] = [];
       handler({ url: "https://cdn.example.com/asset.js", resourceType }, (r) => result.push(r));
-      expect(result).toEqual([{}], `expected ${resourceType} to pass`);
+      expect(result).toEqual([{}]);
     }
   });
 });

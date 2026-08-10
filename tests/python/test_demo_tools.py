@@ -48,7 +48,7 @@ class _FakePanels:
         self.touched.append(panel_type)
 
 
-def _make_context(mock: bool) -> tuple[ToolContext, _CaptureBus, _FakePanels]:
+def _make_context(mock: bool, browser_state=None) -> tuple[ToolContext, _CaptureBus, _FakePanels]:
     config = AppConfig()
     config.agent.mock = mock
     bus = _CaptureBus()
@@ -72,6 +72,7 @@ def _make_context(mock: bool) -> tuple[ToolContext, _CaptureBus, _FakePanels]:
         confirmations=None,
         tts=None,
         telegram=None,
+        browser_state=browser_state,
         run_id="test-run",
         session_id="test-session",
     )
@@ -211,6 +212,44 @@ def test_browser_navigate_event_uses_demo_news_url():
     ev = next(e for e in bus.events if isinstance(e, BrowserNavigateEvent))
     assert ev.url == DEMO_NEWS_URL
     assert ev.title == "El Diario — Noticias locales"
+
+
+def test_browser_navigate_event_reads_real_store_state():
+    """W2-VIEW (ADR 0007): the demo path reads the SAME browser-state
+    store as actions.py — the desktop view's real can_go_back/
+    can_go_forward when it has reported, contract defaults otherwise."""
+    from arsvox_agent.browser_state import BrowserStatePayload, BrowserStateStore
+
+    store = BrowserStateStore()
+    store.update(
+        BrowserStatePayload(
+            url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            title="Pasta fresca en casa",
+            can_go_back=True,
+            can_go_forward=True,
+            loading=False,
+        )
+    )
+    tctx, bus, _ = _make_context(mock=True, browser_state=store)
+
+    _run(tctx)
+
+    ev = next(e for e in bus.events if isinstance(e, BrowserNavigateEvent))
+    assert ev.url == DEMO_NEWS_URL  # demo content URL stays the demo's
+    assert ev.can_go_back is True
+    assert ev.can_go_forward is True
+
+
+def test_browser_navigate_event_falls_back_to_defaults_without_store():
+    """No store attached (unit-test Deps): contract defaults — the UI
+    must not believe history navigation is available."""
+    tctx, bus, _ = _make_context(mock=True)
+
+    _run(tctx)
+
+    ev = next(e for e in bus.events if isinstance(e, BrowserNavigateEvent))
+    assert ev.can_go_back is False
+    assert ev.can_go_forward is False
 
 
 def test_mock_guard_blocks_when_mock_disabled():
