@@ -49,12 +49,14 @@ EXPECTED_STATUS = {
     "conversation_time": "PASS",
     # L3 (reader half) — verified by this lane; the probe is the wire part
     "document_reader": "PASS",
-    # Rows owned by W1 product lanes — PENDING until the gate closes them
-    "document_editor": "PENDING",
+    # GATE-1 closed rows (probes + packaged evidence; PASS enforced)
+    "document_editor": "PASS",
+    "media_local": "PASS",
+    "youtube": "PASS",
+    "memory": "PASS",
+    # W1-TASKS: fire → notification verified; fresh-turn cadence injection
+    # STILL MISSING (probe FAIL on fire_triggers_turn) — leaf dispatched
     "tasks": "PENDING",
-    "media_local": "PENDING",
-    "youtube": "PENDING",
-    "memory": "PENDING",
     # Wave 2 — NOT_YET enforced
     "browser": "NOT_YET",
 }

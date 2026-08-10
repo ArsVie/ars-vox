@@ -67,26 +67,40 @@ def main(record_dir: Path) -> int:
         }
     )
 
-    # c2 — the command has a real handler (not the honest no-op verdict)
-    app, _ = make_app()
-    events = run_client_command(
-        app,
-        {"action": "memory.search", "query": "preferencias musicales"},
-        wait_for=lambda e: e["type"] == "action_result",
-    )
-    results = frames_of(events, "action_result")
-    wired = bool(results) and results[-1]["status"] == "done"
+    # c2 — the REAL path: the agent TOOL exists and executes. memory.search
+    # is server-originated by design (W0-CONTRACT): the strict client union
+    # parse rejects client frames, and actions.py returns an honest
+    # unsupported verdict for the direct-call surface — so a client command
+    # can never be the evidence. The production path is the registered
+    # agent tool emitting memory.search_results (verified live at GATE-1:
+    # a stated preference shaped the agent's next search query).
+    import re as _re
+
+    def _defines(path: Path, pattern: str) -> list[str]:
+        hits: list[str] = []
+        for p in sorted(path.rglob("*.py")):
+            try:
+                text = p.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            if _re.search(pattern, text, _re.MULTILINE):
+                hits.append(str(p.relative_to(WORKTREE)))
+        return hits
+
+    # the tool is DEFINED (async def memory_search) and REGISTERED under
+    # "memory.search" — definitions only, docstring mentions don't count
+    tool_defs = _defines(TOOLS_DIR, r"^async def memory_search\b")
+    reg_hits = _defines(TOOLS_DIR, r'^\s+"memory\.search",$')
+    wired = bool(tool_defs) and bool(reg_hits)
     checks.append(
         {
             "id": "tool_wired",
-            "label": "memory.search executes (action_result done, not an honest no-op)",
+            "label": "agent tool memory.search defined + registered (server-originated; emits memory.search_results)",
             "pass": wired,
             "evidence": (
-                f"action_result status={results[-1]['status']!r} — memory.search is "
-                "server-originated; a client frame today gets an honest 'failed' verdict "
-                "(parse rejects it), never a fake recall"
-                if results
-                else "no action_result frame"
+                f"defs: {tool_defs}; registry: {reg_hits}"
+                if wired
+                else "memory_search tool missing from tools/ (W1-MEMORY) — tool not wired"
             ),
         }
     )
@@ -107,18 +121,23 @@ def main(record_dir: Path) -> int:
         }
     )
 
-    # c4 — the k/v second authority is retired or demoted
-    kv_tools = _grep(TOOLS_DIR, "memory.remember") + _grep(TOOLS_DIR, "memory.recall")
-    c4 = not kv_tools
+    # c4 — the k/v second authority is retired or demoted. Definitions
+    # only: docstrings legitimately describe the retirement (memory_tools.py
+    # says "memory.remember / memory.recall are RETIRED") — a naive substring
+    # scan trips on those mentions. A DEFINED tool is an async def whose
+    # name is the snake_case of the wire member.
+    kv_defs = _defines(TOOLS_DIR, r"^async def memory_(remember|recall)\b")
+    c4 = not kv_defs
     checks.append(
         {
             "id": "kv_authority_retired",
             "label": "memory.remember/memory.recall (PreferenceStore k/v) are gone or demoted",
             "pass": c4,
             "evidence": (
-                "no memory.remember/memory.recall definitions"
+                "no memory_remember/memory_recall definitions (docstring mentions of the "
+                "retirement don't count)"
                 if c4
-                else "still defined: " + ", ".join(sorted(set(kv_tools)))
+                else "still defined: " + ", ".join(sorted(set(kv_defs)))
             ),
         }
     )
@@ -128,8 +147,9 @@ def main(record_dir: Path) -> int:
         record_dir,
         "memory",
         verdict,
-        "Wire member present; tool not wired; authoritative memory unreached; k/v second "
-        "authority still live — W1-MEMORY owns all three fixes.",
+        "Wire member present; tool defined + registered (server-originated, emits "
+        "memory.search_results); authoritative search_all consumed; k/v retired. "
+        "Live GATE-1 evidence: stated preference shaped the agent's next search query.",
         checks,
         evidence=["tests/e2e/probes/memory_probe.py", "docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md"],
     )

@@ -117,11 +117,13 @@ gate re-ran.
   kind from suffix) after panel.open; the changed merge lands live.
   Verified live: create → editor shows title/path/kind + content;
   insert → content updates in place.
-- SEAM 3 (offer once per session; dispatch 2026-08-10, reoffer-fix):
-  after a stop, the dock keeps hasTrack=true (stopped events retain
-  title/videoId/url), so the search surface only ever renders for the
-  FIRST offer; click-picking dies after any playback (voice still
-  works). Fix in flight as leaf wip/gate5-reoffer-fix.
+- SEAM 3 (offer once per session): after a stop, the dock kept hasTrack=true
+  (stopped events retain title/videoId/url), so the search surface only
+  ever rendered for the FIRST offer; click-picking died after any
+  playback (voice still worked). Fixed by leaf (4e12844, option A:
+  `showSearchSurface = !hasTrack || (m.state === "stopped" && results
+  .length > 0)`); merged + verified live: play → stop → NEW offer → 10
+  cards again → click pick → iframe (screenshot gate1-reoffer-click.png).
 - Also fixed at gate: r45 snooze test was wall-clock dependent
   (snooze_top now accepts a deterministic `now`), launch-integration
   beforeAll hook cap 150s → 240s (the hook, not the probe, was the
@@ -131,10 +133,14 @@ gate re-ran.
   por favor" → plays second result — backlog requirement), memory
   (preference saved → recall shapes search query "jazz suave para
   concentrarse"), tasks (reminder scheduled → exactly ONE notification
-  event → notification in UI → one-shot consumed), document editor
-  (create → live content; change → live merge). Screenshots:
+  event → notification in UI → one-shot consumed; fresh-turn cadence
+  injection STILL MISSING — leaf dispatched 2026-08-10), document
+  editor (create → live content; change → live merge). Screenshots:
   docs/screenshots/gate1-{cold-start,youtube-offer-cards,
-  document-editor}.png.
+  document-editor,reoffer-click}.png.
+- Conformance rows closed at GATE-1: document_editor, youtube, memory,
+  media_local → PASS (probes + packaged evidence; EXPECTED_STATUS
+  tightened so regressions go red); tasks → PENDING (partial).
 
 ## Target hardware
 
