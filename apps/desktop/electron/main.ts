@@ -15,14 +15,19 @@
  *    (R12) and desktop quit terminates the child process tree (R13).
  *  - The defaultSession media permission grant is scoped to the app's own
  *    WebContents (the one window we create).
- *  - Browser story (GATE-3.5 wave 1 decision): browsing stays in the
- *    renderer iframe (BrowserPanel — webSecurity on, nodeIntegration
- *    off, contextIsolation on; the preload does not run in subframes).
- *    The R40-R42 hardened-view/security-policy modules were DELETED:
- *    they governed nothing (the remote partition was created and
- *    discarded) and full WebContentsView wiring needs renderer changes
- *    outside this lane. R41 IPC sender validation survives in
- *    ./ipc-guard.ts. Rationale in the browser-story commit message.
+ *  - Browser story (GATE-5 W2-VIEW, ADR 0007): the integrated browser
+ *    is a hardened WebContentsView OWNED by this process (./browser-view.ts
+ *    + ./hardened-view.ts + ./security-policy.ts) — isolated persistent
+ *    partition, deny-by-default permissions, CSP injection, allowlist +
+ *    local/private blocking enforced at the session webRequest layer and
+ *    on every navigate, NO privileged preload in the view. Navigation is
+ *    main-owned (renderer asks via arsvox:browser-* IPC); real
+ *    can_go_back/can_go_forward/url/title/loading are published to the
+ *    renderer (arsvox:browser-state) and to the agent service
+ *    (PUT /api/browser-state), so actions.py emits real values. The
+ *    renderer iframe path is REMOVED — the WebContentsView IS the
+ *    browser surface. R41 sender validation applies to every handler
+ *    (./ipc-guard.ts).
  *
  * Dev notes (A2, GATE-3.5):
  *  - ARSVOX_SERVICE_MODE=external skips spawning (assume a service is
@@ -36,6 +41,12 @@ import { app, BrowserWindow, ipcMain, session, type WebContents } from "electron
 import * as crypto from "crypto";
 import * as path from "path";
 import { isTrustedIpcSender } from "./ipc-guard";
+import { BrowserView, toServicePayload, type BrowserViewState } from "./browser-view";
+import {
+  installGlobalWebContentsGuard,
+  registerLocalDocProtocol,
+} from "./hardened-view";
+import { DEFAULT_REMOTE_ALLOWLIST } from "./security-policy";
 
 import {
   generateAuthToken,
@@ -70,6 +81,24 @@ function isAppWebContents(wc: WebContents): boolean {
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 
+// ==== W2-VIEW (ADR 0007) — local-doc roots ====
+// ARSVOX_DOC_ROOTS: path.delimiter-separated absolute dirs. Alias "docs"
+// for the first, "docsN" for the rest. Empty by default -> the
+// arsvox-doc: protocol is registered but serves 403 until a future lane
+// wires real roots.
+function localDocRoots(): Record<string, string> {
+  const raw = process.env.ARSVOX_DOC_ROOTS;
+  if (!raw) return {};
+  const roots: Record<string, string> = {};
+  raw
+    .split(path.delimiter)
+    .filter((dir) => dir.trim().length > 0)
+    .forEach((dir, i) => {
+      roots[i === 0 ? "docs" : `docs${i}`] = dir.trim();
+    });
+  return roots;
+}
+
 /** The app's own page may only navigate within its own origin. */
 function isAllowedAppNavigation(url: string): boolean {
   if (url.startsWith("file:")) return true;
@@ -87,6 +116,35 @@ function isAllowedAppNavigation(url: string): boolean {
 
 let mainWindow: BrowserWindow | null = null;
 let serviceStatus: ServiceStatus = { state: "starting" };
+let browserView: BrowserView | null = null;
+
+// -------------------------------------------------------- browser view #
+
+/**
+ * W2-VIEW (ADR 0007): publish the view's REAL navigation state —
+ * (a) to the renderer (arsvox:browser-state IPC, immediate UI truth)
+ * and (b) to the agent service (authenticated PUT /api/browser-state),
+ * so actions.py emits real can_go_back/can_go_forward/url/title instead
+ * of hardcoded False. The wire shape is the frozen BrowserNavigateEvent
+ * field set (snake_case on the service payload).
+ */
+function pushBrowserState(state: BrowserViewState): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("arsvox:browser-state", state);
+  }
+  if (serviceStatus.state !== "ready") return;
+  const payload = toServicePayload(state);
+  void fetch(`${AGENT_BASE_URL}/api/browser-state`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }).catch((err: unknown) => {
+    console.warn("[main] browser-state POST failed", err);
+  });
+}
 
 /**
  * Main-owned WebSocket to the agent service (R14: the renderer cannot
@@ -241,9 +299,53 @@ function setupIpc(): void {
     if (typeof message !== "string") return;
     wsBridge.send(message);
   });
+
+  // ---- W2-VIEW (ADR 0007): the integrated browser (main-owned) ----
+  ipcMain.handle("arsvox:browser-navigate", (event, request: { url?: unknown }) => {
+    if (!isTrustedIpcSender(event, isAppWebContents)) throw new Error("unauthorized");
+    if (!browserView) return { ok: false, reason: "no-view" };
+    const url = typeof request?.url === "string" ? request.url : "";
+    if (!url) return { ok: false, reason: "no-url" };
+    return browserView.navigate(url);
+  });
+
+  ipcMain.on("arsvox:browser-back", (event) => {
+    if (!isTrustedIpcSender(event, isAppWebContents)) return;
+    browserView?.back();
+  });
+
+  ipcMain.on("arsvox:browser-forward", (event) => {
+    if (!isTrustedIpcSender(event, isAppWebContents)) return;
+    browserView?.forward();
+  });
+
+  ipcMain.on("arsvox:browser-refresh", (event) => {
+    if (!isTrustedIpcSender(event, isAppWebContents)) return;
+    browserView?.refresh();
+  });
+
+  ipcMain.on("arsvox:browser-set-bounds", (event, bounds: unknown) => {
+    if (!isTrustedIpcSender(event, isAppWebContents)) return;
+    if (!browserView || typeof bounds !== "object" || bounds === null) return;
+    const b = bounds as { x?: unknown; y?: unknown; width?: unknown; height?: unknown };
+    const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    browserView.setBounds({
+      x: num(b.x),
+      y: num(b.y),
+      width: num(b.width),
+      height: num(b.height),
+    });
+  });
 }
 
 // --------------------------------------------------------------- app #
+
+// R40: registerLocalDocProtocol must run BEFORE app.whenReady() —
+// registerSchemesAsPrivileged is pre-ready only; calling it inside
+// whenReady rejects and ABORTS window creation. The protocol handler
+// itself is deferred to whenReady inside hardened-view.ts. Roots stay
+// empty (inert 403) until a future lane wires real directories.
+registerLocalDocProtocol({ roots: localDocRoots() });
 
 app.whenReady().then(() => {
   // Voice-first product: the mic must be usable without fiddling with
@@ -254,6 +356,13 @@ app.whenReady().then(() => {
   });
   session.defaultSession.setPermissionCheckHandler((wc, permission) => {
     return permission === "media" && (wc ? isAppWebContents(wc) : false);
+  });
+
+  // W2-VIEW (ADR 0007): defense in depth — any WebContents that is not
+  // the app window gets the remote navigation guards + window-open deny.
+  installGlobalWebContentsGuard({
+    allowlist: DEFAULT_REMOTE_ALLOWLIST,
+    isAppWebContents,
   });
 
   setupIpc();
@@ -301,6 +410,14 @@ function createWindow(): void {
   win.webContents.on("will-navigate", (event, url) => {
     if (!isAllowedAppNavigation(url)) event.preventDefault();
   });
+  // W2-VIEW (ADR 0007): the integrated browser surface — a hardened
+  // WebContentsView sized by the renderer's reported panel bounds
+  // (arsvox:browser-set-bounds); hidden (0x0) until the panel mounts.
+  browserView = BrowserView.create({
+    allowlist: DEFAULT_REMOTE_ALLOWLIST,
+    onStateChange: pushBrowserState,
+  });
+  browserView.attach(win);
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });

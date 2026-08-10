@@ -14,6 +14,14 @@
  *    cannot set headers and a token-in-URL would be renderer-readable).
  *    Outbound frames sent before the first connect are queued in main and
  *    delivered exactly once (R11).
+ *  - browserNavigate()/browserBack()/browserForward()/browserRefresh()/
+ *    browserSetBounds()/onBrowserState() — W2-VIEW (ADR 0007): the
+ *    integrated browser is MAIN-owned. The renderer asks main to drive
+ *    the hardened WebContentsView (navigate/back/forward/refresh) and
+ *    reports the measured panel bounds; main publishes the view's REAL
+ *    navigation state (url/title/can_go_back/can_go_forward/loading)
+ *    back to the renderer. Remote pages never see any of this surface
+ *    (the view has no preload).
  *
  * The previous getAuthToken() bridge (P2) is gone.
  */
@@ -21,24 +29,16 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
 import type { ServiceStatus } from "./service";
-
-export interface BridgeFetchRequest {
-  url: string;
-  method?: string;
-  headers?: Record<string, string>;
-  /** ArrayBuffer for binary bodies (STT upload), string for JSON. */
-  body?: ArrayBuffer | string;
-  contentType?: string;
-  /** When set, the body is sent as multipart/form-data (UploadFile). */
-  filename?: string;
-}
-
-export interface BridgeFetchResponse {
-  ok: boolean;
-  status: number;
-  contentType: string;
-  body: ArrayBuffer;
-}
+// Bridge surface types live in ./bridge-types.ts — the SINGLE declaration
+// site shared with the renderer contract (src/arsvox-bridge.d.ts imports
+// and re-exports them). They are imported here (not re-exported) so there
+// is exactly one exporter of each name in the repo.
+import type {
+  BridgeBrowserBounds,
+  BridgeBrowserState,
+  BridgeFetchRequest,
+  BridgeFetchResponse,
+} from "./bridge-types";
 
 function subscribe(
   channel: string,
@@ -73,4 +73,24 @@ contextBridge.exposeInMainWorld("arsvox", {
     subscribe("arsvox:ws-message", callback),
   onWsStatus: (callback: (connected: boolean) => void): (() => void) =>
     subscribe("arsvox:ws-status", callback as (payload: unknown) => void),
+  // ---- W2-VIEW (ADR 0007): integrated browser (main-owned) ----
+  browserNavigate: (url: string): Promise<{ ok: boolean; reason: string }> =>
+    ipcRenderer.invoke("arsvox:browser-navigate", { url }) as Promise<{
+      ok: boolean;
+      reason: string;
+    }>,
+  browserBack: (): void => {
+    ipcRenderer.send("arsvox:browser-back");
+  },
+  browserForward: (): void => {
+    ipcRenderer.send("arsvox:browser-forward");
+  },
+  browserRefresh: (): void => {
+    ipcRenderer.send("arsvox:browser-refresh");
+  },
+  browserSetBounds: (bounds: BridgeBrowserBounds): void => {
+    ipcRenderer.send("arsvox:browser-set-bounds", bounds);
+  },
+  onBrowserState: (callback: (state: BridgeBrowserState) => void): (() => void) =>
+    subscribe("arsvox:browser-state", callback as (payload: unknown) => void),
 });

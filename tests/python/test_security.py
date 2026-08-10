@@ -78,6 +78,7 @@ def full_config(client) -> dict:
         ("post", "/api/stt", {"files": {"file": ("a.wav", b"x", "audio/wav")}}),
         ("post", "/tts", {"json": {"text": "hola"}}),
         ("patch", "/config", {"json": {}}),
+        ("put", "/api/browser-state", {"json": {"url": "https://example.com/"}}),
     ],
 )
 def test_protected_endpoints_reject_missing_token(auth_client, method, path, kwargs):

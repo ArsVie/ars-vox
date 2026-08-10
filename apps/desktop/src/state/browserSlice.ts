@@ -83,3 +83,26 @@ export const browserSlice: SurfaceSlice<BrowserContent> = {
     }
   },
 };
+
+/**
+ * W2-VIEW (ADR 0007) — the VIEW is the navigation authority: main
+ * publishes the real WebContentsView state (url/title/can_go_back/
+ * can_go_forward/loading) over arsvox:browser-state, and the store
+ * reduces it onto the same bag the browser.navigate events feed. Both
+ * pipes carry the same frozen field set, so they converge instead of
+ * fighting; the IPC push is simply the freshest truth (in-view link
+ * clicks and title updates never round-trip through the service).
+ */
+export function applyBrowserViewState(
+  bag: BrowserContent | undefined,
+  view: { url: string; title: string; canGoBack: boolean; canGoForward: boolean; loading: boolean },
+): BrowserContent {
+  return {
+    url: view.url,
+    title: view.title,
+    canGoBack: view.canGoBack,
+    canGoForward: view.canGoForward,
+    loading: view.loading,
+    ...(bag?.lastDomAction ? { lastDomAction: bag.lastDomAction } : {}),
+  };
+}

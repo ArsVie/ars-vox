@@ -219,6 +219,18 @@ export interface AppState {
    *  the same choke as applyAdaptiveSpec (registry + inertia guard).
    *  Returns the rejection reason when the intent was rejected, else null. */
   applyLayoutIntent: (intent: PlannerInput) => PlannerRejection | null;
+  /** W2-VIEW (ADR 0007): the main process publishes the WebContentsView's
+   *  REAL navigation state (url/title/can_go_back/can_go_forward/loading)
+   *  over arsvox:browser-state; reduced onto the same content.browser bag
+   *  the browser.navigate events feed (frozen field set). The view is the
+   *  navigation authority. */
+  browserViewState: (view: {
+    url: string;
+    title: string;
+    canGoBack: boolean;
+    canGoForward: boolean;
+    loading: boolean;
+  }) => void;
   /** R21 (GATE-3.5): the spoken-override route. Deterministic phrase
    *  matching on an STT transcript BEFORE any user_text reaches the model:
    *  a matched layout phrase becomes an OverrideIntent through the ONE

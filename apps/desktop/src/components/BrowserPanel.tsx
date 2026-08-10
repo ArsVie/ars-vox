@@ -1,56 +1,88 @@
 import { useStore } from "zustand";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useSurfaceRole } from "../roles/context";
 import { appStore } from "../store";
 import { PanelHeader } from "./PanelHeader";
-import { GlobeIcon, SearchIcon } from "./icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  GlobeIcon,
+  ReloadIcon,
+  SearchIcon,
+} from "./icons";
 
 const START_URL = "about:blank";
 
 /**
- * Integrated browser panel — the agent drives it (browser.navigate events
- * and DOM snapshot through the backend bridge) and the user drives it
- * directly (address bar). News and anything else on the web live here.
- * The panel renders a sandboxed iframe to the current URL — the Electron
- * build keeps the same iframe (W1-ELECTRON: no WebContentsView engine;
- * hardened-view deleted).
+ * Integrated browser panel — W2-VIEW (GATE-5, ADR 0007).
  *
- * UI-201: renders adaptively per its semantic role. primary = the full
- * browsing experience (Ars Vox IS the browser); companion = reduced
- * chrome for side-by-side workflows (subdued, smaller controls);
- * support = compact contextual representation (viewport only — no
- * address entry). The .browser-viewport DOM contract is preserved in
- * every variant. State lives in store.content.browser and local
- * component state (address draft) — the role host keys surfaces by
- * surfaceId, so role/template changes never remount this component.
+ * The browser surface is a WebContentsView OWNED BY THE ELECTRON MAIN
+ * PROCESS (isolated partition, allowlist, CSP, no privileged preload).
+ * This panel is its chrome + placeholder:
+ *  - the .browser-viewport div is a transparent placeholder — the native
+ *    view is layered over it, sized to the bounds THIS component measures
+ *    and reports over arsvox:browser-set-bounds (ResizeObserver + window
+ *    resize; zeroed on unmount so the view never floats over other UI);
+ *  - navigation is MAIN-owned: the address bar and the back/forward/
+ *    refresh controls ask main via arsvox:browser-* IPC (and the same
+ *    commands still flow to the agent service for the wire protocol);
+ *  - REAL nav capability comes back: can_go_back/can_go_forward are the
+ *    view's actual navigationHistory values (published over
+ *    arsvox:browser-state), so the buttons are live, not dead.
  *
- * GATE-3.5 (W3-BROWSER): the back/forward/refresh toolbar buttons were
- * DEAD and are removed. The service hardcodes can_go_back=false
- * (actions.py:254) and there is no browser engine to report history
- * state, so the buttons were permanently disabled; driving the iframe's
- * history from the parent is also impossible under the cross-origin
- * sandbox (history.back/forward throw SecurityError; reload is not
- * exposed cross-origin). Navigation happens through the address bar
- * (browser.navigate), which the backend honors. The browser.back /
- * browser.forward / browser.refresh client actions stay in the wire
- * contract (R39 drift guard pins them against the Python ClientAction
- * union) — the UI just no longer ships dead buttons for them.
+ * The renderer IFRAME PATH IS REMOVED — there is exactly one browser
+ * story. The agent DOM bridge (browser.dom_action) stays W2-DRIVE's
+ * lane; the event is already on the wire and routed.
+ *
+ * UI-201: renders adaptively per its semantic role (primary = full
+ * browsing; companion = subdued chrome; support = viewport only). The
+ * .browser-viewport DOM contract is preserved in every variant.
  */
 export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
   const browser = useStore(appStore, (s) => s.content.browser);
   const dispatchCommand = useStore(appStore, (s) => s.dispatchCommand);
   const [draft, setDraft] = useState("");
+  const viewportRef = useRef<HTMLDivElement | null>(null);
 
   const role = useSurfaceRole().role;
 
   const url = browser?.url ?? "";
   const loading = browser?.loading ?? false;
+  const canGoBack = browser?.canGoBack ?? false;
+  const canGoForward = browser?.canGoForward ?? false;
   const hasPage = url !== "" && url !== START_URL;
   // The header label is the PAGE title (functional), never a surface name.
   const title = browser?.title || meta?.title;
   // Support = compact contextual representation: viewport only, no toolbar.
   const showAddress = role !== "support";
+
+  // The WebContentsView is layered over .browser-viewport: keep main's
+  // view bounds in lockstep with the measured panel area. Zero on unmount
+  // so a closed/replaced panel never leaves the native view floating over
+  // other UI.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return undefined;
+    const report = (): void => {
+      const rect = el.getBoundingClientRect();
+      window.arsvox?.browserSetBounds({
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
+    };
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    window.addEventListener("resize", report);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", report);
+      window.arsvox?.browserSetBounds({ x: 0, y: 0, width: 0, height: 0 });
+    };
+  }, []);
 
   const go = (raw: string): void => {
     const text = raw.trim();
@@ -58,6 +90,14 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
     const target = /^https?:\/\//i.test(text) ? text : `https://${text}`;
     setDraft("");
     dispatchCommand({ action: "browser.navigate", url: target });
+    window.arsvox?.browserNavigate(target);
+  };
+
+  const nav = (action: "browser.back" | "browser.forward" | "browser.refresh"): void => {
+    dispatchCommand({ action });
+    if (action === "browser.back") window.arsvox?.browserBack();
+    else if (action === "browser.forward") window.arsvox?.browserForward();
+    else window.arsvox?.browserRefresh();
   };
 
   return (
@@ -70,6 +110,35 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
       </PanelHeader>
       {showAddress ? (
         <div className="browser-toolbar">
+          <button
+            type="button"
+            className="browser-nav-btn"
+            aria-label="Atrás"
+            title="Atrás"
+            disabled={!canGoBack}
+            onClick={() => nav("browser.back")}
+          >
+            <ChevronLeftIcon size={14} />
+          </button>
+          <button
+            type="button"
+            className="browser-nav-btn"
+            aria-label="Adelante"
+            title="Adelante"
+            disabled={!canGoForward}
+            onClick={() => nav("browser.forward")}
+          >
+            <ChevronRightIcon size={14} />
+          </button>
+          <button
+            type="button"
+            className="browser-nav-btn"
+            aria-label="Recargar"
+            title="Recargar"
+            onClick={() => nav("browser.refresh")}
+          >
+            <ReloadIcon size={13} />
+          </button>
           <form
             className="browser-address"
             onSubmit={(e) => {
@@ -90,16 +159,8 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
           </form>
         </div>
       ) : null}
-      <div className="browser-viewport">
-        {hasPage ? (
-          <iframe
-            key={url}
-            src={url}
-            title="Página web"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
+      <div className="browser-viewport" ref={viewportRef}>
+        {hasPage ? null : (
           <div className="content-panel-empty">
             <span className="content-panel-empty-icon">
               <GlobeIcon size={30} />

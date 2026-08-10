@@ -61,6 +61,7 @@ import {
   type PlannerRejectionCode,
 } from "./adaptive/planner";
 import { contentRegistry } from "./state";
+import { applyBrowserViewState } from "./state/browserSlice";
 import { EMPTY_ADAPTIVE } from "./state/adaptiveTypes";
 import type {
   AdaptiveState,
@@ -936,6 +937,25 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
       },
       applyAdaptiveSpec,
       applyLayoutIntent,
+      /**
+       * W2-VIEW (ADR 0007): the main process owns the WebContentsView and
+       * publishes its REAL navigation state over arsvox:browser-state.
+       * Reduced onto the SAME content.browser bag the browser.navigate
+       * events feed (frozen field set) — the view is the authority.
+       */
+      browserViewState: (view: {
+        url: string;
+        title: string;
+        canGoBack: boolean;
+        canGoForward: boolean;
+        loading: boolean;
+      }) => {
+        const state = get();
+        const next = applyBrowserViewState(state.content.browser, view);
+        if (next !== state.content.browser) {
+          set({ content: { ...state.content, browser: next } });
+        }
+      },
       handleSpokenText: (text) => {
         const state = get();
         // R21: deterministic spoken-override route. Whole-utterance phrase

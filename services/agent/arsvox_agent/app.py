@@ -35,6 +35,7 @@ from arsvox_memory import (
     ToolCallStore,
 )
 
+from arsvox_agent.browser_state import BrowserStatePayload, BrowserStateStore
 from arsvox_agent.config_loader import load_config, save_config
 from arsvox_agent.confirmations import ConfirmationCoordinator
 from arsvox_agent.deps import Deps
@@ -136,6 +137,9 @@ class AppServices:
         self.documents = DocumentStore(self.db)
         self.audit = AuditStore(self.db)
         self.tool_calls = ToolCallStore(self.db)
+        # W2-VIEW (ADR 0007): in-process mirror of the desktop
+        # WebContentsView's real navigation state (PUT /api/browser-state).
+        self.browser_state = BrowserStateStore()
         self.bus = EventBus()
         # H5: reconnect snapshots need the latest media/voice state; the
         # tracker records it from the bus without a background task.
@@ -172,6 +176,8 @@ class AppServices:
             bus=self.bus,
             policy=self.policy,
             confirmations=self.confirmations,
+            # W2-VIEW (ADR 0007): real view navigation state for emitters.
+            browser_state=self.browser_state,
             tts=self.tts,
             telegram=self.telegram,
         )
@@ -324,6 +330,17 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
     @app.put("/api/progress/{kind}/{ref}")
     async def api_progress(kind: str, ref: str, payload: ProgressPayload):
         services.progress.set(kind, ref, payload.position)
+        return {"ok": True}
+
+    # W2-VIEW (ADR 0007): the Electron main process publishes the
+    # WebContentsView's REAL navigation state here (frozen snake_case
+    # wire shape — BrowserNavigateEvent field set) so actions.py and
+    # demo_tools.py emit real can_go_back/can_go_forward/url/title
+    # instead of hardcoded False. Bearer-authenticated like every other
+    # non-/health route.
+    @app.put("/api/browser-state")
+    async def api_browser_state(payload: BrowserStatePayload):
+        services.browser_state.update(payload)
         return {"ok": True}
 
     @app.get("/api/notes")

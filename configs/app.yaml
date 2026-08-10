@@ -80,7 +80,7 @@ reminders:
   confirmation_timeout_s: 120
 
 browser:
-  allowlist: ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org"]
+  allowlist: ["youtube.com", "*.youtube.com", "youtube-nocookie.com", "*.youtube-nocookie.com", "wikipedia.org", "openstreetmap.org"]
   home_url: https://www.youtube.com
 
 media:
