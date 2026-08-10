@@ -121,4 +121,30 @@ describe("DocumentPanel adaptive contract (UI-203)", () => {
     // The preserved kind keeps the editor affordance available.
     expect(html).toContain("document-mode-btn");
   });
+
+  // GATE-5 (W1-DOC-SHARED): document.load FORMS the bag — the panel
+  // renders the loaded document instead of the empty state. create/open
+  // now emit it, so the empty-state renderer bug (bag never formed,
+  // document.changed dropped) is closed end to end.
+  it("renders the loaded document when a document.load event lands (bag forms from empty)", () => {
+    // No bag yet: the panel shows the empty state.
+    const emptyHtml = renderWithRole("primary");
+    expect(emptyHtml).toContain("No hay documento abierto.");
+
+    appStore.getState().applyEvent({
+      type: "document.load",
+      title: "Notas de viaje",
+      kind: "md",
+      path: "/docs/notas-de-viaje.md",
+      content: "lista de compras para el viaje",
+      chapters: [],
+      created_at: ts(),
+    });
+
+    const html = renderWithRole("primary");
+    expect(html).toContain("Notas de viaje");
+    expect(html).toContain("lista de compras para el viaje");
+    expect(html).toContain("document-mode-btn");
+    expect(html).not.toContain("No hay documento abierto.");
+  });
 });

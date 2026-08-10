@@ -1,21 +1,26 @@
 """Document tools — list/search (progressive disclosure: on-command,
 never ingested) plus the W1-DOC-SHARED bus-spy contract: every agent
 edit path (document_save, document_insert_text) publishes
-document.changed so an open editor reconciles live."""
+document.changed so an open editor reconciles live, and create/open
+publish document.load so the renderer bag forms in the first place."""
 
 import asyncio
 import tempfile
 from pathlib import Path
 
+from arsvox_contracts import PanelType
+from arsvox_contracts.commands import PanelOpen
 from arsvox_contracts.config import AppConfig
-from arsvox_contracts.events import DocumentChangedEvent
+from arsvox_contracts.events import DocumentChangedEvent, DocumentLoadEvent, UiCommandEvent
 
 from arsvox_agent.deps import Deps
 from arsvox_agent.tools import ToolRegistry
 from arsvox_agent.tools.context import ToolContext
 from arsvox_agent.tools.document_tools import (
+    document_create,
     document_insert_text,
     document_list,
+    document_open,
     document_save,
     document_search,
 )
@@ -172,3 +177,166 @@ def test_document_save_emits_document_changed():
         assert changed[0].content == "contenido nuevo"
         assert path.read_text(encoding="utf-8") == "contenido nuevo"
         assert "guardado" in out
+
+
+class _FakePanels:
+    def __init__(self) -> None:
+        self.upserts: list[tuple] = []
+
+    def upsert(self, panel_type: str, title: str, content_reference: str) -> None:
+        self.upserts.append((panel_type, title, content_reference))
+
+
+class _FakeDocsStore:
+    """Minimal in-memory DocumentStore: create/get/find_by_title rows."""
+
+    def __init__(self) -> None:
+        self.rows: dict[int, dict] = {}
+        self.next_id = 1
+
+    def find_by_title(self, title: str) -> dict | None:
+        for row in self.rows.values():
+            if row["title"] == title:
+                return row
+        return None
+
+    def create(self, title: str, path: str) -> int:
+        doc_id = self.next_id
+        self.next_id += 1
+        self.rows[doc_id] = {"id": doc_id, "title": title, "path": path}
+        return doc_id
+
+    def get(self, doc_id: int) -> dict | None:
+        return self.rows.get(doc_id)
+
+
+def _make_editor_context(
+    config: AppConfig, docs: _FakeDocsStore, panels: _FakePanels
+) -> tuple[ToolContext, _CaptureBus]:
+    bus = _CaptureBus()
+    deps = Deps(
+        config=config,
+        db=None,
+        sessions=None,
+        notes=None,
+        tasks=None,
+        reminders=None,
+        notifications=None,
+        panels=panels,  # type: ignore[arg-type]
+        preferences=None,
+        progress=None,
+        pending=None,
+        documents=docs,  # type: ignore[arg-type]
+        audit=_FakeAudit(),
+        bus=bus,  # type: ignore[arg-type]
+        policy=None,
+        confirmations=None,
+        tts=None,
+        telegram=None,
+        run_id="test-run",
+        session_id="test-session",
+    )
+    tctx = ToolContext(deps=deps, run_id="test-run", session_id="test-session", bus=bus)
+    return tctx, bus
+
+
+def _load_events(bus) -> list[DocumentLoadEvent]:
+    return [e for e in bus.events if isinstance(e, DocumentLoadEvent)]
+
+
+def _open_commands(bus) -> list[PanelOpen]:
+    return [
+        e.command
+        for e in bus.events
+        if isinstance(e, UiCommandEvent) and isinstance(e.command, PanelOpen)
+    ]
+
+
+def test_document_create_emits_document_load_and_panel_open():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        config = AppConfig().anchor(root)
+        docs = _FakeDocsStore()
+        panels = _FakePanels()
+        tctx, bus = _make_editor_context(config, docs, panels)
+
+        out = asyncio.run(document_create(tctx, "Notas de viaje"))
+
+        loads = _load_events(bus)
+        opens = _open_commands(bus)
+        assert len(loads) == 1
+        assert len(opens) == 1
+        assert opens[0].panel_type == PanelType.DOCUMENT_EDITOR
+        assert opens[0].content_reference == "1"  # the new doc row id
+        assert panels.upserts == [
+            (PanelType.DOCUMENT_EDITOR.value, "Notas de viaje", "1")
+        ]
+        load = loads[0]
+        assert load.title == "Notas de viaje"
+        assert load.kind == "md"  # kind from the .md path suffix
+        assert load.path.endswith("Notas de viaje.md")
+        assert load.content == ""  # empty new doc — later changed fills it live
+        # The file is the authority; the event mirrors what landed.
+        assert Path(load.path).read_text(encoding="utf-8") == ""
+        assert "creado" in out
+
+
+def test_document_open_emits_document_load():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        docdir = root / "data" / "documents"
+        docdir.mkdir(parents=True)
+        path = docdir / "notas.md"
+        path.write_text("lista de compras para el viaje", encoding="utf-8")
+        config = AppConfig().anchor(root)
+        docs = _FakeDocsStore()
+        docs.create("Notas", str(path))
+        panels = _FakePanels()
+        tctx, bus = _make_editor_context(config, docs, panels)
+
+        out = asyncio.run(document_open(tctx, "Notas"))
+
+        loads = _load_events(bus)
+        assert len(loads) == 1
+        assert loads[0].title == "Notas"
+        assert loads[0].kind == "md"
+        assert loads[0].path == str(path)
+        assert loads[0].content == "lista de compras para el viaje"
+        # Open also opens the editor surface (panel.open precedes the load).
+        opens = _open_commands(bus)
+        assert len(opens) == 1
+        assert opens[0].content_reference == "1"
+        assert "abierto" in out
+
+
+def test_document_open_txt_kind_from_suffix():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        docdir = root / "data" / "documents"
+        docdir.mkdir(parents=True)
+        path = docdir / "apuntes.txt"
+        path.write_text("texto plano", encoding="utf-8")
+        config = AppConfig().anchor(root)
+        docs = _FakeDocsStore()
+        docs.create("Apuntes", str(path))
+        tctx, bus = _make_editor_context(config, docs, _FakePanels())
+
+        asyncio.run(document_open(tctx, "Apuntes"))
+
+        loads = _load_events(bus)
+        assert len(loads) == 1
+        assert loads[0].kind == "txt"
+        assert loads[0].content == "texto plano"
+
+
+def test_document_open_missing_emits_no_load():
+    with tempfile.TemporaryDirectory() as td:
+        config = AppConfig().anchor(Path(td))
+        docs = _FakeDocsStore()
+        tctx, bus = _make_editor_context(config, docs, _FakePanels())
+
+        out = asyncio.run(document_open(tctx, "Inexistente"))
+
+        assert _load_events(bus) == []
+        assert _open_commands(bus) == []
+        assert "No encontré" in out
