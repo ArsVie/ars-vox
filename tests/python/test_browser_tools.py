@@ -20,17 +20,27 @@ import asyncio
 from datetime import datetime, timezone
 
 from arsvox_contracts import AppConfig, PolicyKind
-from arsvox_contracts.events import BrowserDomActionEvent
+from arsvox_contracts.events import BrowserDomActionEvent, BrowserNavigateEvent
 
-from arsvox_agent.browser_state import DomActionResultStore
+from arsvox_agent.browser_state import BrowserStatePayload, BrowserStateStore, DomActionResultStore
 from arsvox_agent.deps import Deps
 from arsvox_agent.tools import ToolRegistry
 from arsvox_agent.tools import browser_tools
 from arsvox_agent.tools.context import ToolContext
 
 NO_RESPONSE = browser_tools._NO_RESPONSE
+NAV_NO_RESPONSE = browser_tools._NAV_NO_RESPONSE
 
 FROZEN_FIELDS = {"type", "operation", "target", "value", "result", "created_at"}
+NAV_FROZEN_FIELDS = {
+    "type",
+    "url",
+    "title",
+    "can_go_back",
+    "can_go_forward",
+    "loading",
+    "created_at",
+}
 
 
 class _CaptureBus:
@@ -44,6 +54,7 @@ class _CaptureBus:
 def _make_context(
     mock: bool = False,
     browser_dom: DomActionResultStore | None = None,
+    browser_state: BrowserStateStore | None = None,
 ) -> tuple[ToolContext, _CaptureBus]:
     config = AppConfig()
     config.agent.mock = mock
@@ -68,6 +79,7 @@ def _make_context(
         tts=None,
         telegram=None,
         browser_dom=browser_dom,
+        browser_state=browser_state,
         run_id="test-run",
         session_id="test-session",
     )
@@ -80,6 +92,13 @@ def _assert_frozen_shape(ev: BrowserDomActionEvent) -> None:
     assert isinstance(ev, BrowserDomActionEvent)
     assert set(ev.model_dump().keys()) == FROZEN_FIELDS
     assert ev.type == "browser.dom_action"
+
+
+def _assert_frozen_navigate_shape(ev: BrowserNavigateEvent) -> None:
+    """Frozen wire field set — exactly these keys, nothing else."""
+    assert isinstance(ev, BrowserNavigateEvent)
+    assert set(ev.model_dump().keys()) == NAV_FROZEN_FIELDS
+    assert ev.type == "browser.navigate"
 
 
 # --------------------------------------------------------------------- #
@@ -252,4 +271,139 @@ def test_invalid_operation_refused_without_emitting():
     result = asyncio.run(browser_tools.browser_dom_action(tctx, "hover", target="a"))
 
     assert "Operación no válida" in result
+    assert bus.events == []
+
+
+# --------------------------------------------------------------------- #
+# browser.navigate (GATE-5 W2-NAVIGATE): the agent's navigation tool
+# --------------------------------------------------------------------- #
+
+
+def test_browser_navigate_registered_with_reversible_kind():
+    registry = ToolRegistry()
+    for spec in browser_tools.SPECS:
+        registry.register(spec)
+    spec = registry.get("browser.navigate")
+    assert spec is not None
+    assert spec.kind == PolicyKind.REVERSIBLE
+    assert spec.handler is browser_tools.browser_navigate
+
+
+def test_browser_navigate_emits_frozen_request_shape_and_awaits_real_state():
+    """Round-trip: the handler emits the frozen REQUEST (loading=True,
+    real baseline history flags) and AWAITS the post-navigation state
+    the desktop pushes into the browser-state store — the agent sees
+    the REAL url/title it landed on, not a canned "done"."""
+    store = BrowserStateStore()
+    store.update(
+        BrowserStatePayload(
+            url="https://old.example/",
+            title="Página anterior",
+            can_go_back=True,
+            can_go_forward=False,
+            loading=False,
+        )
+    )
+
+    async def scenario() -> str:
+        tctx, bus = _make_context(browser_state=store)
+        task = asyncio.create_task(
+            browser_tools.browser_navigate(tctx, "https://example.com/docs")
+        )
+        await asyncio.sleep(0)  # let the tool emit the request
+        ev = bus.events[-1]
+        _assert_frozen_navigate_shape(ev)
+        assert ev.url == "https://example.com/docs"
+        # The REQUEST carries the baseline history flags and loading=True;
+        # the post-navigation title is unknown until the view loads.
+        assert ev.title == ""
+        assert ev.can_go_back is True
+        assert ev.can_go_forward is False
+        assert ev.loading is True
+        assert isinstance(ev.created_at, datetime)
+        # Electron main pushes the view's REAL post-navigation state.
+        store.update(
+            BrowserStatePayload(
+                url="https://example.com/docs",
+                title="Documentación",
+                can_go_back=True,
+                can_go_forward=True,
+                loading=False,
+            )
+        )
+        return await task
+
+    result = asyncio.run(scenario())
+    assert result == "Navegación completada: https://example.com/docs — Documentación"
+
+
+def test_browser_navigate_redirect_reports_real_landing():
+    """The view lands elsewhere (redirect / blocked target): the handler
+    reports the REAL url — never a fake success on the requested one."""
+    store = BrowserStateStore()
+
+    async def scenario() -> str:
+        tctx, bus = _make_context(browser_state=store)
+        task = asyncio.create_task(browser_tools.browser_navigate(tctx, "https://a.example"))
+        await asyncio.sleep(0)
+        ev = bus.events[-1]
+        _assert_frozen_navigate_shape(ev)
+        store.update(
+            BrowserStatePayload(
+                url="https://b.example/landing",
+                title="Aterrizó aquí",
+                loading=False,
+            )
+        )
+        return await task
+
+    result = asyncio.run(scenario())
+    assert "https://b.example/landing" in result
+    assert "Aterrizó aquí" in result
+    assert "https://a.example" in result  # the requested url is named, not hidden
+
+
+def test_browser_navigate_timeout_returns_honest_no_response(monkeypatch):
+    store = BrowserStateStore()
+    monkeypatch.setattr(browser_tools, "NAVIGATE_TIMEOUT_S", 0.05)
+
+    async def scenario() -> str:
+        tctx, _ = _make_context(browser_state=store)
+        return await browser_tools.browser_navigate(tctx, "https://example.com")
+
+    assert asyncio.run(scenario()) == NAV_NO_RESPONSE
+
+
+def test_browser_navigate_missing_store_returns_honest_no_response():
+    tctx, bus = _make_context(browser_state=None)
+
+    result = asyncio.run(browser_tools.browser_navigate(tctx, "https://example.com"))
+
+    assert result == NAV_NO_RESPONSE
+    # The request still went on the wire (the renderer may be alive).
+    assert len(bus.events) == 1
+    _assert_frozen_navigate_shape(bus.events[-1])
+
+
+def test_browser_navigate_mock_mode_emits_same_shape_with_canned_mock_marked_result():
+    tctx, bus = _make_context(mock=True, browser_state=None)  # no store needed
+
+    result = asyncio.run(browser_tools.browser_navigate(tctx, "https://example.com"))
+
+    assert result.startswith("[mock]")
+    assert "https://example.com" in result
+    ev = bus.events[-1]
+    _assert_frozen_navigate_shape(ev)
+    assert ev.url == "https://example.com"
+    # The canned title rides the SAME title field, marked as mock.
+    assert ev.title.startswith("[mock]")
+    assert ev.loading is False
+
+
+def test_browser_navigate_empty_url_refused_without_emitting():
+    tctx, bus = _make_context()
+
+    result = asyncio.run(browser_tools.browser_navigate(tctx, "   "))
+
+    assert "URL no válida" in result
     assert bus.events == []

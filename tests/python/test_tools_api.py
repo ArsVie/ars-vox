@@ -9,7 +9,8 @@ from arsvox_agent.tools.register import register_all
 def test_registry_registers_all_tools():
     registry = ToolRegistry()
     n = register_all(registry)
-    assert n == 47
+    # 48: browser.navigate (W2-NAVIGATE) added next to browser.dom_action.
+    assert n == 48
     assert registry.get("layout.compose") is not None
     assert registry.get("shell.exec") is None
 
