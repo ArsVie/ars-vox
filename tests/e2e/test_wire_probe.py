@@ -8,6 +8,7 @@ mock/offline proof that the probes are sound.
 Rows covered (checklist ids in parentheses):
 - L1 conversation-time ............ test_context_first_line_is_time
 - L2 tasks cadence ................ test_reminder_fire_publishes_once,
+                                   test_reminder_fire_starts_fresh_turn,
                                    test_context_carries_active_reminders,
                                    test_tasks_update_frame_shape
 - L3 document reader wire ......... test_document_kind_wire
@@ -137,6 +138,95 @@ def test_reminder_fire_publishes_once(client):
         # fire — one notification event == exactly one chat line (renderer).
         agent_lines = [e for e in events if e["type"] == "agent_message"]
         assert not any("Alarma de prueba W1" in e.get("text", "") for e in agent_lines)
+
+
+def test_reminder_fire_starts_fresh_turn(client, monkeypatch):
+    """W1-TASKS (GATE-5): a fired reminder starts EXACTLY ONE fresh agent
+    turn with the reminder in context — the cronjob-style cadence
+    injection half of the vision line.
+
+    Bus-spy pins over the real app (scripted model, no network): after
+    the fire's notification frame the bus MUST carry a fresh turn
+    (state_update thinking + user_message with the reminder text + the
+    model's reply), the model's actual prompt must contain the reminder
+    text, and there must be EXACTLY ONE such user_message per fire
+    (double-trigger pin). TTS consistency: the notification path never
+    speaks on its own, and with auto_speak off (test default) the fired
+    turn must not push any tts.speak command either.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    import arsvox_agent.runtime as runtime_mod
+
+    from pydantic_ai.messages import ModelResponse, TextPart
+    from pydantic_ai.models.function import FunctionModel
+
+    captured: dict[str, str] = {}
+
+    def _handler(messages, info):
+        parts = []
+        for m in messages:
+            for p in getattr(m, "parts", []):
+                c = getattr(p, "content", None)
+                if isinstance(c, str):
+                    parts.append(c)
+        captured["prompt"] = "\n".join(parts)
+        return ModelResponse(parts=[TextPart(content="Entendido.")])
+
+    monkeypatch.setattr(runtime_mod, "build_model", lambda cfg: FunctionModel(_handler))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()  # state_update
+        ws.receive_json()  # config_update
+        services = client.app.state.services
+        now = datetime.now(timezone.utc)
+        services.reminders.create(
+            "Alarma cadencia W1",
+            (now - timedelta(seconds=1)).isoformat(timespec="seconds"),
+            "none",
+        )
+        events: list[dict] = []
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline and not frames_of(events, "notification"):
+            events.extend(collect_for(ws, 1.0))
+        assert frames_of(events, "notification"), "expected the reminder to fire"
+        # drain the injected turn (scripted model = instant) + a periodic tick
+        events.extend(collect_for(ws, 4.0))
+        notif_idx = next(i for i, e in enumerate(events) if e["type"] == "notification")
+        after = events[notif_idx + 1 :]
+
+        # the fire started a fresh turn: THINKING state after the fire
+        thinking = [
+            e for e in after
+            if e["type"] == "state_update" and e["voice_state"] == "thinking"
+        ]
+        assert thinking, "no state_update(thinking) after the fire — fresh turn did not start"
+        # ...whose user_message carries the fired reminder verbatim
+        turn_msgs = [e for e in after if e["type"] == "user_message"]
+        assert turn_msgs, "no user_message after the fire — reminder not injected into a turn"
+        assert any(
+            "Recordatorio activado" in e["text"] and "Alarma cadencia W1" in e["text"]
+            for e in turn_msgs
+        ), turn_msgs
+        # EXACTLY ONE turn per fire (no double-trigger)
+        assert len(turn_msgs) == 1, (
+            f"double-trigger: {len(turn_msgs)} turns for one fired reminder"
+        )
+        # the model literally received the reminder in its prompt
+        assert captured.get("prompt"), "model never ran for the fired reminder"
+        assert "Recordatorio activado" in captured["prompt"], captured["prompt"][:400]
+        assert "Alarma cadencia W1" in captured["prompt"], captured["prompt"][:400]
+        # the turn answered (scripted reply)
+        replies = [e for e in after if e["type"] == "agent_message"]
+        assert replies and "Entendido." in replies[-1]["text"], replies
+        # TTS consistency: no speech on fire with auto_speak off (the
+        # notification path never speaks; the fired turn must not either)
+        speaks = [
+            e for e in after
+            if e["type"] == "ui_command"
+            and e.get("command", {}).get("action") == "tts.speak"
+        ]
+        assert not speaks, "fired turn spoke despite auto_speak off — TTS regression"
 
 
 def test_tasks_update_frame_shape():

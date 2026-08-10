@@ -221,6 +221,59 @@ def test_list_active_text(tmp_path):
     assert "medicina" in text
 
 
+def test_fire_invokes_on_fire_once_per_reminder(tmp_path):
+    """W1-TASKS (GATE-5): the cadence-injection hook (the app wires it to
+    runtime.handle_reminder_fire) is called EXACTLY once per fired
+    reminder, after the fire's own frames, and a second tick never
+    refires a one-shot."""
+    db, reminders, notifications, bus, scheduler = _setup(tmp_path)
+    calls: list[dict] = []
+
+    async def on_fire(reminder):
+        calls.append(reminder)
+
+    scheduler.on_fire = on_fire
+
+    async def run():
+        now = datetime.now(timezone.utc)
+        rid = reminders.create(
+            "Cadencia W1", (now - timedelta(seconds=1)).isoformat(timespec="seconds"), "none"
+        )
+        rid2 = reminders.create(
+            "Cadencia W2", (now - timedelta(seconds=2)).isoformat(timespec="seconds"), "none"
+        )
+        await scheduler.tick()
+        await scheduler.tick()  # one-shots fired -> nothing due -> no hook
+        return rid, rid2
+
+    rid, rid2 = asyncio_run(run())
+    # due() orders by due_at, so the hook fires in due order — once per
+    # fired reminder, never more
+    assert {c["id"] for c in calls} == {rid, rid2}, calls
+    assert {c["text"] for c in calls} == {"Cadencia W1", "Cadencia W2"}, calls
+    # one-shot fired: nothing is due on later ticks, so the hook can never
+    # be re-invoked for the same occurrence (single-fire guarantee)
+    assert len(calls) == 2
+
+
+def test_on_fire_without_hook_is_inert(tmp_path):
+    """The hook is optional: a scheduler without on_fire (unit tests,
+    LLM-free deployments) ticks exactly as before — no turn, no error."""
+    db, reminders, notifications, bus, scheduler = _setup(tmp_path)
+
+    async def run():
+        now = datetime.now(timezone.utc)
+        reminders.create(
+            "x", (now - timedelta(seconds=1)).isoformat(timespec="seconds"), "none"
+        )
+        q = bus.subscribe()
+        await scheduler.tick()
+        return _drain(q)
+
+    events = asyncio_run(run())
+    assert len([e for e in events if e["type"] == "notification"]) == 1
+
+
 def asyncio_run(coro_or_fn):
     import asyncio
 
