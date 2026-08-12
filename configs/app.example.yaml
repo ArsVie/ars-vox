@@ -52,7 +52,7 @@ telegram:
   chat_id: ""
 
 memory:
-  db_path: data/arsvox.db
+  db_path: null   # null -> stable user-owned log store (ARSVOX_DATA_DIR / XDG_DATA_HOME / ~/.local/share)
   library_dir: data/library
   documents_dir: data/documents
 

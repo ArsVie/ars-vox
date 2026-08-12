@@ -25,15 +25,17 @@ def _prod_config() -> AppConfig:
     return cfg
 
 
-def test_production_paths_resolve_absolute_under_repo_root():
+def test_production_paths_resolve_absolute_under_repo_root(monkeypatch, tmp_path):
+    # db_path is null in the production config -> stable user-owned default
+    monkeypatch.setenv("ARSVOX_DATA_DIR", str(tmp_path))
     cfg = _prod_config()
     paths = cfg.resolved_paths
-    assert paths.db_path == REPO_ROOT / "data" / "arsvox.db"
+    assert paths.db_path == tmp_path / "arsvox" / "arsvox.db"
     assert paths.library_dir == REPO_ROOT / "data" / "library"
     assert paths.documents_dir == REPO_ROOT / "data" / "documents"
     for p in (paths.db_path, paths.library_dir, paths.documents_dir):
         assert p.is_absolute()
-        # repo/data/... — NEVER repo/configs/data/...
+        # never repo/configs/data/... and never the config's own dir
         assert REPO_ROOT / "configs" not in p.parents, p
     # system prompt is unset in the production config
     assert paths.system_prompt_file is None
@@ -41,8 +43,10 @@ def test_production_paths_resolve_absolute_under_repo_root():
 
 def test_raw_values_kept_for_display_and_persistence():
     cfg = _prod_config()
-    # the model keeps the raw relative values (GET /config, save_config)
-    assert cfg.memory.db_path == "data/arsvox.db"
+    # the model keeps the raw values (GET /config, save_config); db_path
+    # stays null so the stable default can never be written back as a
+    # config-relative path
+    assert cfg.memory.db_path is None
     assert cfg.memory.library_dir == "data/library"
     assert cfg.memory.documents_dir == "data/documents"
     assert cfg.agent.system_prompt_file is None
@@ -62,10 +66,39 @@ def test_absolute_config_values_pass_through(tmp_path):
 
 def test_resolved_paths_do_not_depend_on_cwd(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ARSVOX_DATA_DIR", str(tmp_path))
     cfg = _prod_config()
-    assert cfg.resolved_paths.db_path == REPO_ROOT / "data" / "arsvox.db"
+    assert cfg.resolved_paths.db_path == tmp_path / "arsvox" / "arsvox.db"
     assert cfg.resolved_paths.library_dir == REPO_ROOT / "data" / "library"
     assert cfg.resolved_paths.documents_dir == REPO_ROOT / "data" / "documents"
+
+
+def test_default_db_path_precedence(monkeypatch, tmp_path):
+    # ARSVOX_DATA_DIR wins over XDG_DATA_HOME
+    monkeypatch.setenv("ARSVOX_DATA_DIR", str(tmp_path / "override"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    cfg = AppConfig().anchor(tmp_path)
+    assert cfg.resolved_paths.db_path == tmp_path / "override" / "arsvox" / "arsvox.db"
+    # no ARSVOX_DATA_DIR -> XDG_DATA_HOME
+    monkeypatch.delenv("ARSVOX_DATA_DIR")
+    cfg = AppConfig().anchor(tmp_path)
+    assert cfg.resolved_paths.db_path == tmp_path / "xdg" / "arsvox" / "arsvox.db"
+    # neither -> ~/.local/share (user-owned, never the config's dir)
+    monkeypatch.delenv("XDG_DATA_HOME")
+    cfg = AppConfig().anchor(tmp_path)
+    assert cfg.resolved_paths.db_path == (
+        Path.home() / ".local" / "share" / "arsvox" / "arsvox.db"
+    )
+    assert tmp_path not in cfg.resolved_paths.db_path.parents
+
+
+def test_explicit_relative_db_path_still_anchored(tmp_path):
+    # An explicitly configured relative db_path keeps the old semantics:
+    # resolved against the config anchor, so power users can opt back in.
+    raw = yaml.safe_load(PROD_CONFIG.read_text(encoding="utf-8"))
+    raw["memory"]["db_path"] = "data/custom.db"
+    cfg = AppConfig.model_validate(raw).anchor(PROD_CONFIG.parent)
+    assert cfg.resolved_paths.db_path == REPO_ROOT / "data" / "custom.db"
 
 
 def test_unanchored_config_raises_instead_of_cwd_fallback():

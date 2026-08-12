@@ -6,6 +6,7 @@ silently ignored. The UI mirrors this through GET /config and persists
 changes through PATCH /config.
 """
 
+import os
 import re
 from pathlib import Path
 from typing import Literal
@@ -214,7 +215,10 @@ class TelegramSection(BaseModel):
 
 class MemorySection(BaseModel):
     model_config = _STRICT
-    db_path: str = "data/arsvox.db"
+    # None -> stable user-owned default (see _default_db_path); any
+    # explicit value keeps the old semantics (absolute as-is, relative
+    # resolved against the config anchor).
+    db_path: str | None = None
     library_dir: str = "data/library"
     documents_dir: str = "data/documents"
 
@@ -269,12 +273,36 @@ class ResolvedPaths:
     def __init__(
         self, anchor: Path, memory: MemorySection, agent: AgentSection, voice: VoiceSection
     ) -> None:
-        self.db_path = _canonical_path(anchor, memory.db_path)
+        # The log DB defaults to a STABLE, USER-OWNED location — never the
+        # config's directory (configs can live in /tmp, which gets wiped).
+        self.db_path = (
+            _default_db_path()
+            if memory.db_path is None
+            else _canonical_path(anchor, memory.db_path)
+        )
         self.library_dir = _canonical_path(anchor, memory.library_dir)
         self.documents_dir = _canonical_path(anchor, memory.documents_dir)
         self.system_prompt_file = _canonical_path(anchor, agent.system_prompt_file)
         self.wake_sound = _canonical_path(anchor, voice.wake_sound)
         self.sleep_sound = _canonical_path(anchor, voice.sleep_sound)
+
+
+def _default_db_path() -> Path:
+    """Stable user-owned SQLite path for the app's log store.
+
+    ``ARSVOX_DATA_DIR`` wins; otherwise XDG data home; otherwise
+    ``~/.local/share`` — the same XDG-aware pattern the voice package
+    uses for its cache dir. The file lives under ``arsvox/`` so the
+    directory is recognizable and survives /tmp cleanup, config moves,
+    and app reinstalls.
+    """
+    override = os.environ.get("ARSVOX_DATA_DIR")
+    if override:
+        base = Path(override).expanduser()
+    else:
+        xdg = os.environ.get("XDG_DATA_HOME")
+        base = Path(xdg).expanduser() if xdg else Path.home() / ".local" / "share"
+    return (base / "arsvox" / "arsvox.db").resolve()
 
 
 def _canonical_path(anchor: Path, value: str | None) -> Path | None:

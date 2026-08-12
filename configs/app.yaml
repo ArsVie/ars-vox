@@ -6,12 +6,17 @@
 # a copy through GET /config and can persist changes through PATCH
 # /config (Settings panel). Unknown keys are rejected.
 #
-# Relative paths (memory.db_path / library_dir / documents_dir,
-# agent.system_prompt_file, voice.wake_sound / sleep_sound) resolve
-# against the repo root — the parent of this configs/ directory (e.g.
-# data/arsvox.db -> <repo>/data/arsvox.db) — canonicalized to absolute
-# ONCE at load (config.resolved_paths). The process CWD is never used,
-# so the service behaves identically from any working directory.
+# Relative paths (library_dir / documents_dir, agent.system_prompt_file,
+# voice.wake_sound / sleep_sound) resolve against the repo root — the
+# parent of this configs/ directory — canonicalized to absolute ONCE at
+# load (config.resolved_paths). The process CWD is never used, so the
+# service behaves identically from any working directory.
+#
+# memory.db_path is the exception: null (the default) means the log
+# store lives in a STABLE USER-OWNED location (ARSVOX_DATA_DIR, else
+# XDG_DATA_HOME, else ~/.local/share — under arsvox/arsvox.db) so the
+# session log can never be wiped by /tmp cleanup or config moves.
+# Setting it explicitly restores anchor-relative resolution.
 
 app:
   name: Ars-Vox
@@ -71,7 +76,7 @@ telegram:
   chat_id: ""           # single approved recipient chat id (one recipient by design)
 
 memory:
-  db_path: data/arsvox.db
+  db_path: null   # null -> stable user-owned log store (see header comment)
   library_dir: data/library
   documents_dir: data/documents
 

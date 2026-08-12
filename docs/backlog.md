@@ -63,11 +63,11 @@ The backlog is always the present state; it is not tied to a date.
 
 - **Logs must never be lost.** Every session's record — turns, tool
   calls, audit events, reminders fired — must survive app restarts,
-  crashes, and cleanup. The log database is currently reachable through
-  config-relative paths: with the rig config in /tmp, history lives in
-  /tmp/data and is wiped when /tmp is cleaned. The log store must live
-  in a stable, user-owned location (not the config file's directory,
-  not /tmp).
+  crashes, and cleanup. The log store is a stable, user-owned location
+  (`ARSVOX_DATA_DIR`, else `XDG_DATA_HOME`, else `~/.local/share`,
+  under `arsvox/arsvox.db`) — never the config file's directory, never
+  /tmp. An explicit `memory.db_path` in the config overrides the
+  default.
 - **Session state may reset.** A reset that starts the app fresh (no
   restored conversation) is acceptable — the session itself does not
   need to persist. What must persist is the log of what happened, so

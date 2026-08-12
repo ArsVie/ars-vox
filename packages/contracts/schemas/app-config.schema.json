@@ -149,9 +149,16 @@
       "additionalProperties": false,
       "properties": {
         "db_path": {
-          "default": "data/arsvox.db",
-          "title": "Db Path",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Db Path"
         },
         "library_dir": {
           "default": "data/library",
@@ -398,7 +405,7 @@
       "additionalProperties": false,
       "properties": {
         "provider": {
-          "default": "silero",
+          "default": "mock",
           "title": "Provider",
           "type": "string"
         }
@@ -418,13 +425,14 @@
           "$ref": "#/$defs/WakeWordSection",
           "default": {
             "enabled": false,
+            "provider": "mock",
             "model": null
           }
         },
         "vad": {
           "$ref": "#/$defs/VadSection",
           "default": {
-            "provider": "silero"
+            "provider": "mock"
           }
         },
         "stt": {
@@ -476,6 +484,11 @@
           "default": false,
           "title": "Enabled",
           "type": "boolean"
+        },
+        "provider": {
+          "default": "mock",
+          "title": "Provider",
+          "type": "string"
         },
         "model": {
           "anyOf": [
@@ -544,10 +557,11 @@
         "enabled": false,
         "wake_word": {
           "enabled": false,
-          "model": null
+          "model": null,
+          "provider": "mock"
         },
         "vad": {
-          "provider": "silero"
+          "provider": "mock"
         },
         "stt": {
           "model": "tiny",
@@ -595,7 +609,7 @@
     "memory": {
       "$ref": "#/$defs/MemorySection",
       "default": {
-        "db_path": "data/arsvox.db",
+        "db_path": null,
         "library_dir": "data/library",
         "documents_dir": "data/documents"
       }
