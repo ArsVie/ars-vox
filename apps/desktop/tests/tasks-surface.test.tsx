@@ -62,11 +62,15 @@ describe("TasksPanel role variants (UI-204)", () => {
     const html = renderWithRole("primary");
     expect(html).toContain("panel-header");
     expect(html).toContain("Tareas");
-    expect(html).toContain("Pendientes · 1/3");
+    expect(html).toContain("filter-chips");
+    expect(html).toContain("Todas");
+    expect(html).toContain("Pendiente");
+    expect(html).toContain("Completadas");
     expect(html).toContain("Comprar leche");
     expect(html).toContain("Organizar notas");
     expect(html).toContain("Llamar a María"); // done items stay visible
-    expect(html).toContain("Hechas · 1");
+    expect(html).toContain("status-chip--done");
+    expect(html).toContain("Hecha");
     expect(html).toContain("Revisar correo");
     expect(html).toContain("Cada día 9:00 · próxima 2026-08-08 09:00");
   });
@@ -74,11 +78,12 @@ describe("TasksPanel role variants (UI-204)", () => {
   it("companion renders pending to-dos plus reminders, less chrome", () => {
     const html = renderWithRole("companion");
     expect(html).not.toContain("panel-header");
-    expect(html).toContain("Pendientes · 1/3");
+    expect(html).toContain("filter-chips");
+    expect(html).toContain("filter-chip--active");
     expect(html).toContain("Comprar leche");
     expect(html).toContain("Organizar notas");
     expect(html).not.toContain("Llamar a María"); // done items hidden
-    expect(html).not.toContain("Hechas ·");
+    expect(html).not.toContain("status-chip--done");
     expect(html).toContain("Revisar correo");
     expect(html).toContain("tasks-panel--companion");
   });
@@ -134,7 +139,7 @@ describe("TasksPanel role variants (UI-204)", () => {
     expect(html).toContain("tasks-panel--support");
     // Support chrome: urgent subset, no management header.
     expect(html).not.toContain("panel-header");
-    expect(html).not.toContain("Hechas ·");
+    expect(html).not.toContain("filter-chips");
     expect(html).toContain("Comprar leche");
   });
 
@@ -162,6 +167,6 @@ describe("TasksPanel role variants (UI-204)", () => {
     expect(supportAfter).toContain("Sin tareas urgentes");
     const primaryAfter = renderWithRole("primary", null);
     expect(primaryAfter).toContain("task-check checked");
-    expect(primaryAfter).toContain("Hechas · 2");
+    expect((primaryAfter.match(/status-chip--done/g) ?? []).length).toBe(2);
   });
 });

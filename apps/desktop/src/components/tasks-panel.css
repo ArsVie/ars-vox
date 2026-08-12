@@ -1,0 +1,294 @@
+/* ------------------------------------------------------------------
+ * TasksPanel — redesigned task surface (card rows + filter chips).
+ * UI wave leaf F. Dark premium, Spanish-first, elderly-user targets.
+ *
+ * Every rule is scoped under .tasks-panel so this file never leaks
+ * into shared content.css / styles.css. All color/radius tokens carry
+ * fallbacks, so the panel renders correctly even before the global
+ * theme variables land.
+ * ------------------------------------------------------------------ */
+
+/* --- Filter chips row ------------------------------------------- */
+
+.tasks-panel .filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.tasks-panel .filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px; /* elderly-user touch target floor */
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--av-ink, #e8ecf4);
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-chip, 6px);
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease;
+}
+
+.tasks-panel .filter-chip:hover {
+  border-color: var(--av-accent, #3d9aff);
+}
+
+.tasks-panel .filter-chip:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}
+
+.tasks-panel .filter-chip--active {
+  color: #0b1220;
+  background: var(--av-accent, #3d9aff);
+  border-color: var(--av-accent, #3d9aff);
+}
+
+.tasks-panel .filter-chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 999px;
+  color: var(--av-ink-dim, #9aa7bd);
+  background: rgba(154, 167, 189, 0.16);
+}
+
+.tasks-panel .filter-chip--active .filter-chip-count {
+  color: #0b1220;
+  background: rgba(11, 18, 32, 0.32);
+}
+
+/* --- Task cards -------------------------------------------------- */
+
+.tasks-panel .task-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.tasks-panel .task-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px;
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-card, 10px);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.tasks-panel .task-card:hover {
+  border-color: var(--av-ink-dim, #9aa7bd);
+}
+
+.tasks-panel .task-card:focus-within {
+  border-color: var(--av-accent, #3d9aff);
+}
+
+/* Completed cards recede slightly; status chip still carries the state. */
+.tasks-panel .task-card--done {
+  opacity: 0.85;
+}
+
+.tasks-panel .task-check {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px; /* elderly-user touch target floor */
+  height: 44px;
+  padding: 0;
+  color: var(--av-ink-dim, #9aa7bd);
+  background: transparent;
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-chip, 6px);
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease;
+}
+
+.tasks-panel .task-check:hover {
+  border-color: var(--av-accent, #3d9aff);
+  color: var(--av-ink, #e8ecf4);
+}
+
+.tasks-panel .task-check:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}
+
+.tasks-panel .task-check.checked {
+  color: #0b1220;
+  background: var(--av-ok, #25a878);
+  border-color: var(--av-ok, #25a878);
+}
+
+.tasks-panel .task-card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tasks-panel .task-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tasks-panel .task-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--av-ink, #e8ecf4);
+  overflow-wrap: anywhere;
+}
+
+/* --- Status chip (colored by state) ------------------------------ */
+
+.tasks-panel .status-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--av-r-chip, 6px);
+  border: 1px solid transparent;
+}
+
+/* pending — dim */
+.tasks-panel .status-chip--pending {
+  color: var(--av-ink-dim, #9aa7bd);
+  background: rgba(154, 167, 189, 0.12);
+  border-color: rgba(154, 167, 189, 0.35);
+}
+
+/* in-progress — accent */
+.tasks-panel .status-chip--in-progress {
+  color: var(--av-accent, #3d9aff);
+  background: rgba(61, 154, 255, 0.14);
+  border-color: rgba(61, 154, 255, 0.45);
+}
+
+/* done — ok green */
+.tasks-panel .status-chip--done {
+  color: var(--av-ok, #25a878);
+  background: rgba(37, 168, 120, 0.14);
+  border-color: rgba(37, 168, 120, 0.45);
+}
+
+/* error — danger */
+.tasks-panel .status-chip--error {
+  color: var(--av-danger, #ee5c61);
+  background: rgba(238, 92, 97, 0.14);
+  border-color: rgba(238, 92, 97, 0.45);
+}
+
+/* --- Subline: due / progress / error ----------------------------- */
+
+.tasks-panel .task-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+.tasks-panel .task-progress {
+  font-weight: 600;
+}
+
+.tasks-panel .task-error {
+  color: var(--av-danger, #ee5c61);
+}
+
+/* --- Filter empty state ------------------------------------------- */
+
+.tasks-panel .tasks-filter-empty {
+  padding: 14px 4px;
+  font-size: 15px;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+/* --- Reminders + support summary ---------------------------------- */
+
+.tasks-panel .tasks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tasks-panel .tasks-section {
+  margin-top: 16px;
+}
+
+.tasks-panel .tasks-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+.tasks-panel .reminder-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-card, 10px);
+}
+
+.tasks-panel .reminder-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--av-ink, #e8ecf4);
+}
+
+.tasks-panel .reminder-cadence {
+  font-size: 13px;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+.tasks-panel .tasks-next-reminder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+/* --- Reduced motion ------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .tasks-panel *,
+  .tasks-panel *::before,
+  .tasks-panel *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

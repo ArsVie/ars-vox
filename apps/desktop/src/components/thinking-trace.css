@@ -1,0 +1,150 @@
+/* ThinkingTrace — traza de trabajo del asistente.
+   Dark premium, tokens con fallback, sin emojis. */
+
+.thinking-trace {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 240px;
+  max-width: 420px;
+  padding: 8px 10px;
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-card, 10px);
+  color: var(--av-ink, #e8ecf4);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+/* Fila colapsada: botón completo, foco visible con el token de acento. */
+.tt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 2px;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tt-toggle:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}
+
+/* Indicador sutil: pulso suave del punto de acento. */
+.tt-indicator {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--av-accent, #3d9aff);
+  box-shadow: 0 0 0 0 rgba(61, 154, 255, 0.35);
+  animation: tt-pulse 1.6s ease-in-out infinite;
+}
+
+.tt-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tt-prefix {
+  color: var(--av-accent, #3d9aff);
+  font-weight: 600;
+}
+
+.tt-chevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--av-ink-dim, #9aa7bd);
+  transition: transform 150ms ease;
+}
+
+.thinking-trace[data-expanded="true"] .tt-chevron {
+  transform: rotate(90deg);
+}
+
+/* Lista expandida de pasos. */
+.tt-steps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 6px 2px 2px;
+  border-top: 1px solid var(--av-line, #2a3348);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tt-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 2px;
+  font-size: 0.95rem;
+}
+
+/* Punto de estado: completado (lleno tenue), en curso (pulso de acento),
+   pendiente (contorno). */
+.tt-step-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--av-line, #2a3348);
+  background: transparent;
+}
+
+.tt-step[data-state="done"] .tt-step-dot {
+  background: var(--av-ink-dim, #9aa7bd);
+  border-color: transparent;
+}
+
+.tt-step[data-state="active"] .tt-step-dot {
+  background: var(--av-accent, #3d9aff);
+  border-color: transparent;
+  animation: tt-pulse 1.6s ease-in-out infinite;
+}
+
+.tt-step-icon {
+  flex: none;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+.tt-step-label {
+  color: var(--av-ink, #e8ecf4);
+}
+
+.tt-step-state {
+  flex: none;
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+@keyframes tt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+/* Respetar prefers-reduced-motion: sin pulso, sin transiciones. */
+@media (prefers-reduced-motion: reduce) {
+  .tt-indicator,
+  .tt-step[data-state="active"] .tt-step-dot {
+    animation: none;
+  }
+  .tt-chevron {
+    transition: none;
+  }
+}

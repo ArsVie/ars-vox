@@ -235,7 +235,8 @@ describe("TasksPanel", () => {
     });
 
     const html = renderPrimary(<TasksPanel />, "tasks", STANDARD_ROLES);
-    expect(html).toContain("Pendientes · 1/2");
+    expect(html).toContain("filter-chips");
+    expect(html).toContain("Pendiente");
     expect(html).toContain("Comprar leche");
     expect(html).toContain("Llamar a María");
     expect(html).toContain('aria-label="Marcar como hecha"');

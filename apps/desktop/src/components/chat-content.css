@@ -1,0 +1,166 @@
+/* ==========================================================================
+   Leaf D — chat content: markdown rendering, option cards, follow-up chips.
+   Consumes the wave token vars with fallbacks (defined by a parallel leaf):
+   --av-accent, --av-inset, --av-ink, --av-line, --av-r-card, --av-r-chip.
+   Dark premium, Spanish-first, big tappable targets, high contrast —
+   no emojis, one accent, red never used here.
+   ========================================================================== */
+
+/* ---- markdown (MarkdownText) ---------------------------------------- */
+
+/* The root often sits inside .message-text (white-space: pre-wrap).
+   Block children must fold raw newlines like normal markdown. */
+.md-content p,
+.md-content li,
+.md-content h2,
+.md-content h3 {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.md-content p {
+  margin: 0 0 10px;
+}
+.md-content p:last-child {
+  margin-bottom: 0;
+}
+
+.md-strong {
+  font-weight: 800;
+  color: var(--av-ink, #e8ecf4);
+}
+
+.md-em {
+  font-style: italic;
+}
+
+.md-heading {
+  margin: 14px 0 8px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--av-ink, #e8ecf4);
+}
+.md-heading:first-child {
+  margin-top: 0;
+}
+h2.md-heading {
+  font-size: 1.2rem;
+}
+h3.md-heading {
+  font-size: 1.05rem;
+}
+
+.md-list {
+  margin: 4px 0 10px;
+  padding-left: 24px;
+}
+.md-list-item {
+  margin: 4px 0;
+  line-height: 1.55;
+}
+
+.md-code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 0.92em;
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--av-ink, #e8ecf4);
+}
+
+.md-codeblock {
+  margin: 8px 0 12px;
+  padding: 12px 14px;
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-card, 10px);
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 0.92em;
+  line-height: 1.5;
+}
+.md-codeblock .md-code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.md-link {
+  color: var(--av-accent, #3d9aff);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md-link:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}
+
+/* ---- option cards (OptionCards) -------------------------------------- */
+
+.option-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.option-card {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 18px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--av-ink, #e8ecf4);
+  text-align: left;
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-card, 10px);
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.option-card:hover {
+  border-color: var(--av-accent, #3d9aff);
+}
+.option-card:active {
+  transform: scale(0.985);
+}
+.option-card:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}
+
+/* ---- follow-up chips (FollowUpChips) ---------------------------------- */
+
+.followup-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.followup-chip {
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--av-ink, #e8ecf4);
+  background: transparent;
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-chip, 6px);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.followup-chip:hover {
+  border-color: var(--av-accent, #3d9aff);
+  background: var(--av-inset, #1a2133);
+}
+.followup-chip:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}

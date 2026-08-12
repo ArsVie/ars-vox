@@ -1,0 +1,69 @@
+/* ==========================================================================
+   TurnTimer — elapsed readout for agent turns (UI Wave, Leaf C).
+   Dark-theme monospace count-up with a subtle accent shimmer underline.
+   Tokens are consumed with fallbacks: --av-* may land from the shared
+   design system (a parallel lane); until then the dark-theme values here
+   hold. Motion policy (repo governance): animate only transform/opacity,
+   and the prefers-reduced-motion block kills the shimmer entirely.
+   ========================================================================== */
+
+.turn-timer {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--av-ink-dim, #9aa7bd);
+  user-select: none;
+  cursor: default;
+}
+
+.turn-timer__value {
+  position: relative;
+}
+
+/* The shimmer underline — a moving accent sweep under the digits. It is
+   decorative (aria-hidden in the component) and only exists while the
+   timer is running: the static element stays invisible when paused. */
+.turn-timer__shimmer {
+  width: 100%;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--av-accent, #3d9aff) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.turn-timer.running .turn-timer__shimmer {
+  opacity: 0.75;
+  animation: turn-timer-shimmer 1.6s linear infinite;
+}
+
+@keyframes turn-timer-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Motion policy: reduced motion is non-negotiable — the shimmer sweep is
+   disabled entirely; a static faint underline still marks the running
+   state without any animation. */
+@media (prefers-reduced-motion: reduce) {
+  .turn-timer.running .turn-timer__shimmer {
+    animation: none;
+    opacity: 0.35;
+  }
+}

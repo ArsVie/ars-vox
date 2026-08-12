@@ -1,0 +1,25 @@
+/* DocumentPanel — Leaf G layout refinements (Wave UI).
+   Own stylesheet: the shared styles.css / content.css are frozen.
+
+   1. The panel keeps a sensible minimum width so the document body stays
+      readable even in a narrow sidecar slot (capped at 100% so it can
+      never blow out of its slot).
+   2. The header carries the FULL document name in the DOM. When space
+      runs short, the ellipsis eats the START of the name (rtl inline
+      direction) so the ending — where the file tail/extension lives —
+      is never hidden; the `title` tooltip exposes the complete name. */
+
+.document-panel {
+  min-width: min(360px, 100%);
+}
+
+.document-panel-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  unicode-bidi: isolate;
+  text-align: left;
+}

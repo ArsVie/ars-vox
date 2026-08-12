@@ -39,6 +39,31 @@
    One separator language: --divider-strong/normal/subordinate.
    ========================================================================== */
 
+/* ============================================================
+   AV DESIGN TOKENS (leaf H — chrome polish layer, 2026-08-12).
+   Raw values for the polish pass: canvas/field/inset surfaces,
+   line dividers, ink text, accent + semantic colors, radius scale.
+   New chrome rules consume these tokens; the legacy catalog in the
+   :root below stays untouched (bridge unchanged).
+   ============================================================ */
+:root {
+  --av-canvas: #0b0e14;
+  --av-field: #131826;
+  --av-inset: #1a2133;
+  --av-line: #2a3348;
+  --av-line-strong: #3b4a66;
+  --av-ink: #e8ecf4;
+  --av-ink-dim: #9aa7bd;
+  --av-accent: #3d9aff;
+  --av-accent-tint: rgba(61, 154, 255, 0.14);
+  --av-ok: #25a878;
+  --av-warn: #f09a2f;
+  --av-danger: #ee5c61;
+  --av-r-chip: 6px;
+  --av-r-control: 8px;
+  --av-r-card: 10px;
+}
+
 :root {
   color-scheme: dark;
 
@@ -337,13 +362,14 @@ body,
 }
 
 /* The ONE separator language: a 1px seam on the side facing a neighboring
-   region. Only these seam classes may draw region boundaries. */
+   region. Only these seam classes may draw region boundaries. Leaf H:
+   seams consume the --av-line token so every region divider reads clearly. */
 .shell-region--seam-right {
-  border-right: 1px solid var(--divider-normal);
+  border-right: 1px solid var(--av-line);
 }
 
 .shell-region--seam-top {
-  border-top: 1px solid var(--divider-normal);
+  border-top: 1px solid var(--av-line);
 }
 
 /* ----------------------------------------------------- slot (DOM contract)
@@ -466,7 +492,7 @@ body,
   align-items: center;
   gap: var(--spacing-sm);
   padding: 7px 16px;
-  border-top: 1px solid var(--divider-subordinate);
+  border-top: 1px solid var(--av-line);
   color: var(--text-faint);
   font-size: 12.5px;
 }
@@ -527,7 +553,9 @@ body,
   /* UI-303 contrast: dark ink on the bright accent fill (white-on-accent
      measured 2.5-3.7:1 — sub-AA; dark ink is 5.1-7.7:1). */
   color: #0b1220;
-  border-bottom-right-radius: 6px;
+  /* leaf H: card radius token; a small tail keeps the chat read. */
+  border-radius: var(--av-r-card);
+  border-bottom-right-radius: 5px;
   box-shadow: 0 5px 18px rgba(59, 130, 246, 0.32);
 }
 
@@ -539,8 +567,12 @@ body,
   align-self: flex-start;
   align-items: flex-start;
   min-width: 260px;
-  background: var(--panel-3);
-  border: 1px solid var(--panel-border);
+  /* leaf H: raised inset surface + line border, ~72ch measure for
+     long-form answers, relaxed leading. */
+  max-width: 72ch;
+  line-height: 1.7;
+  background: var(--av-inset);
+  border: 1px solid var(--av-line);
   border-bottom-left-radius: 6px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
 }
@@ -572,29 +604,33 @@ body,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
-  padding: 24px;
+  /* leaf H: clearer hierarchy — title leads, hint yields, action sits
+     on its own rhythm. */
+  gap: var(--spacing-md);
+  padding: 32px 24px;
   text-align: center;
-  color: var(--text-faint);
+  color: var(--av-ink-dim);
 }
 
 .empty-state .empty-title {
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.3px;
-  color: var(--text);
-  margin: 14px 0 0 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  line-height: 1.3;
+  color: var(--av-ink);
+  margin: 8px 0 0 0;
 }
 
 .empty-state .empty-hint {
-  font-size: 15.5px;
+  font-size: 16px;
+  line-height: 1.55;
   margin: 0;
-  max-width: 40ch;
-  color: #c3ceda;
+  max-width: 46ch;
+  color: var(--av-ink-dim);
 }
 
 .empty-hint {
-  color: #c3ceda;
+  color: var(--av-ink-dim);
   text-align: center;
 }
 
@@ -745,7 +781,9 @@ body,
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  border-top: 1px solid var(--divider-subordinate);
+  /* leaf H: the compose split gets a real 1px seam (was a near-invisible
+     subordinate wash). */
+  border-top: 1px solid var(--av-line);
   background: rgba(255, 255, 255, 0.02);
   flex: none;
 }
@@ -807,8 +845,11 @@ body,
 }
 
 .composer .mic-button {
-  background: var(--panel-3);
-  border: 1px solid var(--panel-border);
+  /* leaf H: clearly visible idle state — ink text on the field surface
+     (the old rule left dark ink on a dark fill). */
+  background: var(--av-field);
+  border: 1px solid var(--av-line);
+  color: var(--av-ink);
   box-shadow: none;
   min-width: 52px;
   padding: 0 16px;
@@ -900,9 +941,10 @@ body,
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  /* leaf H: tighter minimal pill — icon + label only. */
+  gap: 8px;
   height: var(--control-height-sm);
-  padding: 0 15px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
   background: var(--panel-3);
@@ -918,8 +960,8 @@ body,
 }
 
 .status-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: none;
   transition: background 0.2s ease, box-shadow 0.2s ease;
@@ -982,50 +1024,82 @@ body,
 }
 
 /* --------------------------------------------------------- stop button */
-/* The single most important affordance in a voice-first app: always
-   visible, filled, red-tinted (stop is a legitimate exception to the
-   single-blue system), sized for an older user. Height = the lg
-   control token (>=48px touch target). */
+/* The single most important affordance in a voice-first app. Leaf H
+   (chrome polish): STOP is a SYMBOL-ONLY control — a small (~18px)
+   red rounded square with a stop glyph inside. No text label, no pill.
+   The button surface keeps the lg control token (>=48px touch target
+   for an older user); the expanded transparent button provides the
+   hit area around the square. */
 .stop-button {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
   /* Advisor P0: the stop control must be >= 48px and globally visible. It
-     sits in the global top bar, always rendered, in every template.
-     Height via UI-104 catalog token (--control-height-lg = 48px). */
+     sits in the shell chrome, always rendered, in every template.
+     Size via UI-104 catalog token (--control-height-lg = 48px). */
+  width: var(--control-height-lg);
   height: var(--control-height-lg);
-  padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 107, 87, 0.6);
-  background: rgba(255, 107, 87, 0.22);
-  color: #ff8a76;
-  font-weight: 800;
-  font-size: 13px;
-  letter-spacing: 1.6px;
-  font-family: inherit;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #ff8f93;
   cursor: pointer;
   flex: none;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.stop-button:hover {
-  background: rgba(255, 107, 87, 0.32);
-  color: #ffa08f;
-  border-color: rgba(255, 107, 87, 0.75);
+/* The visible stop square: ~18px red rounded square, glyph inside. */
+.stop-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--av-r-chip);
+  border: 1px solid rgba(238, 92, 97, 0.55);
+  background: rgba(238, 92, 97, 0.22);
+  color: inherit;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.stop-button:hover .stop-glyph {
+  background: rgba(238, 92, 97, 0.38);
+  border-color: rgba(238, 92, 97, 0.8);
+  color: #ffb3b5;
 }
 
 .stop-button:active {
-  transform: scale(0.97);
+  transform: scale(0.94);
 }
 
-.stop-button.active {
-  background: linear-gradient(135deg, var(--danger-strong), var(--danger));
+.stop-button.active .stop-glyph {
+  background: var(--av-danger);
+  border-color: transparent;
   /* UI-303 contrast: white-on-red measured 2.8-3.9:1 (sub-AA); dark ink
      on the red fill is 4.9-6.8:1. Same dark-on-bright convention as the
      play button. */
   color: #0b1220;
-  border-color: transparent;
-  box-shadow: 0 0 18px rgba(255, 107, 87, 0.55);
+  box-shadow: 0 0 14px rgba(238, 92, 97, 0.55);
+}
+
+/* Visually-hidden fallback text: symbol-only controls keep a readable
+   name for assistive tech and text extraction (aria-label remains the
+   accessible name; this span is the visible-label fallback contract). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --------------------------------------------------- shell demo (UI-101) */
@@ -1123,7 +1197,7 @@ body,
   display: flex;
   align-items: stretch;
   background: var(--surface-app);
-  border-top: 1px solid var(--divider-strong);
+  border-top: 1px solid var(--av-line);
 }
 
 .shell-persistent-region {
@@ -1137,7 +1211,7 @@ body,
 }
 
 .shell-persistent-region + .shell-persistent-region {
-  border-left: 1px solid var(--divider-normal);
+  border-left: 1px solid var(--av-line);
 }
 
 .shell-persistent-icon {
@@ -1706,6 +1780,7 @@ body,
   .home-button,
   .mic-button,
   .stop-button,
+  .stop-glyph,
   .empty-action,
   .suggestion-chip,
   .confirmation-actions button,
@@ -1786,4 +1861,43 @@ body,
 .app[data-high-contrast] .composer input {
   background: var(--surface-region);
   border-color: var(--divider-strong);
+}
+
+/* ------------------------------------------- leaf H: composer draft state
+   The composer root carries data-draft="set" while the user has typed a
+   draft (ConversationPanel). With a draft, send + mic light up bright
+   accent with dark ink — the composer reads as "ready to go". Without a
+   draft, the send control is a clearly visible field-style button, never
+   the near-invisible disabled wash. */
+.composer .send-button {
+  background: var(--av-field);
+  border: 1px solid var(--av-line-strong);
+  color: var(--av-ink);
+  box-shadow: none;
+}
+
+.composer .send-button:disabled,
+.composer .send-button:disabled:hover {
+  background: var(--av-field);
+  border-color: var(--av-line);
+  color: var(--av-ink-dim);
+  box-shadow: none;
+  transform: none;
+  cursor: default;
+}
+
+.composer[data-draft="set"] .send-button,
+.composer[data-draft="set"] .send-button:disabled {
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--av-accent) 100%);
+  border-color: transparent;
+  /* UI-303 contrast: dark ink on the bright accent fill (AA >= 4.5:1). */
+  color: #0b1220;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.38);
+}
+
+.composer[data-draft="set"] .mic-button:not(.recording):not(.busy) {
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--av-accent) 100%);
+  border-color: transparent;
+  color: #0b1220;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.38);
 }

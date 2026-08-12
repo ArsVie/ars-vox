@@ -8,6 +8,9 @@ import { useSurfaceRole } from "../roles/context";
 import { MicButton } from "./MicButton";
 import { MicHero } from "./MicHero";
 import { SendIcon } from "./icons";
+import { FollowUpChips } from "./FollowUpChips";
+import { MarkdownText } from "./MarkdownText";
+import { OptionCards } from "./OptionCards";
 
 /**
  * R43 — suggestion chips are a capability contract, not aspirational copy:
@@ -106,12 +109,22 @@ export function ConversationPanel({ meta, panelId }: { meta?: PanelMeta; panelId
               ) : m.role === "user" ? (
                 <span className="message-role">Tú</span>
               ) : null}
-              <span className="message-text">{m.text}</span>
+              {m.role === "assistant" ? (
+                <MarkdownText className="message-text" text={m.text} />
+              ) : (
+                <span className="message-text">{m.text}</span>
+              )}
+              {m.options && m.options.length > 0 ? (
+                <OptionCards options={m.options} onPick={sendText} />
+              ) : null}
+              {m.followUps && m.followUps.length > 0 ? (
+                <FollowUpChips followUps={m.followUps} onPick={sendText} />
+              ) : null}
             </div>
           ))
         )}
       </div>
-      <div className="composer">
+      <div className="composer" data-draft={draft.trim() ? "set" : "empty"}>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

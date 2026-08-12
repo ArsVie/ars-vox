@@ -1,0 +1,80 @@
+/* SelectionActions — floating action bar for text selected inside the
+   document surface. Leaf G (Wave UI). Dark premium, elderly-first:
+   large hit targets, high contrast, restrained motion. */
+
+.selection-actions {
+  position: static;
+}
+
+.selection-actions-bar {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  padding: 8px;
+  border-radius: var(--av-r-card, 10px);
+  background: var(--av-inset, #1a2133);
+  border: 1px solid var(--av-line, #2a3348);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  user-select: none;
+  animation: av-sa-pop 0.16s ease-out;
+}
+
+.selection-actions-btn {
+  min-height: 44px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-control, 8px);
+  background: transparent;
+  color: var(--av-ink, #e8ecf4);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.selection-actions-btn:hover,
+.selection-actions-btn:focus-visible {
+  background: rgba(61, 154, 255, 0.14);
+  border-color: var(--av-accent, #3d9aff);
+}
+
+.selection-actions-btn:active {
+  background: rgba(61, 154, 255, 0.24);
+}
+
+.selection-actions-btn:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}
+
+@keyframes av-sa-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-actions-bar {
+    animation: none;
+  }
+
+  .selection-actions-btn {
+    transition: none;
+  }
+}

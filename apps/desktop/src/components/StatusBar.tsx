@@ -13,6 +13,7 @@ import {
   WaveformIcon,
 } from "./icons";
 import { StopButton } from "./StopButton";
+import { TURN_ACTIVE_VOICE_STATES, TurnTimer } from "./TurnTimer";
 
 const VOICE_LABELS: Record<string, string> = {
   sleeping: "En espera",
@@ -112,6 +113,7 @@ export function StatusBar() {
         </span>
         <span className="status-voice">{label}</span>
       </span>
+      {TURN_ACTIVE_VOICE_STATES.includes(voiceState) ? <TurnTimer /> : null}
       <StopButton />
     </div>
   );

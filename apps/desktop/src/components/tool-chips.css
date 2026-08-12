@@ -1,0 +1,143 @@
+/*
+ * ToolChips — compact tool-activity disclosure (dark theme, Spanish, no
+ * emojis, elderly-user sized targets).
+ *
+ * Theme tokens are consumed with fallbacks so the app theme can override
+ * them without this file changing:
+ *   var(--av-ok, #25a878)      done dot
+ *   var(--av-accent, #3d9aff)  running dot / focus ring
+ *   var(--av-danger, #ee5c61)  error dot
+ *   var(--av-ink-dim, #9aa7bd) quiet text
+ *   var(--av-inset, #1a2133)   chip background
+ *   var(--av-line, #2a3348)    chip border
+ *   var(--av-r-chip, 6px)      chip radius
+ */
+
+.toolchips {
+  display: inline-block;
+  max-width: 100%;
+  color: var(--av-ink-dim, #9aa7bd);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+/* Collapsed summary — one quiet chip, comfortable tap target. */
+.toolchips-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-chip, 6px);
+  background: var(--av-inset, #1a2133);
+  color: inherit;
+  font: inherit;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.toolchips-summary:hover,
+.toolchips-summary:active {
+  border-color: var(--av-accent, #3d9aff);
+}
+
+.toolchips-summary:focus-visible {
+  outline: 2px solid var(--av-accent, #3d9aff);
+  outline-offset: 2px;
+}
+
+/* CSS-only chevron (no emoji/glyph characters in the DOM). */
+.toolchips-chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 150ms ease;
+}
+
+.toolchips-summary[aria-expanded="true"] .toolchips-chevron {
+  transform: rotate(-135deg);
+}
+
+/* Expanded — the chip list. */
+.toolchips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toolchips-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-chip, 6px);
+  background: var(--av-inset, #1a2133);
+  color: inherit;
+  font-size: 15px;
+}
+
+.toolchips-label {
+  overflow-wrap: anywhere;
+}
+
+/* Status dots. */
+.toolchips-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--av-ok, #25a878);
+}
+
+.toolchips-dot--running {
+  background: var(--av-accent, #3d9aff);
+  animation: toolchips-pulse 1.4s ease-in-out infinite;
+}
+
+.toolchips-dot--error {
+  background: var(--av-danger, #ee5c61);
+}
+
+@keyframes toolchips-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Screen-reader-only status text (dots are aria-hidden). */
+.toolchips-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolchips-dot--running {
+    animation: none;
+  }
+
+  .toolchips-chevron {
+    transition: none;
+  }
+}

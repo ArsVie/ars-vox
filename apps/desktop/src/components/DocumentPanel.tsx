@@ -9,6 +9,8 @@ import { useSurfaceRole } from "../roles/context";
 import { PanelHeader } from "./PanelHeader";
 import { ReaderView } from "./ReaderView";
 import { DocumentIcon, PenIcon } from "./icons";
+import { SelectionActions } from "./SelectionActions";
+import "./document-panel.css";
 
 /**
  * UI-203: the reading surface adapts to its semantic role. The role host
@@ -114,7 +116,9 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
       aria-label="Documento"
     >
       <PanelHeader panelId={panelId} icon={<DocumentIcon size={15} />}>
-        {title}
+        <span className="document-panel-title" title={title}>
+          {title}
+        </span>
       </PanelHeader>
       {!hasContent ? (
         <div className="document-body">
@@ -197,6 +201,7 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
           )}
         </div>
       )}
+      {hasContent ? <SelectionActions /> : null}
     </section>
   );
 }

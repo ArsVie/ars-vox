@@ -35,6 +35,12 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
   text: string;
+  /** Leaf D: optional reply-option cards rendered under the message
+   *  (tap sends the option text through sendText). */
+  options?: string[];
+  /** Leaf D: optional follow-up suggestion chips rendered under the
+   *  message (tap sends the follow-up text through sendText). */
+  followUps?: string[];
 }
 
 /** Panel metadata carried by the surface components' `meta` prop
