@@ -35,6 +35,7 @@ from arsvox_memory import (
     ToolCallStore,
 )
 
+from arsvox_agent.browser_engine import BrowserEngine
 from arsvox_agent.browser_state import (
     BrowserStatePayload,
     BrowserStateStore,
@@ -149,6 +150,17 @@ class AppServices:
         # Electron main (PUT /api/browser-dom-result) for the awaiting
         # browser.dom_action tool.
         self.browser_dom = DomActionResultStore()
+        # BROWSER-USE INTEGRATION: the agent's in-process browser
+        # authority (local Chromium, text-first). Lazy — Chromium starts
+        # on the first browser tool call, never at service boot.
+        self.browser_engine = (
+            BrowserEngine(
+                list(config.browser.allowlist),
+                headless=config.browser.engine_headless,
+            )
+            if config.browser.engine_enabled
+            else None
+        )
         self.bus = EventBus()
         # H5: reconnect snapshots need the latest media/voice state; the
         # tracker records it from the bus without a background task.
@@ -190,6 +202,9 @@ class AppServices:
             # W2-DRIVE (GATE-5): dom_action execution results for the
             # browser.dom_action tool's await round-trip.
             browser_dom=self.browser_dom,
+            # BROWSER-USE INTEGRATION: the engine the browser tools
+            # execute against (None when disabled).
+            browser_engine=self.browser_engine,
             tts=self.tts,
             telegram=self.telegram,
         )
@@ -221,6 +236,11 @@ class AppServices:
         services keep working (provider changes take effect on restart)."""
         self.config = config
         self.deps_base.config = config
+        if self.browser_engine is not None:
+            self.browser_engine.update_config(
+                list(config.browser.allowlist),
+                headless=config.browser.engine_headless,
+            )
         self.runtime.set_config(config)
 
     def config_snapshot(self) -> dict:
@@ -244,6 +264,8 @@ def create_app(config_path: Path | str = "configs/app.yaml") -> FastAPI:
         yield
         await services.scheduler.stop()
         await services.pipeline.stop()
+        if services.browser_engine is not None:
+            await services.browser_engine.close()
         services.db.close()
 
     app = FastAPI(title="Ars-Vox agent service", version="0.1.0", lifespan=lifespan)

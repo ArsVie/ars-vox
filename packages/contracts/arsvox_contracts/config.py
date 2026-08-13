@@ -237,6 +237,13 @@ class BrowserSection(BaseModel):
     model_config = _STRICT
     allowlist: list[str] = ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org"]
     home_url: str = "https://www.youtube.com"
+    # BROWSER-USE INTEGRATION: the agent's in-process, text-first browser
+    # engine (local Chromium via CDP). engine_enabled=True replaces the
+    # Electron round-trip as the agent's browser authority; the desktop
+    # view stays the user's display (best-effort mirror). headless keeps
+    # Chromium invisible (agent reads text, never screenshots).
+    engine_enabled: bool = True
+    engine_headless: bool = True
 
 
 class MediaSection(BaseModel):

@@ -63,6 +63,8 @@ reminders:
 
 browser:
   allowlist: ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org"]
+  engine_enabled: true
+  engine_headless: true
   home_url: https://www.youtube.com
 
 media:

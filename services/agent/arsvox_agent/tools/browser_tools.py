@@ -1,36 +1,26 @@
-"""browser.dom_action + browser.navigate — the agent drives the integrated browser.
+"""browser.dom_action + browser.navigate — the agent drives the browser.
 
-GATE-5 W2-DRIVE: the agent's DOM bridge. The tool emits the FROZEN
-``browser.dom_action`` wire event (operation click|scroll|set_value|
-query, target, value, result) on the bus. The renderer routes the frame
-into the store (visible ``lastDomAction``) and forwards it to Electron
-main, which EXECUTES it against the browser view's webContents (never
-the app window's page) and PUTs the real result back to the service
-(``/api/browser-dom-result``). This handler AWAITS that round-trip keyed
-by the event's own ``created_at``, so the model sees the ACTUAL page
-result (query text, click verdict) — not a canned "done". If the
-desktop never answers (no Electron, view unattached), the handler
-returns an honest no-response message after a bounded wait.
+BROWSER-USE INTEGRATION: the agent's browser authority is now the
+IN-PROCESS engine (browser_engine.py — local Chromium via CDP,
+text-first, no screenshots, no vision). Both tools execute against it
+and answer with the engine's REAL result (real url/title/redirects,
+real page text, real click/fill verdicts) — never a canned "done", and
+never a wait on the desktop.
 
-GATE-5 W2-NAVIGATE: the agent's navigation tool. ``browser.navigate``
-emits the FROZEN ``browser.navigate`` wire event (url, title,
-can_go_back, can_go_forward, loading) — the same event the user's own
-address-bar command emits. The renderer routes it to main
-(window.arsvox.browserNavigate → WebContentsView, allowlist-pre-checked
-in browser-view.ts), and main PUTs the view's REAL post-navigation
-state via /api/browser-state into the browser-state store. The handler
-AWAITS that store update (bounded window), so the model sees the real
-resulting url/title — including redirects. Never a fake success:
-timeouts / no store / blocked pages answer honestly in Spanish.
+The Electron WebContentsView remains the USER'S display: both tools
+still emit the FROZEN wire events (browser.navigate /
+browser.dom_action) so the desktop mirrors the agent's navigation when
+the app is open — but the agent never WAITS on it. The "El escritorio
+no respondió" defect (a dead desktop eating the turn) is structurally
+gone: the agent's browser works even with the app window closed.
 
-SEARCH-BAR SINGLE PATH (one browser state, one authority): the agent
-NAVIGATES — it never types into the renderer's address bar. The address
-bar draft is renderer-only transient state (its submit is a user
-gesture); the browser's one authority is the WebContentsView, driven by
-main-owned navigation (browser.navigate, allowlist-pre-checked). What
-``set_value`` is FOR here is the PAGE's own inputs (site search boxes,
-forms) — the vision's "agent drives the search bar" is the page's
-search bar, applied to the SAME view the user manipulates.
+Legacy fallback (engine disabled in config, or unit tests without an
+engine): the previous emit -> await Electron-main round-trip through
+the browser_state/browser_dom stores is preserved unchanged.
+
+Navigation policy: the engine enforces the SAME scheme/local-private/
+allowlist gate as the desktop view (config.browser.allowlist), so the
+in-process browser is never weaker than the Electron one.
 
 Mock mode (config.agent.mock — the demo path): same frozen event shape,
 canned result explicitly marked "[mock]". The demo never pretends a
@@ -43,6 +33,12 @@ from typing import Literal
 from arsvox_contracts import PolicyKind
 from arsvox_contracts.events import BrowserDomActionEvent, BrowserNavigateEvent
 
+from arsvox_agent.browser_engine import (
+    BrowserBlockedError,
+    BrowserElementError,
+    BrowserEngineError,
+    BrowserTimeoutError,
+)
 from arsvox_agent.browser_state import BrowserState
 from arsvox_agent.tools import ToolSpec
 from arsvox_agent.tools.context import ToolContext
@@ -70,6 +66,25 @@ _NAV_NO_RESPONSE = (
     "El escritorio no respondió a la navegación "
     "(¿está abierta la app? ¿la página fue bloqueada?)."
 )
+
+
+# --------------------------------------------------------------------- #
+# Engine error mapping (browser-use integration): the tools own the
+# user-facing Spanish; the engine raises typed errors with details.
+# --------------------------------------------------------------------- #
+
+
+def _engine_blocked(reason: str) -> str:
+    return f"Página bloqueada: esta dirección no está permitida ({reason})."
+
+
+def _engine_unavailable(detail: str = "") -> str:
+    base = "El navegador local no está disponible"
+    return f"{base} ({detail})." if detail else f"{base}."
+
+
+def _engine_timeout() -> str:
+    return "La página tardó demasiado en responder."
 
 
 async def browser_dom_action(
@@ -110,8 +125,41 @@ async def browser_dom_action(
         )
         return result
 
-    # Real path: emit the REQUEST, then await the execution result that
-    # Electron main pushes back (keyed by this event's created_at).
+    # Real path (engine first): execute against the IN-PROCESS engine —
+    # the desktop still receives the frozen event so it can mirror the
+    # action on the user's view, but the agent never waits on it.
+    engine = tctx.deps.browser_engine
+    if engine is not None:
+        created_at = datetime.now(timezone.utc)
+        await tctx.emit(
+            BrowserDomActionEvent(
+                operation=operation,
+                target=target,
+                value=value,
+                result=None,
+                created_at=created_at,
+            )
+        )
+        try:
+            if operation == "query":
+                return await engine.query(target)
+            if operation == "click":
+                return await engine.click(target)
+            if operation == "set_value":
+                return await engine.set_value(target, value or "")
+            return await engine.scroll(target, value)
+        except BrowserElementError as exc:
+            return str(exc)
+        except BrowserTimeoutError:
+            return _engine_timeout()
+        except BrowserEngineError as exc:
+            return _engine_unavailable(exc.detail)
+        except BrowserBlockedError as exc:
+            return _engine_blocked(exc.reason)
+
+    # Legacy fallback (engine disabled): emit the REQUEST, then await the
+    # execution result that Electron main pushes back (keyed by this
+    # event's created_at).
     created_at = datetime.now(timezone.utc)
     await tctx.emit(
         BrowserDomActionEvent(
@@ -174,8 +222,43 @@ async def browser_navigate(tctx: ToolContext, url: str) -> str:
         )
         return result
 
-    # Real path: snapshot the view's current state, emit the REQUEST,
-    # then await the post-navigation state Electron main pushes back.
+    # Real path (engine first): the in-process engine navigates and
+    # reports the REAL landing (url/title — including redirects). The
+    # desktop still receives the frozen event so the user's view
+    # mirrors the navigation, but the agent never waits on it.
+    engine = tctx.deps.browser_engine
+    if engine is not None:
+        # The engine's policy gate runs BEFORE anything is emitted: a
+        # doomed navigation never reaches the desktop mirror either.
+        decision = engine.check_url(url)
+        if not decision.allowed:
+            return _engine_blocked(decision.reason)
+        store = tctx.deps.browser_state
+        baseline = store.get() if store is not None else None
+        created_at = datetime.now(timezone.utc)
+        await tctx.emit(
+            BrowserNavigateEvent(
+                url=url,
+                title=baseline.title if baseline is not None and baseline.url == url else "",
+                can_go_back=baseline.can_go_back if baseline is not None else False,
+                can_go_forward=baseline.can_go_forward if baseline is not None else False,
+                loading=True,
+                created_at=created_at,
+            )
+        )
+        try:
+            state = await engine.navigate(url)
+        except BrowserTimeoutError:
+            return _engine_timeout()
+        except BrowserEngineError as exc:
+            return _engine_unavailable(exc.detail)
+        except BrowserBlockedError as exc:
+            return _engine_blocked(exc.reason)
+        return _landing_detail(state, url)
+
+    # Legacy fallback (engine disabled): snapshot the view's current
+    # state, emit the REQUEST, then await the post-navigation state
+    # Electron main pushes back.
     store = tctx.deps.browser_state
     baseline = store.get() if store is not None else None
     created_at = datetime.now(timezone.utc)
@@ -201,21 +284,23 @@ async def browser_navigate(tctx: ToolContext, url: str) -> str:
 SPECS = [
     ToolSpec(
         "browser.dom_action",
-        "Drive the integrated browser's CURRENT page: click a target "
-        "(CSS selector or aria label/role), scroll (pixels or to a "
-        "target), set_value (fill a page input), or query (read the "
-        "page text, truncated). To open a new page use browser.navigate.",
+        "Drive the browser's CURRENT page (in-process engine; the "
+        "desktop view mirrors it): click a target (CSS selector or "
+        "aria label/visible text), scroll (pixels in ``value`` or to "
+        "``target``), set_value (fill a page input), or query (read "
+        "the page text, truncated). To open a new page use "
+        "browser.navigate.",
         browser_dom_action,
         PolicyKind.REVERSIBLE,
         effect="revertible",
     ),
     ToolSpec(
         "browser.navigate",
-        "Open a new page in the integrated browser: navigate the SAME "
-        "WebContentsView the user manipulates to the given URL "
-        "(allowlist-pre-checked by the view). Returns the real "
-        "resulting url/title, or an honest no-response if the desktop "
-        "does not confirm the navigation.",
+        "Open a page in the browser: navigate to the given URL "
+        "(allowlist-checked by the engine — only configured domains, "
+        "no local addresses or non-http schemes). Returns the REAL "
+        "resulting url/title, including redirects. The desktop view "
+        "mirrors the navigation when the app is open.",
         browser_navigate,
         PolicyKind.REVERSIBLE,
         effect="revertible",

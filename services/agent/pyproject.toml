@@ -17,6 +17,11 @@ dependencies = [
     "uvicorn>=0.29",
     "pyyaml>=6.0",
     "httpx>=0.27",
+    # BROWSER-USE INTEGRATION: in-process text-first browser engine
+    # (local Chromium via CDP). Pinned — the API moves fast and the
+    # actor/ package is labeled legacy. Chromium is a separate one-time
+    # `browser-use install` download.
+    "browser-use==0.13.7",
 ]
 
 [tool.setuptools.packages.find]

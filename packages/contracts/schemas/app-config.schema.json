@@ -109,6 +109,16 @@
           "default": "https://www.youtube.com",
           "title": "Home Url",
           "type": "string"
+        },
+        "engine_enabled": {
+          "default": true,
+          "title": "Engine Enabled",
+          "type": "boolean"
+        },
+        "engine_headless": {
+          "default": true,
+          "title": "Engine Headless",
+          "type": "boolean"
         }
       },
       "title": "BrowserSection",
@@ -632,7 +642,9 @@
           "wikipedia.org",
           "openstreetmap.org"
         ],
-        "home_url": "https://www.youtube.com"
+        "home_url": "https://www.youtube.com",
+        "engine_enabled": true,
+        "engine_headless": true
       }
     },
     "media": {

@@ -24,6 +24,7 @@ from arsvox_memory import (
 )
 from arsvox_tts import TTSProvider
 
+from arsvox_agent.browser_engine import BrowserEngine
 from arsvox_agent.browser_state import BrowserStateStore, DomActionResultStore
 from arsvox_agent.confirmations import ConfirmationCoordinator
 from arsvox_agent.events import EventBus
@@ -61,6 +62,11 @@ class Deps:
     # Electron main (keyed by the request's created_at; None in unit
     # tests that never run the browser tool).
     browser_dom: DomActionResultStore | None = None
+    # BROWSER-USE INTEGRATION: the in-process, text-first browser engine
+    # (None when config.browser.engine_enabled=False, or in unit tests
+    # that never run the browser tools — the legacy round-trip remains
+    # the fallback authority in those cases).
+    browser_engine: BrowserEngine | None = None
     # per-run
     run_id: str = ""
     session_id: str = ""
