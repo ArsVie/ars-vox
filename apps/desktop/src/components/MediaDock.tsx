@@ -330,6 +330,14 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
   // and a YouTube video render the SAME controls and the SAME UI, and
   // local playback reaches the element through the SAME controller.
   const playableSrc = localPlayableSrc(m.localPath ?? m.url);
+  // GHOST-GUARD (2026-08-13, user screenshot): media state can carry a
+  // STALE title after the content was cleared ("Quité el video" left the
+  // title behind while videoId/url went null). A surface with a title but
+  // nothing playable must not render a dead player inside a huge empty
+  // region — collapse to the compact empty body instead. The state-level
+  // fix (disposal clears title too) lands with the cordis-discipline wave;
+  // this guard protects the render layer today.
+  const hasPlayableContent = m.videoId !== null || playableSrc !== null;
   const { mediaRef } = useLocalPlayer(playableSrc, m.state, m.positionS, m.volume);
   // The hook returns a RefObject<HTMLMediaElement>; the JSX narrows it to
   // the concrete element (audio/video) — one hook instance per track.
@@ -351,14 +359,14 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
     autoplayIntents.current,
   );
 
-  const title = meta?.title ?? m.title ?? "Medios";
+  const title = hasPlayableContent ? (meta?.title ?? m.title ?? "Medios") : "Medios";
 
   const playPauseButton = (
     <button
       type="button"
       className="media-play-btn"
       aria-label={isPlaying ? "Pausar" : "Reproducir"}
-      disabled={m.state === "stopped"}
+      disabled={m.state === "stopped" || !hasPlayableContent}
       onClick={() => dispatchCommand({ action: "media.play_pause" })}
     >
       {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
@@ -446,6 +454,10 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
               STOPPED track with an offer in the bag returns HERE too —
               every offer is clickable, not just the first per session. */}
           <YoutubePanel meta={meta} embedded />
+        </div>
+      ) : !hasPlayableContent ? (
+        <div className="media-dock-body">
+          <span className="media-dock-empty">Reproducción en espera.</span>
         </div>
       ) : (
         <div className="media-player">

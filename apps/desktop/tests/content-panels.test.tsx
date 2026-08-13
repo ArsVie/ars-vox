@@ -306,7 +306,7 @@ describe("MediaDock", () => {
       kind: "audio",
       title: "Sinfonía",
       video_id: null,
-      url: null,
+      url: "file:///C:/música/sinfonia.mp3",
       position_s: 60,
       duration_s: 300,
       volume: 0.8,

@@ -251,8 +251,15 @@ body,
 /* UI-303: token-colored focus ring on EVERY keyboard focus. The ring is
    drawn with outline (which follows the element's own border-radius in
    Chromium — no border-radius override here, so pill-shaped controls keep
-   their pill outline instead of morphing to a rounded square on focus). */
-:focus-visible {
+   their pill outline instead of morphing to a rounded square on focus).
+   USER FIX (2026-08-13): scoped to INTERACTIVE controls — the blanket
+   selector was also outlining non-interactive containers (the app frame
+   itself drew blue lines along the viewport edges when it held focus). */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -890,6 +897,22 @@ body,
 }
 .conversation--companion .send-button .btn-label,
 .conversation--support .send-button .btn-label {
+  display: none;
+}
+
+/* USER RULE (2026-08-13): when conversation is a SECONDARY window
+   (companion/support), the mic button also collapses to an icon circle —
+   the limited width belongs to the text box. Accessible name lives on
+   the button (aria-label + title in MicButton.tsx). */
+.conversation--companion .mic-button,
+.conversation--support .mic-button {
+  width: 52px;
+  padding: 0;
+  flex: none;
+  justify-content: center;
+}
+.conversation--companion .mic-button .btn-label,
+.conversation--support .mic-button .btn-label {
   display: none;
 }
 
