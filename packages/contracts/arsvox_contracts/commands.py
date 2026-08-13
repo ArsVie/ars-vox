@@ -107,7 +107,7 @@ class PanelClose(BaseModel):
 
 
 class PanelSetPrimary(BaseModel):
-    action: Literal["panel.set_primary"]
+    action: Literal["panel.set_primary"] = "panel.set_primary"
     panel_type: PanelType
 
 

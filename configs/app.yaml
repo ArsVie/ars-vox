@@ -36,7 +36,7 @@ agent:
     name: deepseek-v4-flash            # any opencode-go model id works
     temperature: 0.2
     timeout_s: 90
-    max_steps: 8        # hard cap on tool steps per turn
+    max_steps: 16       # hard cap on tool steps per turn
   system_prompt_file: null   # optional path to a custom system prompt (markdown)
   recent_turns_in_context: 6
 

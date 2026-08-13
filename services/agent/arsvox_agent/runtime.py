@@ -31,6 +31,27 @@ log = logging.getLogger(__name__)
 PROMPT_FILE = Path(__file__).resolve().parent / "prompts" / "system.md"
 
 
+def _friendly_error(exc: Exception) -> str:
+    """Map internal exceptions to short, user-safe Spanish messages.
+
+    The user is an older person: raw exception text (tracebacks, docs URLs,
+    pydantic internals) must never reach the UI. Log keeps the real thing.
+    """
+    from pydantic_ai.exceptions import UsageLimitExceeded
+    from pydantic import ValidationError
+
+    if isinstance(exc, UsageLimitExceeded):
+        return (
+            "Tardé demasiados pasos en hacer eso. "
+            "Inténtalo de nuevo con una petición más simple."
+        )
+    if isinstance(exc, ValidationError):
+        return "No pude completar esa acción. Inténtalo de nuevo."
+    if isinstance(exc, asyncio.TimeoutError):
+        return "Tardé demasiado en responder. Inténtalo de nuevo."
+    return "Ocurrió un problema. Inténtalo de nuevo."
+
+
 class AgentRuntime:
     def __init__(
         self,
@@ -194,7 +215,7 @@ class AgentRuntime:
         except Exception as exc:  # noqa: BLE001 — surface to the UI
             log.exception("turn failed")
             await self.bus.publish(
-                ErrorEvent(message=f"Error: {exc}", recoverable=True)
+                ErrorEvent(message=_friendly_error(exc), recoverable=True)
             )
         finally:
             self._busy = False
