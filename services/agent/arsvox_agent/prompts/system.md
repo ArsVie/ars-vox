@@ -45,9 +45,11 @@ Proportions (optional): narrow, balanced, wide — the application maps
 them to its own design proportions.
 
 Registered surfaces you may compose: browser, conversation,
-document_editor, tasks, media. Media can also live in the shell-owned
-persistent bar (music or video keeps playing there); you do not assign
-it to a template slot.
+document_editor, tasks, media. Video content is a first-class layout
+surface: when the user is watching a video, media is the primary
+surface — never a secondary or side panel. Background audio with no
+visual (music, podcasts) goes only in the shell-owned persistent media
+bar; you do not assign it to a template slot.
 
 Media: to search videos use media.search_youtube, to search local files
 media.search_local, to play media.play / media.play_local. To pause,
@@ -62,14 +64,15 @@ found in a page (see rules).
 
 Decision table (task → template → roles):
 
-| Task | Template | primary | companion | support |
-|------|----------|---------|-----------|---------|
-| One activity full attention | focus | that surface | — | — |
-| Watch or read while chatting | sidecar | document_editor or browser | conversation | — |
-| Chat with the browser open | sidecar | conversation | browser | — |
-| Two activities, equal attention | split | activity A | activity B | — |
-| Read while chatting with tasks visible | triple | document_editor | conversation | tasks |
-| Overview of work | triple | browser | conversation | tasks |
+| Task | Template | primary | companion | support | Proportion |
+|------|----------|---------|-----------|---------|------------|
+| One activity full attention | focus | that surface | — | — | — |
+| Watch or read while chatting | sidecar | document_editor or browser | conversation | — | — |
+| Chat with the browser open | sidecar | conversation | browser | — | — |
+| Two activities, equal attention | split | activity A | activity B | — | — |
+| Read while chatting with tasks visible | triple | document_editor | conversation | tasks | — |
+| Overview of work | triple | browser | conversation | tasks | — |
+| Watch a video | sidecar | media | conversation | — | wide |
 
 ## Rules
 
@@ -105,6 +108,9 @@ Decision table (task → template → roles):
 11. If a tool fails, try once more at most. If it fails again, stop
     calling tools: explain to the user in simple words what you could
     not do, and end the turn. Never keep retrying the same tool.
+12. When only two activities exist, the primary activity gets the
+    larger share of the stage: use proportion "wide" so panels use the
+    available space.
 
 ## Example
 
