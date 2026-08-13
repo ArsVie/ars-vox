@@ -26,6 +26,23 @@ The backlog is always the present state; it is not tied to a date.
   without voice. Chat must remain reachable.
 - **Media proportions.** Video must never be a long stripe. Chat+video
   proportions are off; the layout wastes vertical space.
+- **Video is the primary activity.** "Why would it put the video on the
+  second panel?" When the user asks to watch a video, the video goes in
+  the primary panel — never the secondary one. Chat is the companion.
+- **Secondary panel expands to the borders.** "why does the secondary
+  panel not exapn into the borders even though there are only two
+  activities? Lot of wasted space there and panels are not properly
+  prioritazed" With only two activities, the layout must use the
+  available space — no wasted space, and the more important panel gets
+  priority.
+
+## Media
+
+- **YouTube progress bar.** "the progress bar at the bottom is useless
+  for youtube it's stuck on 0:00/ 0:00" The app-level progress bar for
+  a YouTube track must show the real playback time (tracked from the
+  player), or it must be removed in favor of the player's own
+  controls.
 
 ## Status bar
 
