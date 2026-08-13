@@ -7,15 +7,16 @@ source: /mnt/d/paper.pdf ("A Programming Paradigm for Spatiotemporal Composabili
 # Mining Report: "A Programming Paradigm for Spatiotemporal Composability" → ars-vox
 
 > INTEGRATION NOTE (parent agent, 2026-08-13): report below is the read-only
-> analysis leaf's output, shipped verbatim except two filename corrections.
-> Spot-verified against the PDF text before shipping: §6.1
-> acquisition/emission + withholding/compensation (confirmed verbatim),
-> §5.2.1 per-field reconciliation (confirmed), §5.2.2 transactional
-> backup+rollback HMR (confirmed), §5.3 Koishi 4,000+ plugins (confirmed).
-> Corrected: the leaf cited `adaptive/planner.ts` and `layout/inertia.ts` as
-> existing files — neither exists; the target/committed split lives in
-> store.ts (adaptive.spec + role-resolved assignments) and no inertia
-> module exists yet (the movement rules are policy, not code).
+> analysis leaf's output, shipped verbatim. Spot-verified against the PDF
+> text before shipping: §6.1 acquisition/emission + withholding/compensation
+> (confirmed verbatim), §5.2.1 per-field reconciliation (confirmed), §5.2.2
+> transactional backup+rollback HMR (confirmed), §5.3 Koishi 4,000+ plugins
+> (confirmed). Also verified against the repo: `adaptive/planner.ts` (UI-301
+> intent→LayoutSpec layer) and `layout/inertia.ts` (UI-207 spatial inertia
+> cost policy) both exist exactly as cited. (An intermediate revision of
+> this note wrongly claimed those two files were hallucinated — that was a
+> false negative from a glob-mode file search; this note is the corrected
+> record.)
 
 ## 1. The paper in 5 lines
 
@@ -47,7 +48,7 @@ source: /mnt/d/paper.pdf ("A Programming Paradigm for Spatiotemporal Composabili
 
 ### D. Target view vs. committed view; refresh loop; quiescence
 - **What it buys:** The runtime continuously compares *what should be running* (target, from declarations + current context) against *what was committed* (committed view). Lifecycle fires exactly on their disagreement; `refresh` is idempotent so neutral changes are harmless (§4.2 Definition 46, §5.1.3 Algorithm 5).
-- **Maps to:** the target/committed split already present in the store (adaptive spec + role-resolved assignments) vs. `AdaptiveStage.tsx` (renderer). The paper's discipline: the target is a function of *current state only*, and the diff drives minimal transitions — exactly what the planner logic should do on each `layout.compose` rather than blindly applying the model's full spec.
+- **Maps to:** `adaptive/planner.ts` (target layout) vs. `store.ts` (committed layout) vs. `AdaptiveStage.tsx` (renderer). The paper's discipline: the target is a function of *current state only*, and the diff drives minimal transitions — exactly what the planner should do on each `layout.compose` rather than blindly applying the model's full spec.
 - **Fit: HIGH.**
 - **Scope:** design-level — codify "target = f(active tools, session state, user mode)"; commit only after a successful transition.
 
@@ -59,9 +60,9 @@ source: /mnt/d/paper.pdf ("A Programming Paradigm for Spatiotemporal Composabili
 
 ### F. Inertia / asynchronous transitions
 - **What it buys:** Once a transition is in flight it *completes* (an iteration in flight lands), then chains into the next transition; a target flip during flight can't abort mid-step — preventing thrash, half-applied states, and flicker (§4.3.3, §5.1.3 "mutual chaining of reload and unload").
-- **Maps to:** the frozen movement rules — *short low-motion transitions, keep active content visible during transitions, no layout change during reading*. No inertia module exists yet (the rules are policy, not code); the paper's contribution is the *semantics*: a layout transition, once started, runs to completion before any new `layout.compose` is honored (queue the new one instead of interrupting). This stops rapid-fire LLM commands from causing motion storms.
+- **Maps to:** the frozen movement rules — *short low-motion transitions, keep active content visible during transitions, no layout change during reading*. `layout/inertia.ts` already exists as a cost policy (UI-207); the paper's contribution is the *semantics*: a layout transition, once started, runs to completion before any new `layout.compose` is honored (queue the new one instead of interrupting). This stops rapid-fire LLM commands from causing motion storms.
 - **Fit: HIGH.**
-- **Scope:** surgical — add a small transition state machine (IDLE → TRANSITIONING → settle → apply queued target).
+- **Scope:** surgical — extend `inertia.ts` with a small transition state machine (IDLE → TRANSITIONING → settle → apply queued target).
 
 ### G. Failure transitions (recover-then-record, per-fiber isolation)
 - **What it buys:** A failing transition first recovers everything installed up to the failure, records the error on that fiber only, does not auto-retry, and leaves siblings running — a plugin host's semantics (§4.3.4, L-Raise; Theorem 59).
@@ -176,10 +177,10 @@ source: /mnt/d/paper.pdf ("A Programming Paradigm for Spatiotemporal Composabili
 
 - **Pure deterministic engine = local confluence/composability** — `adaptiveEngine.ts`: geometry is a pure function of (LayoutSpec, viewport); same spec → same geometry; invalid specs throw `AdaptiveGeometryError` and *never reach layout state* (§4.4.5's "quiescent state is a function of the final configuration" in miniature; §4.2's well-formedness enforced before mutation, preservation-style).
 - **surfaceId-keyed assignments = recovery up to observational equivalence + name discipline** — the engine header explicitly keys by `surfaceId`, never by instance (§3.3.2, §4.4.1 Lemma 57).
-- **Target vs. committed split = the refresh loop** — the store's adaptive spec (desired) vs. committed assignments vs. `AdaptiveStage.tsx` (rendered); the paper's Definition 46 target-view discipline, partially instantiated (§4.2, §5.1.3).
+- **Target vs. committed split = the refresh loop** — `adaptive/planner.ts` (desired) vs. `store.ts` (committed) vs. `AdaptiveStage.tsx` (rendered); the paper's Definition 46 target-view discipline, partially instantiated (§4.2, §5.1.3).
 - **Two-phase confirmations for destructive actions = withholding (output-commit)** — exactly §6.1's "withhold an emission until the state that produced it is certain to persist" (§6.1).
 - **Role degradation (primary → companion → support) = a coeffect response** — panels responding to changed conditions by role is the paper's activating/deactivating/neutral classification carried by a graded role value (§3.2.2).
-- **Frozen movement rules = inertia + tranquility** — "no change during reading; max one major change per command; keep active content visible; short low-motion transitions" are a hand-encoded, stricter version of §4.3.3 inertia and §7.3's quiescence/tranquility discipline (Kramer–Magee, Vandewoude); no code-level inertia module exists yet (see Section F).
+- **Frozen movement rules = inertia + tranquility** — "no change during reading; max one major change per command; keep active content visible; short low-motion transitions" are a hand-encoded, stricter version of §4.3.3 inertia and §7.3's quiescence/tranquility discipline (Kramer–Magee, Vandewoude); `layout/inertia.ts` (UI-207) exists.
 - **Shell-owned persistent regions + always-visible STOP = root-fiber provisions** — the shell is the never-retired root whose coeffects (media bar, notifications, STOP) are always provided; global controls "stay put" because their provider is never withdrawn (§4.1, §3.3.1 hierarchy).
 - **run_id-scoped tool events + SQLite session restore = per-fiber effect attribution + coarse-grained persistence** — the paper's §1.2.3 point that process restart is the coarse-grained substitute, which SQLite-backed session restore already mitigates (§1.2.3).
 - **Contract schemas (`adaptive-layout.schema.json`, `ui-commands.schema.json`, `agent-events.schema.json`) = declarative configuration** — the loader/reconciliation data layer exists; what's missing is the reconciliation *engine* (Section I) and the disposal discipline (Section A).
