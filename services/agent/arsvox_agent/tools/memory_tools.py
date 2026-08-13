@@ -112,6 +112,7 @@ SPECS = [
         "what the user said or prefers before shaping searches.",
         memory_search,
         PolicyKind.READ_ONLY,
+        effect="revertible",
     ),
     ToolSpec(
         "preferences.set",
@@ -119,5 +120,6 @@ SPECS = [
         "memory: use notes.add for facts and memory.search to recall them.",
         preferences_set,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
 ]

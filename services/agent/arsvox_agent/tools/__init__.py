@@ -17,7 +17,7 @@ import inspect
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Literal
 
 from pydantic import BaseModel
 
@@ -62,6 +62,35 @@ class ToolSpec:
     handler: Handler
     kind: PolicyKind
     approval: bool = False
+    #: Side-effect taxonomy (lane A2): "revertible" = read-only or a
+    #: local/reversible state change; "emission" = sends/publishes data
+    #: out of the system or commits irreversibly. Descriptive metadata
+    #: for the effect ledger and confirmation tooling — the execution
+    #: gate keeps deciding on `approval` exactly as before.
+    effect: Literal["revertible", "emission"] = "revertible"
+
+
+def spec(
+    name: str,
+    description: str,
+    handler: Handler,
+    kind: PolicyKind,
+    approval: bool = False,
+    effect: Literal["revertible", "emission"] = "revertible",
+) -> ToolSpec:
+    """Build a ToolSpec with an explicit effect tag (lane A2).
+
+    ``effect`` classifies the tool's side effects:
+      - "revertible" (default): read-only, or a local/reversible state
+        change (ui, layout, media, documents, tasks, memory, library,
+        browser, preferences);
+      - "emission": sends/publishes data out of the system or commits
+        irreversibly (telegram.send_pending, reminders.create).
+
+    The tag is descriptive only — policy decisions keep using
+    ``approval``, so tagging never changes today's behavior.
+    """
+    return ToolSpec(name, description, handler, kind, approval=approval, effect=effect)
 
 
 def _approval_text(tool: str, args: dict) -> tuple[str, str]:
@@ -85,6 +114,19 @@ class ToolRegistry:
     def register(self, spec: ToolSpec) -> None:
         if spec.name in self._specs:
             raise ValueError(f"duplicate tool {spec.name}")
+        # Lane A2 validation: the effect tag must be truthful. Approval
+        # is the policy gate; an emission tag on the same tool is the
+        # contract the confirmation/ledger tooling relies on.
+        if spec.effect not in ("revertible", "emission"):
+            raise ValueError(
+                f"tool {spec.name}: invalid effect tag {spec.effect!r} "
+                "(expected 'revertible' or 'emission')"
+            )
+        if spec.approval and spec.effect != "emission":
+            raise ValueError(
+                f"tool {spec.name}: approval=True requires effect='emission' "
+                f"(got {spec.effect!r})"
+            )
         self._specs[spec.name] = spec
 
     def get(self, name: str) -> ToolSpec | None:

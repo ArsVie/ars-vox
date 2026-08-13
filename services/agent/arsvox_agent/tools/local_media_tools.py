@@ -79,6 +79,7 @@ SPECS = [
         "result's local_path.",
         media_search_local,
         PolicyKind.READ_ONLY,
+        effect="revertible",
     ),
     ToolSpec(
         "media.play_local",
@@ -86,5 +87,6 @@ SPECS = [
         "after media.search_local). Takes the local_path from a search result.",
         media_play_local,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
 ]

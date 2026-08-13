@@ -70,7 +70,8 @@ SPECS = [
         " repeat_rule: none, daily or weekly.",
         reminders_create,
         PolicyKind.REVERSIBLE,
+        effect="emission",
     ),
-    ToolSpec("reminders.list", "List active reminders.", reminders_list, PolicyKind.READ_ONLY),
-    ToolSpec("reminders.cancel", "Cancel an active reminder by id.", reminders_cancel, PolicyKind.REVERSIBLE),
+    ToolSpec("reminders.list", "List active reminders.", reminders_list, PolicyKind.READ_ONLY, effect="revertible"),
+    ToolSpec("reminders.cancel", "Cancel an active reminder by id.", reminders_cancel, PolicyKind.REVERSIBLE, effect="revertible"),
 ]

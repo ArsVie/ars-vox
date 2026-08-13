@@ -119,32 +119,36 @@ from arsvox_contracts import PolicyKind
 from arsvox_agent.tools import ToolSpec
 
 SPECS = [
-    ToolSpec("library.scan", "List the books available in the configured library.", library_scan, PolicyKind.READ_ONLY),
-    ToolSpec("library.search", "Search the library by title.", library_search, PolicyKind.READ_ONLY),
+    ToolSpec("library.scan", "List the books available in the configured library.", library_scan, PolicyKind.READ_ONLY, effect="revertible"),
+    ToolSpec("library.search", "Search the library by title.", library_search, PolicyKind.READ_ONLY, effect="revertible"),
     ToolSpec(
         "library.open",
         "Open a book by title; restores the saved reading position when present.",
         library_open,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "library.continue_reading",
         "Open the book the user was last reading, at the saved position.",
         library_continue_reading,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
-    ToolSpec("library.get_position", "Get the saved reading position of a book.", library_get_position, PolicyKind.READ_ONLY),
+    ToolSpec("library.get_position", "Get the saved reading position of a book.", library_get_position, PolicyKind.READ_ONLY, effect="revertible"),
     ToolSpec(
         "library.set_position",
         "Save the reading position of a book (section index and 0..1 progress).",
         library_set_position,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
-    ToolSpec("library.read_selection", "Return the current section text of a book.", library_read_selection, PolicyKind.REVERSIBLE),
+    ToolSpec("library.read_selection", "Return the current section text of a book.", library_read_selection, PolicyKind.REVERSIBLE, effect="revertible"),
     ToolSpec(
         "library.read_next_section",
         "Advance to the next section and return its text.",
         library_read_next_section,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
 ]

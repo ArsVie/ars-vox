@@ -72,6 +72,7 @@ SPECS = [
         " telegram.send_pending directly; confirmation triggers it with the stored text.",
         telegram_prepare_message,
         PolicyKind.USER_VISIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "telegram.send_pending",
@@ -79,5 +80,6 @@ SPECS = [
         telegram_send_pending,
         PolicyKind.EXTERNAL,
         approval=True,
+        effect="emission",
     ),
 ]

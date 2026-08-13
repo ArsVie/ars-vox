@@ -38,5 +38,6 @@ SPECS = [
         " request depends on what is currently on screen.",
         app_get_state,
         PolicyKind.READ_ONLY,
+        effect="revertible",
     ),
 ]

@@ -207,6 +207,7 @@ SPECS = [
         "page text, truncated). To open a new page use browser.navigate.",
         browser_dom_action,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "browser.navigate",
@@ -217,5 +218,6 @@ SPECS = [
         "does not confirm the navigation.",
         browser_navigate,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
 ]

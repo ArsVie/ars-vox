@@ -219,18 +219,21 @@ SPECS = [
         " telegram_preview, settings. title and content_reference are optional context.",
         ui_open_panel,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "ui.close_panel",
         "Close a panel by panel_type or panel_id.",
         ui_close_panel,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "ui.set_primary_panel",
         "Make a panel the primary (largest) panel in the current layout.",
         ui_set_primary_panel,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "layout.compose",
@@ -246,17 +249,20 @@ SPECS = [
         " when the user's primary task changes.",
         layout_compose,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "ui.set_fullscreen",
         "Put a panel in full-screen mode.",
         ui_set_fullscreen,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
     ToolSpec(
         "ui.restore_layout",
         "Restore the previous layout.",
         ui_restore_layout,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
 ]

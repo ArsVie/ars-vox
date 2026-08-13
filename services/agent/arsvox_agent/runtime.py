@@ -4,6 +4,7 @@ objects, audio devices, or credentials — those live in Deps/stores."""
 
 import asyncio
 import dataclasses
+import functools
 import logging
 import uuid
 from pathlib import Path
@@ -24,7 +25,8 @@ from arsvox_agent.deps import Deps
 from arsvox_agent.events import EventBus
 from arsvox_agent.local_intents import match_confirmation_utterance
 from arsvox_agent.model_provider import build_model
-from arsvox_agent.tools import ToolRegistry, build_pydantic_tools
+from arsvox_agent.effect_ledger import EffectLedger, inverse_for, inverted_tools
+from arsvox_agent.tools import Handler, ToolRegistry, ToolSpec, build_pydantic_tools
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +71,11 @@ class AgentRuntime:
         self._agent = None
         self._active_task: asyncio.Task | None = None
         self._busy = False
+        # A1 (Cordis): the CURRENT turn's EffectLedger, or None outside
+        # a turn. _run_turn sets it before _turn runs; the recording
+        # tool wrappers (see _recording_handler) read it at call time,
+        # so inverses are recorded only inside a live turn.
+        self._run_ledger: EffectLedger | None = None
         # GATE-3.5 (C4): a turn that dispatches TTS stays in THINKING until
         # the renderer acks physical playback (tts.started -> SPEAKING,
         # tts.finished -> terminal). This flag tells _run_turn's finally
@@ -88,12 +95,32 @@ class AgentRuntime:
                 build_model(self.config),
                 system_prompt=self._load_system_prompt(),
                 deps_type=Deps,
-                tools=build_pydantic_tools(self.registry),
+                tools=build_pydantic_tools(self._instrumented_registry()),
                 model_settings=ModelSettings(
                     temperature=self.config.agent.model.temperature
                 ),
             )
         return self._agent
+
+    def _instrumented_registry(self) -> ToolRegistry:
+        """Copy of the shared registry whose opted-in handlers record
+        inverses into the CURRENT run's EffectLedger (A1).
+
+        Built from the SAME ToolSpec objects, except opted-in specs
+        (effect_ledger.INVERSE_PAIRS) get a recording wrapper around
+        their handler. The shared registry is never mutated, so
+        execute_direct — the confirmation executor's gate-bypassed
+        path — keeps calling the ORIGINAL handlers: inverses are
+        recorded only for model tool calls inside a live turn.
+        """
+        instrumented = ToolRegistry()
+        for spec in self.registry.all():
+            if spec.name in inverted_tools():
+                spec = dataclasses.replace(
+                    spec, handler=_recording_handler(self, spec)
+                )
+            instrumented.register(spec)
+        return instrumented
 
     def _load_system_prompt(self) -> str:
         override = self.config.resolved_paths.system_prompt_file
@@ -207,17 +234,29 @@ class AgentRuntime:
 
     # ------------------------------------------------------------------ #
     async def _run_turn(self, text: str) -> None:
+        # A1 (Cordis): one EffectLedger per turn. Opted-in model tool
+        # calls record inverses as they execute (see
+        # _instrumented_registry). On ABORT — cancellation (STOP cancels
+        # _active_task, the existing path) or an unhandled exception —
+        # rollback restores the pre-turn state. A turn that COMPLETES
+        # keeps its effects: the ledger is dropped in finally without
+        # rolling back (product invariant — the user wanted them).
+        ledger = EffectLedger()
+        self._run_ledger = ledger
         try:
             await self._turn(text)
         except asyncio.CancelledError:
             log.info("turn %s cancelled", text[:40])
+            await ledger.rollback()
             raise
         except Exception as exc:  # noqa: BLE001 — surface to the UI
             log.exception("turn failed")
+            await ledger.rollback()
             await self.bus.publish(
                 ErrorEvent(message=_friendly_error(exc), recoverable=True)
             )
         finally:
+            self._run_ledger = None
             self._busy = False
             # GATE-3.5 (C4/R05): settle_to_terminal's speech guard
             # refuses while TTS is dispatched-but-unacked or physically
@@ -398,3 +437,53 @@ class AgentRuntime:
         self.deps_base.audit.log("control", "stop", {"scope": "run"})
         await asyncio.sleep(0.05)
         self._set_voice(VoiceState.SLEEPING)
+
+
+# --------------------------------------------------------------------- #
+# A1 (Cordis): recording wrapper for opted-in tool handlers. Module-level
+# (below the class) so the AgentRuntime annotation resolves.
+
+def _recording_handler(runtime: AgentRuntime, spec: ToolSpec) -> Handler:
+    """Wrap one opted-in tool handler so a successful effectful call
+    records its inverse into the turn's EffectLedger (A1).
+
+    ``functools.wraps`` keeps the ORIGINAL signature/annotations visible
+    to inspect.signature, which build_pydantic_tools uses to derive the
+    model-facing JSON schema — the wrapper is transparent to the tool
+    layer. Inverses are recorded only when ALL of:
+
+      * a turn is live (``runtime._run_ledger`` set — never during
+        execute_direct / approval execution);
+      * the pair table (effect_ledger.inverse_for) has an inverse and
+        the tool's returned text proves the effect happened;
+      * no inverse for that key is already armed ("clear media ONLY
+        when the same run opened it" — the first successful media.play
+        of a run arms the inverse, later ones in the same run do not
+        stack duplicates).
+
+    The inverse closure reuses the existing handler via the SHARED
+    registry's execute_direct (gate bypassed by design — the effect
+    already happened; no new side-effect code paths).
+    """
+    original = spec.handler
+
+    @functools.wraps(original)
+    async def _recorded(tctx, *args, **kwargs):
+        result = await original(tctx, *args, **kwargs)
+        ledger = runtime._run_ledger
+        if ledger is not None and not ledger.has_armed(spec.name):
+            pair = inverse_for(spec.name, kwargs, result)
+            if pair is not None:
+                inverse_tool, inverse_args = pair
+                run_id = tctx.run_id
+                registry = runtime.registry
+
+                async def _inverse():
+                    return await registry.execute_direct(
+                        inverse_tool, inverse_args, run_id=run_id
+                    )
+
+                ledger.add(spec.name, _inverse)
+        return result
+
+    return _recorded

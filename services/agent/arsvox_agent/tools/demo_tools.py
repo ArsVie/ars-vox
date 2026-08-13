@@ -177,5 +177,6 @@ SPECS = [
         "(mock mode only).",
         demo_populate,
         PolicyKind.REVERSIBLE,
+        effect="revertible",
     ),
 ]
