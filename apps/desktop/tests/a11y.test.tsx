@@ -28,7 +28,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ConversationPanel } from "../src/components/ConversationPanel";
-import { StatusBar } from "../src/components/StatusBar";
+import { ComposerStatus, HomeAffordance } from "../src/components/StatusBar";
 import type { VoiceState } from "../src/contracts";
 import { appStore } from "../src/store";
 import {
@@ -87,7 +87,12 @@ function setVoiceState(state: VoiceState): void {
 
 function renderStatusBar(state: VoiceState): string {
   setVoiceState(state);
-  return renderToStaticMarkup(<StatusBar />);
+  return renderToStaticMarkup(
+    <>
+      <HomeAffordance />
+      <ComposerStatus />
+    </>,
+  );
 }
 
 /** Capabilities the conversation surface declares in the shared registry. */

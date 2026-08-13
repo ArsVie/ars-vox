@@ -171,8 +171,8 @@ describe("ConversationPanel history survival", () => {
   });
 });
 
-describe("ConversationPanel shell-state non-duplication", () => {
-  it("never repeats shell-level assistant state (StatusBar owns it)", () => {
+describe("ConversationPanel shell-state embedding", () => {
+  it("embeds the single composer status bar without duplicating activity text", () => {
     appStore.getState().applyEvent({
       type: "state_update",
       voice_state: "listening",
@@ -180,11 +180,13 @@ describe("ConversationPanel shell-state non-duplication", () => {
       created_at: ts(),
     });
     const html = render("primary");
-    expect(html).not.toContain("Escuchando");
-    expect(html).not.toContain("Pensando");
-    expect(html).not.toContain("Deteniendo");
+    // The composer status row IS the canonical single presentation.
+    expect(html).toContain("composer-status");
+    expect(html).toContain('role="status"');
+    expect(html).toContain("status-pill");
+    // Exactly one live region; the activity line is not repeated.
+    expect((html.match(/role="status"/g) ?? []).length).toBe(1);
     expect(html).not.toContain("Procesando correos");
-    expect(html).not.toContain("status-pill");
   });
 });
 

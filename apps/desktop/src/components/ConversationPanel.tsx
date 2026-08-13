@@ -8,6 +8,7 @@ import { useSurfaceRole } from "../roles/context";
 import { MicButton } from "./MicButton";
 import { MicHero } from "./MicHero";
 import { SendIcon } from "./icons";
+import { ComposerStatus } from "./StatusBar";
 import { FollowUpChips } from "./FollowUpChips";
 import { MarkdownText } from "./MarkdownText";
 import { OptionCards } from "./OptionCards";
@@ -124,6 +125,7 @@ export function ConversationPanel({ meta, panelId }: { meta?: PanelMeta; panelId
           ))
         )}
       </div>
+      <ComposerStatus />
       <div className="composer" data-draft={draft.trim() ? "set" : "empty"}>
         <input
           value={draft}

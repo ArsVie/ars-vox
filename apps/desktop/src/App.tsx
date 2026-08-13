@@ -6,7 +6,7 @@ import { registerProductSurfaces } from "./adaptive/surfaces";
 import { ConfirmationPanel } from "./components/ConfirmationPanel";
 import { ErrorPanel } from "./components/ErrorPanel";
 import { PersistentRegions, type PersistentSurface } from "./components/PersistentRegions";
-import { StatusBar } from "./components/StatusBar";
+import { FloatingStatus, HomeAffordance } from "./components/StatusBar";
 import { TtsPlayer } from "./components/TtsPlayer";
 import { AdaptiveStage } from "./layout/AdaptiveStage";
 import { computeAdaptiveGeometry } from "./layout/adaptiveEngine";
@@ -86,6 +86,12 @@ export default function App() {
     (media.title !== "" || media.videoId !== null || media.url !== null)
   );
   const mediaInLayout = adaptiveAssignments.some((a) => a.surfaceId === "media");
+  // UI-WAVE: the status bar is embedded above the composer INSIDE the
+  // conversation panel; the floating fallback renders only while the
+  // conversation surface is not part of the composition.
+  const conversationInLayout = adaptiveAssignments.some(
+    (a) => a.surfaceId === "conversation",
+  );
   // GATE-3.5 (A6/R34): the notifications region shows while there is
   // something real to render — restored/live notifications (not merely a
   // system message in the chat).
@@ -139,7 +145,7 @@ export default function App() {
       data-large-text={largeText ? "" : undefined}
       data-high-contrast={highContrast ? "" : undefined}
     >
-      <StatusBar />
+      <HomeAffordance />
       {geometry ? (
         <AdaptiveStage
           geometry={geometry}
@@ -147,6 +153,7 @@ export default function App() {
         />
       ) : null}
       <PersistentRegions surfaces={persistentSurfaces} />
+      {conversationInLayout ? null : <FloatingStatus />}
       <ConfirmationPanel />
       <ErrorPanel />
       <TtsPlayer />

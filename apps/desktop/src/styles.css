@@ -277,28 +277,52 @@ body,
 
 /* --------------------------------------------------- shell chrome (floating)
    W0-DIRECTIVE: not a header/status bar. The state presentation is a
-   minimal floating cluster — persistent ARS·VOX home affordance, the
-   single voice-state pill (where the eyes land), and STOP — hovering at
-   the top-center of the stage in every template. */
-.shell-chrome {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 120;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-2);
-  box-shadow: var(--shadow-float);
-  font-size: 13.5px;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-  max-width: calc(100% - 24px);
-}
+   minimal floating cluster — persistent ARS·VOX home affordance only: the
+      voice-state pill + STOP now live in .composer-status above the input. */
+   .shell-chrome {
+     position: absolute;
+     top: 12px;
+     left: 12px;
+     z-index: 120;
+     display: flex;
+     align-items: center;
+     padding: 4px 6px;
+     border-radius: 999px;
+     border: 1px solid var(--panel-border);
+     background: var(--panel-2);
+     box-shadow: var(--shadow-float);
+     font-size: 13.5px;
+     font-variant-numeric: tabular-nums;
+     user-select: none;
+   }
+
+   /* UI-WAVE: minimal status row embedded ABOVE the composer (backlog
+      directive) — pill + timer left, STOP right. */
+   .composer-status {
+     display: flex;
+     align-items: center;
+     gap: 10px;
+     padding: 6px 12px 4px;
+     user-select: none;
+   }
+
+   /* UI-WAVE: floating fallback (top-right) when the conversation surface
+      is not part of the composition — voice state + STOP stay reachable. */
+   .floating-status {
+     position: absolute;
+     top: 12px;
+     right: 12px;
+     z-index: 120;
+     display: flex;
+     align-items: center;
+     gap: 10px;
+     padding: 6px 10px;
+     border-radius: 999px;
+     border: 1px solid var(--panel-border);
+     background: var(--panel-2);
+     box-shadow: var(--shadow-float);
+     user-select: none;
+   }
 
 /* Persistent home affordance: the ARS·VOX wordmark returns to the
    central mic hero (C1 layout reset through the shared wire seam). */
@@ -1047,6 +1071,11 @@ body,
   cursor: pointer;
   flex: none;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* UI-WAVE: push STOP to the right edge of the composer status row. */
+.composer-status .stop-button {
+  margin-left: auto;
 }
 
 /* The visible stop square: ~18px red rounded square, glyph inside. */
@@ -1825,7 +1854,9 @@ body,
   font-size: 13.5px;
 }
 
-.app[data-large-text] .shell-chrome {
+.app[data-large-text] .shell-chrome,
+.app[data-large-text] .composer-status,
+.app[data-large-text] .floating-status {
   font-size: 15px;
 }
 

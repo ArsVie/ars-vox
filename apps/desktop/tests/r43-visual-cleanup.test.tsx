@@ -32,7 +32,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ConfirmationPanel } from "../src/components/ConfirmationPanel";
 import { ConversationPanel } from "../src/components/ConversationPanel";
 import { PanelHeader } from "../src/components/PanelHeader";
-import { STATUS_VOCABULARY, StatusBar } from "../src/components/StatusBar";
+import { STATUS_VOCABULARY, ComposerStatus, HomeAffordance } from "../src/components/StatusBar";
 import { appStore } from "../src/store";
 import {
   SurfaceRoleProvider,
@@ -41,7 +41,11 @@ import {
 import type { SurfaceRole } from "../src/adaptive/contracts";
 
 function renderStatusBar(): string {
-  return renderToStaticMarkup(<StatusBar />);
+  return renderToStaticMarkup(<ComposerStatus />);
+}
+
+function renderHome(): string {
+  return renderToStaticMarkup(<HomeAffordance />);
 }
 
 /** Capabilities the conversation surface declares in the shared registry. */
@@ -214,7 +218,7 @@ describe("R43 role=status live region contains no interactive controls", () => {
 
 describe("W0-DIRECTIVE: persistent home affordance + close X on panel headers", () => {
   it("the ARS·VOX home affordance is persistent and labeled Inicio", () => {
-    const html = renderStatusBar();
+    const html = renderHome();
     expect(html).toContain("ARS");
     expect(html).toContain("VOX");
     expect(html).toContain('aria-label="Inicio"');
