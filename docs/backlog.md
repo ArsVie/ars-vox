@@ -68,11 +68,31 @@ The backlog is always the present state; it is not tied to a date.
 
 ## Browser
 
-- **Browser must respond.** Asking for news ("noticias de Mexicali")
-  fails with "El escritorio no respondió" — the browser surface does
-  not show the requested page in the packaged app. The browser panel
-  must open and navigate reliably; a failed navigation must be
-  reported honestly.
+- **Browser must respond — DONE (browser-use integration, 2026-08-13).**
+  Asking for news ("noticias de Mexicali") used to fail with "El
+  escritorio no respondió" — the agent's browser actions hard-depended
+  on the Electron desktop round-trip. The agent now executes navigation
+  and DOM actions IN-PROCESS on a local, text-first Chromium engine
+  (browser_use 0.13.7, pinned; `services/agent/arsvox_agent/
+  browser_engine.py`): real url/title, real page text, no screenshots,
+  no vision. The desktop WebContentsView remains the USER'S display via
+  the same frozen wire events (best-effort mirror — the agent never
+  waits on it). Navigation policy (scheme/local-private/allowlist) is
+  enforced server-side, mirroring security-policy.ts. Live-verified:
+  real turns navigate + read real Wikipedia content; non-allowlisted
+  URLs are refused before any emission.
+  Open follow-ups:
+  - **Chromium in the packaged app**: dev runs download Chromium via
+    `browser-use install` (one-time); the packaged build must bundle or
+    provision the Chromium binary + declare the path (engine accepts
+    `executable_path` via config today is NOT wired — wire it).
+  - **Headful mode for the user**: engine runs headless by default
+    (agent reads text); if the desktop is absent the user sees nothing —
+    decide whether `engine_headless: false` or CDP-attach to the
+    Electron view is the product answer.
+  - **Click by visible text**: current click target matching covers
+    aria-label/visible text on a/button/input; full text-fragment
+    search (any element) is a possible refinement.
 
 ## Status bar
 

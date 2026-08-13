@@ -1,15 +1,33 @@
 ---
 type: status
 title: Ars-Vox current state
-description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-10.
-timestamp: 2026-08-10T03:10:00Z
+description: Single authority for current implementation state. Supersedes all current-state claims in ADRs, audits, and HANDOFF.md. Updated 2026-08-13.
+timestamp: 2026-08-13T21:30:00Z
 ---
 
-# Ars-Vox — current state (2026-08-10)
+# Ars-Vox — current state (2026-08-13)
 THIS FILE IS THE SINGLE AUTHORITY for current implementation state.
 HANDOFF.md is the roadmap (guidance, not history); ADRs are historical
 decisions; audits are snapshots. If any other doc contradicts this file,
 this file wins.
+
+## BROWSER-USE ENGINE (wip/browser-use-2026-08-13, 2026-08-13)
+
+The agent's browser authority moved IN-PROCESS. browser.navigate and
+browser.dom_action now execute on a local, text-first Chromium engine
+(browser_use 0.13.7, pinned; services/agent/arsvox_agent/
+browser_engine.py) — no screenshots, no vision, no desktop dependency.
+The Electron WebContentsView stays the USER'S display: both tools emit
+the same frozen wire events (best-effort mirror), but the agent never
+waits on the desktop, so "El escritorio no respondió" is structurally
+gone. Navigation policy (scheme / local-or-private / allowlist) is
+enforced server-side, ported 1:1 from security-policy.ts; blocked URLs
+are refused BEFORE any emission. Config gains browser.engine_enabled /
+browser.engine_headless (default true); the legacy Electron round-trip
+remains the fallback when the engine is disabled (or absent in unit
+tests). Live-verified with the real model: wikipedia navigation +
+real page text + honest blocked refusal. Packaging follow-up: Chromium
+provisioning for the packaged build (backlog).
 
 ## GATE-5 Wave 0 (MERGED + PACKAGED-VERIFIED 2026-08-09; wire and store.ts FROZEN)
 
