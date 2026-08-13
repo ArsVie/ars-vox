@@ -70,7 +70,7 @@ describe("TasksPanel role variants (UI-204)", () => {
     expect(html).toContain("Organizar notas");
     expect(html).toContain("Llamar a María"); // done items stay visible
     expect(html).toContain("status-chip--done");
-    expect(html).toContain("Hecha");
+    expect(html).toContain("Completada");
     expect(html).toContain("Revisar correo");
     expect(html).toContain("Cada día 9:00 · próxima 2026-08-08 09:00");
   });

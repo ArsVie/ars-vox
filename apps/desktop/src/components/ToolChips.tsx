@@ -2,16 +2,28 @@
  * ToolChips — compact disclosure of the assistant's tool activity.
  *
  * Collapsed: one quiet chip with plain Spanish counts ("4 acciones · 2
- * mensajes"). Expanded (toggle button, aria-expanded): one chip per tool
- * call, each a label plus a status dot — done (ok-green), running
- * (accent, pulsing), error (danger red). Auto-hides when there are no
- * calls. Dark theme, no emojis, elderly-user sized tap targets.
+ * mensajes"). Expanded (toggle button, aria-expanded): one ROW per tool
+ * call in the gallery "Tool Chips" pattern — a small status icon on the
+ * left, a bold Spanish operation label, and, when the data carries one,
+ * a rounded mono target chip with the tool argument summary (title, URL,
+ * file name, command). Status: done (ok-green), running (accent,
+ * pulsing), error (danger red). Auto-hides when there are no calls.
+ * Dark theme, no emojis, elderly-user sized rows, high-contrast ink.
  *
  * Presentational by design: the integrator feeds it from whatever owns
  * tool-call data (see mount notes) via `calls` / `messageCount` props.
  * The wire already carries the raw material — ServerEvent `tool_call`
- * (tool, status: running|done|error|rejected) — but the store does not
- * retain it yet, so this component holds no store binding.
+ * (tool, args, status) — but the store does not retain it yet, so this
+ * component holds no store binding.
+ *
+ * Label contract (unchanged): each call is `{ label, status }`. The
+ * label is either a plain Spanish phrase ("Buscar receta") or a
+ * wire-style `tool · target` pair ("media.play · Mi video"). Known tool
+ * names map to Spanish operation labels (media.play → "Reproducción",
+ * ui.set_primary_panel → "Abrir panel"); unknown names render as-is.
+ * The mono target chip renders only when the label itself carries a
+ * target after " · " — targets or durations the wire does not provide
+ * are never invented.
  */
 
 import { useId, useState } from "react";
@@ -45,6 +57,60 @@ const STATUS_LABELS: Record<ToolCallStatus, string> = {
   running: "en curso",
   error: "con error",
 };
+
+/** Spanish operation labels for known wire tool names (gallery pattern). */
+const TOOL_OPERATIONS: Record<string, string> = {
+  "media.play": "Reproducción",
+  "media.play_pause": "Reproducción",
+  "media.seek": "Reproducción",
+  "media.select_result": "Reproducción",
+  "media.search_results": "Búsqueda",
+  "audio.play": "Reproducción",
+  "youtube.play": "Reproducción",
+  "youtube.search": "Búsqueda",
+  "search.push": "Búsqueda",
+  "memory.search_results": "Búsqueda",
+  "memory.buffer": "Guardar en memoria",
+  "browser.navigate": "Abrir página",
+  "browser.dom_action": "Acción en página",
+  "browser.js": "Acción en página",
+  "web.dom": "Acción en página",
+  "ui.set_primary_panel": "Abrir panel",
+  "app.alert": "Aviso",
+  "image.set": "Mostrar imagen",
+};
+
+/** Domain fallback when a tool name has no exact mapping. */
+const TOOL_DOMAINS: Record<string, string> = {
+  media: "Reproducción",
+  audio: "Reproducción",
+  youtube: "Reproducción",
+  browser: "Navegación",
+  web: "Página web",
+  memory: "Memoria",
+  search: "Búsqueda",
+  image: "Imagen",
+  app: "Interfaz",
+  ui: "Interfaz",
+  system: "Sistema",
+};
+
+/** Spanish operation label for a tool name (unknown names stay raw). */
+function operationLabel(name: string): string {
+  return TOOL_OPERATIONS[name] ?? TOOL_DOMAINS[name.split(".")[0]] ?? name;
+}
+
+/**
+ * Splits a `tool · target` label into [operation, target]. Labels without
+ * a separator (plain Spanish phrases) come back whole with no target —
+ * a target is only ever the label's own text, never invented.
+ */
+function splitLabel(label: string): [string, string | undefined] {
+  const [first, ...rest] = label.split(" · ");
+  const target = rest.join(" · ");
+  if (first.trim() === "" || target.trim() === "") return [label, undefined];
+  return [first, target];
+}
 
 /** Demo fixture for the integrator: one of each status + a done pair. */
 export const TOOLCHIPS_DEMO: { calls: ToolCallChip[]; messageCount: number } = {
@@ -105,6 +171,7 @@ export function ToolChips({
         <ul id={listId} className="toolchips-list" role="list">
           {calls.map((call, index) => {
             const status: ToolCallStatus = call.status ?? "done";
+            const [operation, target] = splitLabel(call.label);
             return (
               <li
                 key={`${call.label}-${index}`}
@@ -116,8 +183,20 @@ export function ToolChips({
                   className={`toolchips-dot toolchips-dot--${status}`}
                   aria-hidden="true"
                 />
-                <span className="toolchips-label">{call.label}</span>
-                <span className="toolchips-sr-only">{STATUS_LABELS[status]}</span>
+                <span className="toolchips-label">
+                  {operationLabel(operation)}
+                </span>
+                {target !== undefined ? (
+                  <>
+                    <span className="toolchips-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="toolchips-target">{target}</span>
+                  </>
+                ) : null}
+                <span className="toolchips-sr-only">
+                  {STATUS_LABELS[status]}
+                </span>
               </li>
             );
           })}

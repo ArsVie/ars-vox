@@ -6,7 +6,7 @@ import { useSurfaceRole } from "../roles/context";
 import { appStore } from "../store";
 import type { PanelMeta } from "../store";
 import { PanelHeader } from "./PanelHeader";
-import { BellIcon, CheckIcon } from "./icons";
+import { BellIcon, CheckIcon, ChevronRightIcon } from "./icons";
 import "./tasks-panel.css";
 
 /**
@@ -28,13 +28,15 @@ import "./tasks-panel.css";
  * SurfaceRoleProvider — the adaptive mount is the ONLY mount. Role changes
  * never touch store.content.tasks.
  *
- * UI WAVE (leaf F): rows are cards with a colored status chip (pending =
- * dim, in-progress = accent, done = ok green, error = danger). The frozen
- * wire TodoItem carries no progress/status/error fields yet, so those are
- * read leniently and degrade gracefully: when the Python side adds them,
- * the subline and chips light up with no contract change; until then they
- * simply never render. Filter state is local component state — the store
- * contract is untouched (same reads: content.tasks + dispatchCommand).
+ * UI WAVE (leaf F): rows are capsule pills — status icon + bold label +
+ * muted quantity/due on the right + state badge + toggle + chevron. State
+ * is redundantly encoded (icon + text + color) for elderly a11y; done rows
+ * carry a solid green "Completada" badge. The frozen wire TodoItem carries
+ * no progress/status/error/quantity fields yet, so those are read leniently
+ * and degrade gracefully: when the Python side adds them, the ring, badge
+ * and quantity light up with no contract change; until then they simply
+ * never render. Filter state is local component state — the store contract
+ * is untouched (same reads: content.tasks + dispatchCommand).
  */
 
 /** Lenient extras the frozen wire does not carry yet (read-only, optional).
@@ -43,6 +45,7 @@ interface TodoExtras {
   status?: unknown;
   progress?: unknown;
   error?: unknown;
+  quantity?: unknown;
 }
 
 export type TodoStatus = "pending" | "in-progress" | "done" | "error";
@@ -50,7 +53,7 @@ export type TodoStatus = "pending" | "in-progress" | "done" | "error";
 const STATUS_LABEL: Record<TodoStatus, string> = {
   pending: "Pendiente",
   "in-progress": "En curso",
-  done: "Hecha",
+  done: "Completada",
   error: "Error",
 };
 
@@ -95,6 +98,44 @@ export function progressLabel(value: unknown): string | null {
     }
   }
   return null;
+}
+
+/** Lenient optional quantity text (e.g. "2 mensajes"), shown muted on the
+ *  right of the row. Absent/unusable = not rendered. */
+export function quantityLabel(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string" && value.trim() !== "") return value.trim();
+  return null;
+}
+
+/** Short numeric progress for the in-progress ring ("67%", "3/5"). Longer
+ *  labels stay out of the ring — the state badge carries the text. */
+export function ringNumber(value: unknown): string | null {
+  const label = progressLabel(value);
+  if (label === null) return null;
+  return /^(\d{1,3}%|\d{1,2}\/\d{1,2})$/.test(label) ? label : null;
+}
+
+/** ADVISOR P1-4: humanize wire due dates ("2026-08-14T08:00:00" →
+ *  "jueves 14 ago, 08:00") so rows never show a raw machine string.
+ *  Unparseable values fall back to the trimmed raw text (lenient). */
+export function humanizeDue(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return trimmed;
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return trimmed;
+  }
 }
 
 export type FilterKey = "todas" | "pendiente" | "en-curso" | "completadas";
@@ -156,37 +197,50 @@ export function TasksPanel({
   const visibleTodos = role === "support" ? urgent : filterTodos(todos, filter);
   const hasContent = todos.length > 0 || reminders.length > 0;
 
-  const renderTodoCard = (todo: TodoItem) => {
+  const renderTodoRow = (todo: TodoItem) => {
     const status = todoStatus(todo);
     const extras = todo as TodoItem & TodoExtras;
-    const progress = progressLabel(extras.progress);
+    const quantity = quantityLabel(extras.quantity);
+    const ring = ringNumber(extras.progress);
     const errorText =
       typeof extras.error === "string" && extras.error.trim() !== ""
         ? extras.error.trim()
         : null;
     return (
-      <li key={todo.id} className={`task-card task-card--${status}`}>
+      <li key={todo.id} className={`task-row task-row--${status}`}>
+        <span
+          role="img"
+          aria-label={STATUS_LABEL[status]}
+          className={`task-status-icon task-status-icon--${status}`}
+        >
+          {status === "done" ? (
+            <CheckIcon size={18} />
+          ) : status === "error" ? (
+            "!"
+          ) : status === "in-progress" && ring ? (
+            ring
+          ) : null}
+        </span>
+        <span className="task-title">{todo.title}</span>
+        <span className="task-row-meta">
+          {quantity ? <span className="task-quantity">{quantity}</span> : null}
+          {todo.due ? <span className="task-due">{humanizeDue(todo.due)}</span> : null}
+          {errorText ? <span className="task-error">{errorText}</span> : null}
+        </span>
+        <span className={`status-chip status-chip--${status}`}>
+          {STATUS_LABEL[status]}
+        </span>
         <button
           type="button"
           className={`task-check ${todo.done ? "checked" : ""}`}
           aria-label={todo.done ? "Marcar como pendiente" : "Marcar como hecha"}
           onClick={() => dispatchCommand({ action: "tasks.toggle", task_id: todo.id })}
         >
-          {todo.done ? <CheckIcon size={14} /> : null}
+          {todo.done ? <CheckIcon size={16} /> : null}
         </button>
-        <div className="task-card-main">
-          <div className="task-card-top">
-            <span className="task-title">{todo.title}</span>
-            <span className={`status-chip status-chip--${status}`}>
-              {STATUS_LABEL[status]}
-            </span>
-          </div>
-          <div className="task-card-meta">
-            {todo.due ? <span className="task-due">{todo.due}</span> : null}
-            {progress ? <span className="task-progress">{progress}</span> : null}
-            {errorText ? <span className="task-error">{errorText}</span> : null}
-          </div>
-        </div>
+        <span className="task-chevron" aria-hidden="true">
+          <ChevronRightIcon size={16} />
+        </span>
       </li>
     );
   };
@@ -219,13 +273,13 @@ export function TasksPanel({
               <span className="tasks-section-label">
                 {`Urgentes · ${urgent.length}/${pending.length}`}
               </span>
-              <ul className="tasks-list">{urgent.map(renderTodoCard)}</ul>
+              <ul className="tasks-list">{urgent.map(renderTodoRow)}</ul>
             </div>
           ) : (
             <div className="tasks-section">
               <span className="tasks-section-label">Sin tareas urgentes</span>
               {pending.length > 0 ? (
-                <ul className="tasks-list">{pending.slice(0, 1).map(renderTodoCard)}</ul>
+                <ul className="tasks-list">{pending.slice(0, 1).map(renderTodoRow)}</ul>
               ) : null}
             </div>
           )}
@@ -255,7 +309,7 @@ export function TasksPanel({
             </div>
           ) : null}
           {visibleTodos.length > 0 ? (
-            <ul className="tasks-list task-cards">{visibleTodos.map(renderTodoCard)}</ul>
+            <ul className="tasks-list task-rows">{visibleTodos.map(renderTodoRow)}</ul>
           ) : (
             <div className="tasks-filter-empty">No hay tareas en este filtro.</div>
           )}

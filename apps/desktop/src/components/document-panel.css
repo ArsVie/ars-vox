@@ -19,7 +19,79 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
+  /* ADVISOR P2-9: truncate the TAIL ("Receta de av…"), never the head —
+     document names are user titles (no extension to protect), and losing
+     the first words hides what the document IS. The full name stays in
+     the `title` tooltip. */
+  direction: ltr;
   unicode-bidi: isolate;
   text-align: left;
+}
+
+/* Source chip (gallery style): file-type badge + name + link icon.
+   Visual only. Em-based sizing so the chip scales with large-text mode;
+   no fixed heights. Colors come from the --av-* tokens (PDF = danger,
+   EPUB = amber, TXT/MD/other = accent). */
+
+.doc-source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.18em 0.75em 0.18em 0.3em;
+  border: 1px solid var(--av-line);
+  border-radius: 999px;
+  background: var(--av-field);
+  color: var(--av-ink);
+  line-height: 1.4;
+}
+
+.doc-source-badge {
+  flex: none;
+  padding: 0.08em 0.55em;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.doc-source-badge--pdf {
+  background: var(--av-danger);
+}
+
+.doc-source-badge--epub {
+  background: #d99a2b; /* amber (warn tone) — no --av-* warn token exists */
+}
+
+.doc-source-badge--file {
+  background: var(--av-accent);
+}
+
+.doc-source-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--av-ink);
+}
+
+.doc-source-link {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  color: var(--av-ink-dim);
+  transition: color 120ms ease;
+}
+
+.doc-source-chip:hover .doc-source-link {
+  color: var(--av-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-source-link {
+    transition: none;
+  }
 }

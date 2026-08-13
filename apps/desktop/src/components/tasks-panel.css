@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------
- * TasksPanel — redesigned task surface (card rows + filter chips).
+ * TasksPanel — redesigned task surface (capsule pill rows + filter chips).
  * UI wave leaf F. Dark premium, Spanish-first, elderly-user targets.
  *
  * Every rule is scoped under .tasks-panel so this file never leaks
@@ -69,40 +69,98 @@
   background: rgba(11, 18, 32, 0.32);
 }
 
-/* --- Task cards -------------------------------------------------- */
+/* --- Task rows (capsule pills) ----------------------------------- */
 
-.tasks-panel .task-cards {
+.tasks-panel .task-rows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-.tasks-panel .task-card {
+.tasks-panel .task-row {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-height: 64px;
-  padding: 12px 14px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px; /* no fixed height: large-text mode wraps freely */
   background: var(--av-inset, #1a2133);
   border: 1px solid var(--av-line, #2a3348);
-  border-radius: var(--av-r-card, 10px);
+  border-radius: var(--av-r-pill, 999px);
   transition: border-color 140ms ease, background-color 140ms ease;
 }
 
-.tasks-panel .task-card:hover {
+.tasks-panel .task-row:hover {
   border-color: var(--av-ink-dim, #9aa7bd);
 }
 
-.tasks-panel .task-card:focus-within {
+.tasks-panel .task-row:focus-within {
   border-color: var(--av-accent, #3d9aff);
 }
 
-/* Completed cards recede slightly; status chip still carries the state. */
-.tasks-panel .task-card--done {
-  opacity: 0.85;
+/* Completed rows recede slightly; icon + badge + toggle still carry state. */
+.tasks-panel .task-row--done {
+  opacity: 0.9;
+}
+
+/* --- Status icon: redundant with the badge (color + glyph + label) */
+
+.tasks-panel .task-status-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 50%;
+  border: 2px solid var(--av-line, #2a3348);
+}
+
+/* pending — hollow ring */
+.tasks-panel .task-status-icon--pending {
+  color: var(--av-ink-dim, #9aa7bd);
+  border-color: var(--av-line, #2a3348);
+}
+
+/* in-progress — numbered accent ring */
+.tasks-panel .task-status-icon--in-progress {
+  color: var(--av-accent, #3d9aff);
+  border-color: var(--av-accent, #3d9aff);
+}
+
+/* done — solid ok-green circle with check */
+.tasks-panel .task-status-icon--done {
+  color: #0b1220;
+  background: var(--av-ok, #25a878);
+  border-color: var(--av-ok, #25a878);
+}
+
+/* error — danger ring */
+.tasks-panel .task-status-icon--error {
+  color: var(--av-danger, #ee5c61);
+  border-color: var(--av-danger, #ee5c61);
+}
+
+/* --- Right-side meta: quantity / due / error --------------------- */
+
+.tasks-panel .task-row-meta {
+  flex: 0 1 auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+.tasks-panel .task-quantity {
+  font-weight: 600;
 }
 
 .tasks-panel .task-check {
@@ -116,7 +174,7 @@
   color: var(--av-ink-dim, #9aa7bd);
   background: transparent;
   border: 1px solid var(--av-line, #2a3348);
-  border-radius: var(--av-r-chip, 6px);
+  border-radius: 50%; /* round toggle inside the capsule row */
   cursor: pointer;
   transition: background-color 140ms ease, border-color 140ms ease,
     color 140ms ease;
@@ -138,24 +196,22 @@
   border-color: var(--av-ok, #25a878);
 }
 
-.tasks-panel .task-card-main {
+.tasks-panel .task-title {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.tasks-panel .task-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.tasks-panel .task-title {
   font-size: 16px;
   font-weight: 600;
   line-height: 1.35;
   color: var(--av-ink, #e8ecf4);
   overflow-wrap: anywhere;
+}
+
+.tasks-panel .task-chevron {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--av-ink-dim, #9aa7bd);
 }
 
 /* --- Status chip (colored by state) ------------------------------ */
@@ -165,10 +221,10 @@
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  padding: 2px 10px;
+  padding: 4px 12px;
   font-size: 13px;
   font-weight: 600;
-  border-radius: var(--av-r-chip, 6px);
+  border-radius: 999px; /* pill badge */
   border: 1px solid transparent;
 }
 
@@ -186,11 +242,11 @@
   border-color: rgba(61, 154, 255, 0.45);
 }
 
-/* done — ok green */
+/* done — solid ok-green "Completada" badge (high contrast) */
 .tasks-panel .status-chip--done {
-  color: var(--av-ok, #25a878);
-  background: rgba(37, 168, 120, 0.14);
-  border-color: rgba(37, 168, 120, 0.45);
+  color: #0b1220;
+  background: var(--av-ok, #25a878);
+  border-color: var(--av-ok, #25a878);
 }
 
 /* error — danger */
@@ -200,23 +256,11 @@
   border-color: rgba(238, 92, 97, 0.45);
 }
 
-/* --- Subline: due / progress / error ----------------------------- */
-
-.tasks-panel .task-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-top: 6px;
-  font-size: 14px;
-  color: var(--av-ink-dim, #9aa7bd);
-}
-
-.tasks-panel .task-progress {
-  font-weight: 600;
-}
+/* --- Error text (right-side meta) --------------------------------- */
 
 .tasks-panel .task-error {
   color: var(--av-danger, #ee5c61);
+  font-weight: 600;
 }
 
 /* --- Filter empty state ------------------------------------------- */

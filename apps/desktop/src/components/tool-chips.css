@@ -1,16 +1,27 @@
 /*
  * ToolChips — compact tool-activity disclosure (dark theme, Spanish, no
- * emojis, elderly-user sized targets).
+ * emojis, elderly-user sized rows).
+ *
+ * Expanded rows follow the gallery "Tool Chips" pattern: a small status
+ * icon on the left, a bold Spanish operation label, and a rounded mono
+ * target chip with the tool argument summary (title, URL, file, command)
+ * when the label carries one ("tool · target"). No durations are shown —
+ * the wire provides none and they are never invented.
  *
  * Theme tokens are consumed with fallbacks so the app theme can override
  * them without this file changing:
  *   var(--av-ok, #25a878)      done dot
  *   var(--av-accent, #3d9aff)  running dot / focus ring
  *   var(--av-danger, #ee5c61)  error dot
- *   var(--av-ink-dim, #9aa7bd) quiet text
- *   var(--av-inset, #1a2133)   chip background
- *   var(--av-line, #2a3348)    chip border
+ *   var(--av-ink, #e8ecf4)     bold operation label / mono chip text
+ *   var(--av-ink-dim, #9aa7bd) quiet collapsed summary / separator dot
+ *   var(--av-inset, #1a2133)   row background (field-level surface)
+ *   var(--av-field, #131826)   mono target chip background
+ *   var(--av-line, #2a3348)    row / chip border
  *   var(--av-r-chip, 6px)      chip radius
+ *
+ * Monospace for the target chip uses the app's mono stack (no --av-mono
+ * token exists): ui-monospace, "Cascadia Mono", Consolas, monospace.
  */
 
 .toolchips {
@@ -63,10 +74,10 @@
   transform: rotate(-135deg);
 }
 
-/* Expanded — the chip list. */
+/* Expanded — one compact row per tool call (gallery "Tool Chips"). */
 .toolchips-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
   margin: 10px 0 0;
   padding: 0;
@@ -74,27 +85,55 @@
 }
 
 .toolchips-item {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-height: 40px;
+  max-width: 100%;
   padding: 6px 12px;
   border: 1px solid var(--av-line, #2a3348);
   border-radius: var(--av-r-chip, 6px);
   background: var(--av-inset, #1a2133);
-  color: inherit;
+  color: var(--av-ink, #e8ecf4);
   font-size: 15px;
 }
 
+/* Bold operation label — high-contrast ink, never the quiet dim tone. */
 .toolchips-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-weight: 650;
+  color: var(--av-ink, #e8ecf4);
   overflow-wrap: anywhere;
 }
 
-/* Status dots. */
+/* Punctuation between operation and target (decorative, SR-hidden). */
+.toolchips-sep {
+  flex: none;
+  color: var(--av-ink-dim, #9aa7bd);
+}
+
+/* Mono target chip — the tool argument summary (title, URL, file…). */
+.toolchips-target {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--av-line, #2a3348);
+  border-radius: var(--av-r-chip, 6px);
+  background: var(--av-field, #131826);
+  color: var(--av-ink, #e8ecf4);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Status dots — the small leading icon of each row. */
 .toolchips-dot {
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--av-ok, #25a878);
 }

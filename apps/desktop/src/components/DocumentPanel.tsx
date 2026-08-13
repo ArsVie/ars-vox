@@ -99,6 +99,11 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
   const title = doc?.title ?? meta?.title ?? "Documento";
   const canEdit = doc?.kind === "txt" || doc?.kind === "md" || (!isBinary && hasContent);
 
+  // Source chip (gallery style): short type badge + file name + link icon.
+  const chipKind = doc?.kind ?? "txt";
+  const chipTone = chipKind === "pdf" ? "pdf" : chipKind === "epub" ? "epub" : "file";
+  const chipName = doc?.title || doc?.path?.split("/").pop() || meta?.title || "Documento";
+
   const startEdit = (): void => {
     setDraft(fullText);
     setMode("edit");
@@ -142,6 +147,25 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
                 <PenIcon size={13} /> Editar
               </button>
             ) : null}
+            <span
+              className={`doc-source-chip doc-source-chip--${chipTone}`}
+              title={doc!.path}
+            >
+              <span className={`doc-source-badge doc-source-badge--${chipTone}`}>
+                {chipKind.toUpperCase()}
+              </span>
+              <span className="doc-source-name">{chipName}</span>
+              <svg className="doc-source-link" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M6.5 3.5h6v6M12.5 3.5L3.5 12.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
           </div>
           {isBinary ? (
             <>

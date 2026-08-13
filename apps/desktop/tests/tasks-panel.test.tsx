@@ -222,7 +222,8 @@ describe("TasksPanel card + chip markup", () => {
     expect(html).toContain("Comprar leche");
     expect(html).toContain("Organizar notas");
     expect(html).toContain("Llamar a María");
-    expect(html).toContain("task-card");
+    expect(html).toContain("task-row");
+    expect(html).toContain("task-rows");
   });
 
   it("status chip classes per state + progress/error/due sublines", () => {
@@ -233,12 +234,14 @@ describe("TasksPanel card + chip markup", () => {
     expect(html).toContain("status-chip--error");
     // Spanish labels for every state.
     expect(html).toContain(">Pendiente</span>");
-    expect(html).toContain(">Hecha</span>");
+    expect(html).toContain(">Completada</span>");
     expect(html).toContain(">En curso</span>");
     expect(html).toContain(">Error</span>");
-    // Subline: due, progress "3/5", error text.
+    // Subline: due, progress "3/5" in the in-progress ring icon, error text.
     expect(html).toContain('class="task-due">hoy</span>');
-    expect(html).toContain('class="task-progress">3/5</span>');
+    expect(html).toContain(
+      'class="task-status-icon task-status-icon--in-progress">3/5</span>',
+    );
     expect(html).toContain('class="task-error">No se pudo sincronizar</span>');
   });
 
