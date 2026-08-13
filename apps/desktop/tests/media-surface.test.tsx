@@ -97,7 +97,7 @@ describe("UI-205 MediaDock adaptive variants", () => {
     expect(html).toContain("Taller de carpintería");
     expect(html).toContain('aria-label="Pausar"');
     expect(html).toContain(
-      "youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&amp;autoplay=1",
+      "youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&amp;playsinline=1&amp;autoplay=1",
     );
 
     // A second tool-path change (pause) lands in the CONTROLLER first…

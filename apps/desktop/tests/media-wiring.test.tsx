@@ -261,7 +261,7 @@ describe("H7: real YouTube player control (no URL swap)", () => {
     });
 
     const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
-    expect(html).toContain("youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&amp;autoplay=1");
+    expect(html).toContain("youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&amp;playsinline=1&amp;autoplay=1");
     // Same video id, same key — toggling state never remounts the embed.
     expect(html).toContain('data-youtube-control="postmessage"');
   });
@@ -280,10 +280,10 @@ describe("H7: real YouTube player control (no URL swap)", () => {
 
   it("youtubeEmbedSrc builds the stable player-API url", () => {
     expect(youtubeEmbedSrc("dQw4w9WgXcQ", false)).toBe(
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1",
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&playsinline=1",
     );
     expect(youtubeEmbedSrc("dQw4w9WgXcQ", true)).toBe(
-      "https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&autoplay=1",
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&playsinline=1&autoplay=1",
     );
   });
 

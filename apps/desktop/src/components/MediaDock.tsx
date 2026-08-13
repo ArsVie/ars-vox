@@ -13,8 +13,10 @@ import { PauseIcon, PlayIcon, WaveformIcon, YoutubeIcon } from "./icons";
 
 function fmtTime(total: number): string {
   const s = Math.max(0, Math.floor(total));
-  const m = Math.floor(s / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
@@ -45,7 +47,16 @@ export const YT_PLAYER_READY_GRACE_MS = 5000;
 
 /** Stable embed URL for the player-API protocol (no URL swap on toggle). */
 export function youtubeEmbedSrc(videoId: string, autoplay: boolean): string {
-  const params = new URLSearchParams({ enablejsapi: "1" });
+  // origin + playsinline are REQUIRED for the IFrame API postMessage
+  // channel: without a matching origin the player never delivers
+  // onReady/infoDelivery to the host page (stuck 0:00 progress bar).
+  // URLSearchParams percent-encodes the origin (https%3A%2F%2Fhost) as
+  // the API expects; it is omitted outside a browser (SSR) where there
+  // is no origin to verify against.
+  const params = new URLSearchParams({ enablejsapi: "1", playsinline: "1" });
+  if (typeof window !== "undefined" && window.location.origin) {
+    params.set("origin", window.location.origin);
+  }
   if (autoplay) params.set("autoplay", "1");
   return `${YOUTUBE_EMBED_BASE}/${videoId}?${params.toString()}`;
 }
@@ -113,7 +124,10 @@ export function parseYoutubePlayerEvent(data: unknown): YoutubePlayerEvent {
     return out;
   };
 
-  if (ev.event === "onReady") return { kind: "ready" };
+  // onReady payloads carry info.currentTime/info.duration (and
+  // videoData) in the real API — seed the bar as soon as the player is
+  // ready instead of waiting for the first infoDelivery.
+  if (ev.event === "onReady") return { kind: "ready", ...timeInfo() };
   if (ev.event === "initialDelivery") {
     return { kind: "ready", ...timeInfo() };
   }
@@ -351,19 +365,27 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
     </button>
   );
 
+  // Honest-controls guard: with no real duration (the YouTube player
+  // never initialized its API channel), a fake "0:00 / 0:00" bar lies.
+  // Show the seek/time controls only once the player has reported a
+  // real duration; otherwise the row stays title + play/pause only.
+  const hasTime = m.durationS > 0;
+
   const progressControl = (
     <div className="media-player-progress">
-      <input
-        type="range"
-        min={0}
-        max={Math.max(1, m.durationS)}
-        value={Math.min(m.positionS, m.durationS)}
-        aria-label="Posición"
-        onChange={(e) =>
-          dispatchCommand({ action: "media.seek", position_s: Number(e.target.value) })
-        }
-      />
-      {role !== "persistent" ? (
+      {hasTime ? (
+        <input
+          type="range"
+          min={0}
+          max={Math.max(1, m.durationS)}
+          value={Math.min(m.positionS, m.durationS)}
+          aria-label="Posición"
+          onChange={(e) =>
+            dispatchCommand({ action: "media.seek", position_s: Number(e.target.value) })
+          }
+        />
+      ) : null}
+      {role !== "persistent" && hasTime ? (
         <span className="media-player-time">
           {fmtTime(m.positionS)} / {fmtTime(m.durationS)}
         </span>
