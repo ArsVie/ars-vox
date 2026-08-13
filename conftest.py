@@ -47,3 +47,9 @@ sys.meta_path[:] = [
 ]
 
 # (intentionally leave module-level names; conftest globals are inert)
+
+# Shared harness fixtures for BOTH test trees (tests/python and
+# tests/e2e). pytest >= 9 only accepts pytest_plugins in the TOP-LEVEL
+# conftest, so the declaration lives here — it used to be duplicated in
+# the two sub-conftests, which pytest 9.1+ rejects at collection time.
+pytest_plugins = ["tests.python.harness_fixtures"]
