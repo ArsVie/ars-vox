@@ -39,8 +39,8 @@ import {
   type StateSnapshotEvent,
 } from "./contracts";
 import { computeAdaptiveGeometry, type Viewport } from "./layout/adaptiveEngine";
-import { surfaceRegistry } from "./roles/registry";
-import { resolveLayout } from "./roles/fallback";
+import { surfaceRegistry, type SurfaceRequirementSnapshot } from "./roles/registry";
+import { resolveLayout, type ResolvedAssignment } from "./roles/fallback";
 import type { LayoutSpec as AdaptiveLayoutSpec } from "./adaptive/contracts";
 import {
   applyOverrides,
@@ -56,10 +56,17 @@ import {
 import { scoreChange } from "./layout/inertia";
 import {
   planLayout,
+  reconcileLayout,
   type PlannerInput,
   type PlannerRejection,
   type PlannerRejectionCode,
 } from "./adaptive/planner";
+import {
+  INITIAL_GATE_STATE,
+  reduce as reduceGate,
+  TRANSITION_MS,
+  type GateState,
+} from "./layout/transitionGate";
 import { contentRegistry } from "./state";
 import { applyBrowserViewState } from "./state/browserSlice";
 import { EMPTY_ADAPTIVE } from "./state/adaptiveTypes";
@@ -262,6 +269,74 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
     };
 
     /**
+     * B1 (cordis-discipline): build the client-side placement snapshot the
+     * surface requirements consult. mediaActive = a title AND a playable
+     * target exist; documentOpen = a document_editor content bag exists.
+     * Never throws — absent content reads as unsatisfied, not as an error.
+     */
+    const buildRequirementSnapshot = (state: AppState): SurfaceRequirementSnapshot => {
+      const media = state.content.media;
+      const mediaActive =
+        !!media &&
+        media.title !== "" &&
+        (media.videoId !== null || media.url !== null || media.localPath !== null);
+      return {
+        mediaActive,
+        documentOpen: state.content.document_editor != null,
+      };
+    };
+
+    /** B2 host state: the transition gate + its settle timer (per store
+     *  instance; the host owns timing — the gate itself is pure). */
+    let gateState: GateState = INITIAL_GATE_STATE;
+    let gateTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Commit a validated spec through the ONE layout-state write. */
+    const commitAdaptive = (
+      spec: AdaptiveLayoutSpec,
+      assignments: ResolvedAssignment[],
+      overrides: AdaptiveState["overrides"],
+      preFullscreen: AdaptiveState["preFullscreen"],
+    ): void => {
+      const state = get();
+      set({
+        adaptive: {
+          ...state.adaptive,
+          spec,
+          assignments,
+          overrides,
+          lastRejection: null,
+          preFullscreen,
+        },
+      });
+    };
+
+    /**
+     * B2 (cordis-discipline): settle the in-flight transition. When a
+     * last-wins proposal was queued during the transition, it becomes the
+     * next committed target and a new transition window opens; otherwise
+     * the gate returns to IDLE. Never throws: a settle with nothing owed
+     * is a no-op.
+     */
+    const settleGate = (): void => {
+      gateTimer = null;
+      const result = reduceGate(gateState, { type: "settle" });
+      gateState = result.state;
+      if (result.command === "commit" && gateState.phase === "TRANSITIONING") {
+        const target = gateState.target;
+        const targetAssignments = resolveLayout(target, surfaceRegistry);
+        const state = get();
+        commitAdaptive(
+          target,
+          targetAssignments,
+          state.adaptive.overrides,
+          state.adaptive.preFullscreen,
+        );
+        gateTimer = setTimeout(settleGate, TRANSITION_MS);
+      }
+    };
+
+    /**
      * UI-103: validate the adaptive LayoutSpec against the surface registry,
      * resolve every role through the deterministic fallback ladder, and
      * store the result. Invalid specs throw and never reach state.
@@ -353,7 +428,45 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           : wasFullscreen && !nowFullscreen
             ? null
             : state.adaptive.preFullscreen;
-      const verdict = scoreChange(state.adaptive.spec, constrained, {
+      // B1 (cordis-discipline): reconcile the desired composition against
+      // the committed one (per-surfaceId diff, requirement filtering).
+      // Requirement drops apply ONLY to agent-initiated compositions on
+      // user-UNCONSTRAINED desks — a user-pinned or user-initiated desk is
+      // never filtered.
+      let finalSpec = constrained;
+      let finalAssignments = assignments;
+      const hasUserConstraints = Object.keys(overrides.bySurface).length > 0;
+      if (!userInitiated && !hasUserConstraints) {
+        const reconciled = reconcileLayout(
+          constrained,
+          state.adaptive.spec,
+          buildRequirementSnapshot(state),
+          surfaceRegistry,
+        );
+        if (reconciled.spec !== constrained) {
+          // reconcileLayout's contract: an invalid filtered composition is
+          // returned as-is for the CALLER to gate (it never throws). Reject
+          // it through the same frozen gates as the incoming spec — the
+          // committed layout stays untouched.
+          try {
+            computeAdaptiveGeometry(
+              reconciled.spec,
+              state.viewport,
+              surfaceRegistry.registeredIds(),
+            );
+            finalAssignments = resolveLayout(reconciled.spec, surfaceRegistry);
+            finalSpec = reconciled.spec;
+          } catch (error) {
+            recordLayoutRejection(
+              "geometry",
+              "reconciled composition is unrenderable",
+              error,
+            );
+            return;
+          }
+        }
+      }
+      const verdict = scoreChange(state.adaptive.spec, finalSpec, {
         userInitiated,
       });
       if (verdict.decision === "keep") {
@@ -364,16 +477,22 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
         }
         return;
       }
-      set({
-        adaptive: {
-          ...state.adaptive,
-          spec: constrained,
-          assignments,
-          overrides,
-          lastRejection: null,
-          preFullscreen,
-        },
-      });
+      if (!userInitiated) {
+        // B2 (cordis-discipline): agent-initiated changes flow through the
+        // transition gate — an in-flight transition ALWAYS completes and
+        // rapid proposals queue last-wins. The first proposal commits
+        // synchronously; proposals inside the 260ms window queue (the
+        // settle commits the latest). User-initiated changes stay instant.
+        const result = reduceGate(gateState, { type: "propose", spec: finalSpec });
+        gateState = result.state;
+        if (result.command === "commit") {
+          commitAdaptive(finalSpec, finalAssignments, overrides, preFullscreen);
+          if (gateTimer) clearTimeout(gateTimer);
+          gateTimer = setTimeout(settleGate, TRANSITION_MS);
+        }
+        return;
+      }
+      commitAdaptive(finalSpec, finalAssignments, overrides, preFullscreen);
     };
 
     /**

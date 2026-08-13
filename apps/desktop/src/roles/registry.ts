@@ -14,6 +14,13 @@
  *  - unregister() removes a surface (returns false when absent); a surface
  *    may be registered again afterwards.
  *  - registeredIds() returns a fresh snapshot Set — no aliasing.
+ *  - declareRequirement() attaches a PURE placement predicate (B1 dependency
+ *    spec) to a surfaceId. Requirements are keyed by surfaceId and are
+ *    consulted ONLY by the planner's reconcileLayout — register() and
+ *    resolveLayout never consult them, and undeclared ids have no
+ *    requirement (requiresOf returns undefined). Declaring a requirement
+ *    for an unregistered id is allowed (consultation only happens for ids
+ *    that appear in a desired spec).
  *
  * The module-level `surfaceRegistry` singleton is seeded with the frozen
  * PLACEHOLDER_REGISTRY (every placeholder surface with full roles) so the
@@ -32,6 +39,28 @@ export const ALL_ROLES: readonly SurfaceRole[] = [
   "persistent",
 ];
 
+/**
+ * B1 dependency spec — client-side placement snapshot (2026-08-13).
+ *
+ * Deliberately NOT in adaptive/contracts.ts: that module mirrors the Python
+ * wire schemas (schema cross-checked by tests/adaptive-contract.test.ts),
+ * while this snapshot is a pure client-side predicate input with no wire or
+ * Python counterpart. NO store import — the snapshot is structural and the
+ * caller (store wiring) builds it.
+ */
+export interface SurfaceRequirementSnapshot {
+  /** True when media content is active (a title and videoId/url exist). */
+  mediaActive: boolean;
+  /** True when an open document context exists. */
+  documentOpen: boolean;
+}
+
+/** Pure placement requirement declared by a surface — a deterministic
+ *  function of the snapshot; never touches the store. */
+export type SurfaceRequirement = (
+  snapshot: SurfaceRequirementSnapshot,
+) => boolean;
+
 export interface SurfaceRegistry {
   /** Register a surface. Throws deterministically on duplicate id, empty
    *  roles, or an unknown role string. */
@@ -48,6 +77,13 @@ export interface SurfaceRegistry {
   capabilitiesOf(surfaceId: string): readonly SurfaceRole[];
   /** True when the surface may be hosted persistently by the shell. */
   isPersistentCapable(surfaceId: string): boolean;
+  /** Placement requirement the surface declares (B1), or undefined when it
+   *  declares none. Consulted by reconcileLayout, never by register() or
+   *  resolveLayout. */
+  requiresOf(surfaceId: string): SurfaceRequirement | undefined;
+  /** Declare (or redeclare) a surface's placement requirement predicate.
+   *  Keyed by surfaceId; declaring for an unregistered id is allowed. */
+  declareRequirement(surfaceId: string, requires: SurfaceRequirement): void;
   /** Snapshot of registered ids — feed this to validateLayoutSpec. */
   registeredIds(): ReadonlySet<string>;
   /** Number of registered surfaces. */
@@ -59,6 +95,7 @@ export function createSurfaceRegistry(
 ): SurfaceRegistry {
   const byId = new Map<string, SurfaceRegistration>();
   const order: string[] = [];
+  const requirements = new Map<string, SurfaceRequirement>();
 
   const register = (registration: SurfaceRegistration): void => {
     const { surfaceId, roles } = registration;
@@ -116,6 +153,12 @@ export function createSurfaceRegistry(
     isPersistentCapable(surfaceId: string): boolean {
       return byId.get(surfaceId)?.persistentCapable ?? false;
     },
+    requiresOf(surfaceId: string): SurfaceRequirement | undefined {
+      return requirements.get(surfaceId);
+    },
+    declareRequirement(surfaceId: string, requires: SurfaceRequirement): void {
+      requirements.set(surfaceId, requires);
+    },
     registeredIds(): ReadonlySet<string> {
       return new Set(order);
     },
@@ -132,4 +175,17 @@ export function createSurfaceRegistry(
  */
 export const surfaceRegistry: SurfaceRegistry = createSurfaceRegistry(
   PLACEHOLDER_REGISTRY,
+);
+
+// B1 dependency specs (2026-08-13): placement requirements consulted by the
+// planner's reconcileLayout when a snapshot is supplied. media only mounts
+// while media content is active; document_editor only while an open document
+// context exists. Every other surface declares NO requirement — behavior
+// unchanged. Declarations are keyed by surfaceId, so they hold once
+// registerProductSurfaces() (adaptive/surfaces.ts) registers these ids into
+// this same singleton.
+surfaceRegistry.declareRequirement("media", (snapshot) => snapshot.mediaActive);
+surfaceRegistry.declareRequirement(
+  "document_editor",
+  (snapshot) => snapshot.documentOpen,
 );

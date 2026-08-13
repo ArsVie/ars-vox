@@ -25,6 +25,19 @@ function ts(): string {
 }
 
 function layoutApply(store: ReturnType<typeof createAppStore>): void {
+  // B1 dependency spec (cordis-discipline): document_editor only composes
+  // while an open document exists — the agent opens the document BEFORE
+  // proposing a layout that hosts it. Load the document first so the wire
+  // composition satisfies the placement requirement.
+  store.getState().applyEvent({
+    type: "document.load",
+    title: "Lista de la compra.pdf",
+    kind: "pdf",
+    path: "C:\\docs\\lista.pdf",
+    content: "tomates, pan, café",
+    chapters: [],
+    created_at: ts(),
+  } as ServerEvent);
   store.getState().applyEvent({
     type: "ui_command",
     command: {

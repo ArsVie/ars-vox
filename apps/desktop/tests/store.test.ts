@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ServerEvent, UiCommand } from "../src/contracts";
 import { registerProductSurfaces } from "../src/adaptive/surfaces";
 import { createAppStore } from "../src/store";
+import { TRANSITION_MS } from "../src/layout/transitionGate";
 
 // GATE-3.5: layout commands now route through the adaptive choke, which
 // validates against the surface registry — register the real product
@@ -17,6 +18,23 @@ registerProductSurfaces();
 
 function ts(): string {
   return new Date().toISOString();
+}
+
+/**
+ * B1 (cordis-discipline): agent compositions hosting document_editor
+ * require an OPEN document — the agent opens it before proposing a layout.
+ * reconcileLayout drops the surface when the requirement is unsatisfied.
+ */
+function openDocument(store: ReturnType<typeof createAppStore>): void {
+  store.getState().applyEvent({
+    type: "document.load",
+    title: "Receta.pdf",
+    kind: "pdf",
+    path: "C:/docs/receta.pdf",
+    content: "harina, agua, sal",
+    chapters: [],
+    created_at: ts(),
+  } as ServerEvent);
 }
 
 const listening = (): ServerEvent => ({
@@ -31,6 +49,7 @@ describe("vertical slice: open a document", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
     store.getState().setConnected(true); // R11: sends flow live only while connected
+    openDocument(store);
 
     store.getState().sendText("Open a document.");
     expect(sent).toEqual([{ type: "user_text", text: "Open a document." }]);
@@ -196,19 +215,26 @@ describe("error surfacing", () => {
 
 describe("layout restoration", () => {
   it("layout.restore clears the user constraint set through the one choke", () => {
-    const store = createAppStore(() => {});
-    store.getState().applyEvent({
-      type: "ui_command",
-      command: {
-        action: "layout.apply",
-        template: "split",
-        primary_panel: "document_editor",
-        secondary_panel: "conversation",
-        preserve: true,
-      },
-      created_at: ts(),
-    });
-    expect(store.getState().adaptive.spec?.template).toBe("split");
+    // B2 transition gate: settle each agent proposal's window so the next
+    // agent proposal commits instead of queueing (the manual commands
+    // between them never touch the gate).
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const store = createAppStore(() => {});
+      openDocument(store);
+      store.getState().applyEvent({
+        type: "ui_command",
+        command: {
+          action: "layout.apply",
+          template: "split",
+          primary_panel: "document_editor",
+          secondary_panel: "conversation",
+          preserve: true,
+        },
+        created_at: ts(),
+      });
+      vi.advanceTimersByTime(TRANSITION_MS + 50);
+      expect(store.getState().adaptive.spec?.template).toBe("split");
 
     // the user closes the primary — a persistent constraint
     store.getState().applyEvent({
@@ -245,6 +271,9 @@ describe("layout restoration", () => {
       store.getState().adaptive.spec?.assignments.map((a) => a.surfaceId) ?? [];
     expect(ids).toContain("document_editor");
     expect(ids).toContain("conversation");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -281,6 +310,7 @@ describe("tts speak queue", () => {
 describe("panel close", () => {
   it("closing the primary panel degrades deterministically (user close constraint)", () => {
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyEvent({
       type: "ui_command",
       command: {
@@ -376,6 +406,7 @@ describe("local panel fullscreen toggle", () => {
   it("toggles a panel into and out of fullscreen without sending transport", () => {
     const sent: unknown[] = [];
     const store = createAppStore((m) => sent.push(m));
+    openDocument(store);
     store.getState().applyEvent({
       type: "ui_command",
       command: {
@@ -455,6 +486,7 @@ describe("local panel fullscreen toggle", () => {
 describe("multi-zone layout via slots (A8)", () => {
   it("slots-bearing layout.apply maps to the adaptive composition (dock → shell-owned)", () => {
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyEvent({
       type: "ui_command",
       command: {
@@ -480,6 +512,7 @@ describe("multi-zone layout via slots (A8)", () => {
 
   it("treats slots.main as the source of truth over primary_panel", () => {
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyEvent({
       type: "ui_command",
       command: {
@@ -501,6 +534,7 @@ describe("multi-zone layout via slots (A8)", () => {
 
   it("legacy layout.apply without slots keeps working (mapped through the planner)", () => {
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyEvent({
       type: "ui_command",
       command: {
@@ -526,6 +560,7 @@ describe("multi-zone layout via slots (A8)", () => {
 
   it("viewport changes never rewrite the adaptive composition (geometry is render-time)", () => {
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyEvent({
       type: "ui_command",
       command: {
@@ -607,32 +642,40 @@ describe("config-driven UI state (config_update)", () => {
   });
 
   it("applies the config default layout only before any layout command (via the one choke)", () => {
-    const store = createAppStore(() => {});
-    store.getState().applyEvent(configEvent({}));
-    let state = store.getState();
-    // R19 (migration source): the config default enters the ONE choke.
-    // "split" maps through the planner's wire map; "news" is NOT a
-    // registered surface → the fallback anchor (conversation) is used.
-    expect(state.adaptive.spec?.template).toBe("split");
-    expect(state.adaptive.spec?.assignments[0].surfaceId).toBe("conversation");
+    // B2 transition gate: settle the config-default proposal's window so
+    // the following server layout command commits instead of queueing.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const store = createAppStore(() => {});
+      store.getState().applyEvent(configEvent({}));
+      vi.advanceTimersByTime(TRANSITION_MS + 50);
+      let state = store.getState();
+      // R19 (migration source): the config default enters the ONE choke.
+      // "split" maps through the planner's wire map; "news" is NOT a
+      // registered surface → the fallback anchor (conversation) is used.
+      expect(state.adaptive.spec?.template).toBe("split");
+      expect(state.adaptive.spec?.assignments[0].surfaceId).toBe("conversation");
 
-    // a server layout command takes over; a later reconnect config_update
-    // must NOT clobber it back to the default
-    store.getState().applyEvent({
-      type: "ui_command",
-      command: {
-        action: "layout.apply",
-        template: "focus",
-        primary_panel: "browser",
-        secondary_panel: null,
-        preserve: true,
-      },
-      created_at: ts(),
-    });
-    store.getState().applyEvent(configEvent({}));
-    state = store.getState();
-    expect(state.adaptive.spec?.template).toBe("focus");
-    expect(state.adaptive.spec?.assignments[0].surfaceId).toBe("browser");
+      // a server layout command takes over; a later reconnect config_update
+      // must NOT clobber it back to the default
+      store.getState().applyEvent({
+        type: "ui_command",
+        command: {
+          action: "layout.apply",
+          template: "focus",
+          primary_panel: "browser",
+          secondary_panel: null,
+          preserve: true,
+        },
+        created_at: ts(),
+      });
+      store.getState().applyEvent(configEvent({}));
+      state = store.getState();
+      expect(state.adaptive.spec?.template).toBe("focus");
+      expect(state.adaptive.spec?.assignments[0].surfaceId).toBe("browser");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("honors the config TTS queue cap in the speak path", () => {
@@ -1235,6 +1278,7 @@ describe("notifications (GATE-3.5 A6/R34 + W2-REMINDERS seam)", () => {
 describe("layout.compose (adaptive-native, C5/A3)", () => {
   it("composes straight into adaptive.spec, normalizing surface_id to surfaceId at the wire boundary", () => {
     const store = createAppStore(() => {});
+    openDocument(store);
 
     // The exact python wire shape (commands.py LayoutCompose): assignments
     // carry surface_id — normalized ONCE by normalizeUiCommand, never here.

@@ -15,7 +15,7 @@
  * (3) the demo role-history showing one uninterrupted per-surfaceId entry
  * with the full role sequence.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import type { StoreApi } from "zustand/vanilla";
 
@@ -46,6 +46,7 @@ import {
   EMPTY_ADAPTIVE,
   type AppState,
 } from "../src/store";
+import { TRANSITION_MS } from "../src/layout/transitionGate";
 
 /** sidecar spec with explicit main/side role assignments. */
 function sidecar(
@@ -352,18 +353,27 @@ describe("store adaptive state (UI-103)", () => {
   });
 
   it("the same surface instance transitions primary -> companion -> primary", () => {
-    const store = createAppStore(() => {});
-    const seen: string[] = [];
-    store.getState().applyAdaptiveSpec(specPrimary);
-    seen.push(roleOf(store, "placeholder.primary"));
-    store.getState().applyAdaptiveSpec(specSwapped);
-    seen.push(roleOf(store, "placeholder.primary"));
-    store.getState().applyAdaptiveSpec(specPrimary);
-    seen.push(roleOf(store, "placeholder.primary"));
-    // The surfaceId never changes identity — only its role transitions.
-    expect(seen).toEqual(["primary", "companion", "primary"]);
-    // Both surfaces were present at every step (no surface lost).
-    expect(store.getState().adaptive.assignments.length).toBe(2);
+    // B2 transition gate: settle the window after each agent proposal so
+    // the next one commits instead of queueing.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const store = createAppStore(() => {});
+      const seen: string[] = [];
+      store.getState().applyAdaptiveSpec(specPrimary);
+      vi.advanceTimersByTime(TRANSITION_MS + 50);
+      seen.push(roleOf(store, "placeholder.primary"));
+      store.getState().applyAdaptiveSpec(specSwapped);
+      vi.advanceTimersByTime(TRANSITION_MS + 50);
+      seen.push(roleOf(store, "placeholder.primary"));
+      store.getState().applyAdaptiveSpec(specPrimary);
+      seen.push(roleOf(store, "placeholder.primary"));
+      // The surfaceId never changes identity — only its role transitions.
+      expect(seen).toEqual(["primary", "companion", "primary"]);
+      // Both surfaces were present at every step (no surface lost).
+      expect(store.getState().adaptive.assignments.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("per-surfaceId state bag survives role swaps untouched", () => {
@@ -457,11 +467,34 @@ describe("store adaptive state (UI-103)", () => {
 /* ----------------------------------------------------------------- host */
 
 describe("SurfaceHost (geometry-blind, keyed by surfaceId)", () => {
+  // B2 transition gate host state lives in the store closure and survives
+  // setState. Fake timers are armed ONCE for the whole describe (each
+  // useFakeTimers call resets the clock, losing the store's pending settle
+  // timer); the beforeEach advance then settles any leftover transition so
+  // each test starts IDLE. No restore in afterEach — restoring would clear
+  // the pending timer and re-break gate isolation.
+  beforeAll(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+
   beforeEach(() => {
     (appStore as unknown as { getServerState: () => unknown }).getServerState =
       () => appStore.getState();
+    // Settle any leftover transition FIRST (the advance may commit a queued
+    // target), then reset the state below.
+    vi.advanceTimersByTime(1000);
     appStore.setState({ adaptive: EMPTY_ADAPTIVE, surfaceState: {} });
     demoRoleHistory.clear();
+  });
+
+  afterEach(() => {
+    // No timer restore here — see the beforeAll note.
+  });
+
+  afterAll(() => {
+    // Worker hygiene: restore real timers when this describe finishes so a
+    // reused worker thread never leaks the fake clock into another file.
+    vi.useRealTimers();
   });
 
   function renderHost(): string {
@@ -491,29 +524,37 @@ describe("SurfaceHost (geometry-blind, keyed by surfaceId)", () => {
   });
 
   it("same surface transitions primary -> companion -> primary with state intact", () => {
-    appStore.getState().setSurfaceState("placeholder.primary", "stamp", "S1");
-    appStore.getState().applyAdaptiveSpec(specPrimary);
-    let html = renderHost();
-    expect(countOccurrences(html, 'data-surface-id="placeholder.primary"')).toBe(1);
-    expect(html).toContain('data-demo-role="primary"');
-    expect(html).toContain('data-demo-stamp="S1"');
+    // The describe-level fake clock (beforeAll) is already active — the
+    // advance calls settle each agent proposal's window so the next one
+    // commits instead of queueing. No local useFakeTimers/useRealTimers:
+    // restoring would clear the shared clock and leave later tests racy.
+    {
+      appStore.getState().setSurfaceState("placeholder.primary", "stamp", "S1");
+      appStore.getState().applyAdaptiveSpec(specPrimary);
+      vi.advanceTimersByTime(TRANSITION_MS + 50);
+      let html = renderHost();
+      expect(countOccurrences(html, 'data-surface-id="placeholder.primary"')).toBe(1);
+      expect(html).toContain('data-demo-role="primary"');
+      expect(html).toContain('data-demo-stamp="S1"');
 
-    appStore.getState().applyAdaptiveSpec(specSwapped);
-    html = renderHost();
-    expect(countOccurrences(html, 'data-surface-id="placeholder.primary"')).toBe(1);
-    expect(html).toContain('data-demo-role="companion"');
-    expect(html).toContain('data-demo-stamp="S1"'); // state survived the swap
+      appStore.getState().applyAdaptiveSpec(specSwapped);
+      vi.advanceTimersByTime(TRANSITION_MS + 50);
+      html = renderHost();
+      expect(countOccurrences(html, 'data-surface-id="placeholder.primary"')).toBe(1);
+      expect(html).toContain('data-demo-role="companion"');
+      expect(html).toContain('data-demo-stamp="S1"'); // state survived the swap
 
-    appStore.getState().applyAdaptiveSpec(specPrimary);
-    html = renderHost();
-    expect(html).toContain('data-demo-role="primary"');
-    expect(html).toContain('data-demo-stamp="S1"');
-    // One uninterrupted per-surfaceId history entry with the full sequence.
-    expect(demoRoleHistory.get("placeholder.primary")?.roles).toEqual([
-      "primary",
-      "companion",
-      "primary",
-    ]);
+      appStore.getState().applyAdaptiveSpec(specPrimary);
+      html = renderHost();
+      expect(html).toContain('data-demo-role="primary"');
+      expect(html).toContain('data-demo-stamp="S1"');
+      // One uninterrupted per-surfaceId history entry with the full sequence.
+      expect(demoRoleHistory.get("placeholder.primary")?.roles).toEqual([
+        "primary",
+        "companion",
+        "primary",
+      ]);
+    }
   });
 
   it("renders the resolved (degraded) role for unsupported requests", () => {

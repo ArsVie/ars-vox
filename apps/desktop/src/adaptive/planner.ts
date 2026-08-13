@@ -40,6 +40,18 @@
  *   unregistered_surface — surface "ghost" is not in the registry
  *   invalid_primary    — two primaries in sidecar (only split may pair)
  *   geometry           — template cannot fit the stage px floors
+ *
+ * RECONCILE (B1, 2026-08-13): reconcileLayout() diffs a desired LayoutSpec
+ * against the committed one PER SURFACE ID — unchanged surfaces keep their
+ * identity (surfaceId-keyed identity contract + no-change-during-reading
+ * rule), removed surfaces are the disposal cue, added surfaces the mount
+ * cue. Dependency specs: registry entries may declare a PURE
+ * requires(snapshot) predicate (roles/registry.ts); a desired surface whose
+ * requirement the snapshot does not satisfy is DROPPED with code
+ * requirement_unsatisfied (never thrown mid-way). The snapshot is
+ * caller-supplied (the store's wiring builds it): an ABSENT snapshot or
+ * registry means requirements are NOT consulted — every existing call site
+ * and behavior is preserved.
  */
 
 import type { LayoutSlotsWire } from "../contracts";
@@ -60,6 +72,10 @@ import {
   type Viewport,
 } from "../layout/adaptiveEngine";
 import { resolveRole } from "../roles/fallback";
+import type {
+  SurfaceRequirement,
+  SurfaceRequirementSnapshot,
+} from "../roles/registry";
 
 /** Shell default viewport until the renderer reports real size (matches
  *  the store's DEFAULT_VIEWPORT; kept local to avoid an import cycle). */
@@ -99,7 +115,8 @@ export type PlannerRejectionCode =
   | "invalid_assignment"
   | "invalid_primary"
   | "unregistered_surface"
-  | "geometry";
+  | "geometry"
+  | "requirement_unsatisfied";
 
 export interface PlannerRejection {
   code: PlannerRejectionCode;
@@ -116,6 +133,11 @@ export type PlannerResult =
 export interface PlannerRegistry {
   registeredIds(): ReadonlySet<string>;
   capabilitiesOf(surfaceId: string): readonly SurfaceRole[];
+  /** B1 dependency specs: the placement requirement predicate a surface
+   *  declares, or undefined. OPTIONAL so every existing structural consumer
+   *  keeps satisfying this interface (createSurfaceRegistry always provides
+   *  it); when absent, reconcileLayout cannot consult requirements. */
+  requiresOf?(surfaceId: string): SurfaceRequirement | undefined;
 }
 
 /** Deterministic legacy-wire template → adaptive template mapping.
@@ -338,4 +360,121 @@ export function planLayout(
   }
 
   return { ok: true, spec, notes };
+}
+
+/* ------------------------------------------------------------- reconcile */
+
+/**
+ * B1 — reconcile a desired spec against the committed one (per-surfaceId
+ * diff, Cordis §5.2.1).
+ *
+ * Diff semantics are keyed by surfaceId, NOT by assignment equality:
+ *  - unchangedSurfaceIds: surfaces present in both specs — they keep their
+ *    identity (surfaceId-keyed identity contract + no-change-during-reading
+ *    rule). A template change with identical assignments is still a change
+ *    (the returned spec differs) but every surface is unchanged.
+ *  - removedSurfaceIds: surfaces in `current` but not in the reconciled
+ *    spec — the disposal cue (in `current` assignment order).
+ *  - addedSurfaceIds: surfaces in the reconciled spec but not in `current`
+ *    — the mount cue (in spec assignment order).
+ *
+ * Dependency specs (B1): when a `snapshot` AND a `registry` are supplied,
+ * every desired surface's declared requires(snapshot) predicate is
+ * consulted; a surface whose requirement is unsatisfied is DROPPED from the
+ * composition with a structured rejection (code "requirement_unsatisfied",
+ * surfaceId in the reason) — never thrown mid-way. Absent snapshot or
+ * registry = requirements NOT consulted (all existing behavior preserved;
+ * the snapshot is the caller's wiring concern).
+ *
+ * The desired spec is assumed already validated (planner output). Only the
+ * requirement-filtered composition is re-gated through the frozen
+ * validateLayoutSpec: when filtering invalidates it (no primary left, empty
+ * composition), the committed `current` spec is kept untouched (no-op diff)
+ * and the rejections still report why. With `current` null and nothing
+ * valid left, the filtered spec is returned as-is — the caller's frozen
+ * gate rejects it; nothing here throws.
+ *
+ * Pure and deterministic: identical inputs always produce identical
+ * results — no time, no randomness, no side effects.
+ */
+export interface ReconcileResult {
+  /** Spec to commit: the desired spec minus requirement-dropped surfaces
+   *  (or the kept `current` when filtering invalidated the composition).
+   *  With no drops it is the desired object itself. */
+  spec: LayoutSpec;
+  /** Mount cue — spec surfaces absent from `current`, in spec order. */
+  addedSurfaceIds: string[];
+  /** Disposal cue — `current` surfaces absent from the spec, in `current`
+   *  order. */
+  removedSurfaceIds: string[];
+  /** Identity-preserved surfaces — present in both, in spec order. */
+  unchangedSurfaceIds: string[];
+  /** Structured reasons for requirement-dropped surfaces. Empty when the
+   *  snapshot is absent or every requirement is satisfied. */
+  rejections: PlannerRejection[];
+}
+
+export function reconcileLayout(
+  desired: LayoutSpec,
+  current: LayoutSpec | null,
+  snapshot?: SurfaceRequirementSnapshot | null,
+  registry?: PlannerRegistry,
+): ReconcileResult {
+  const rejections: PlannerRejection[] = [];
+
+  // ---- requirement consultation (B1) ------------------------------------
+  // Snapshot and registry are both required to consult; otherwise the
+  // desired spec passes through untouched (existing call sites preserved).
+  let spec: LayoutSpec = desired;
+  if (snapshot != null && registry?.requiresOf) {
+    const kept: LayoutAssignment[] = [];
+    for (const assignment of desired.assignments) {
+      const requires = registry.requiresOf(assignment.surfaceId);
+      if (requires && !requires(snapshot)) {
+        rejections.push({
+          code: "requirement_unsatisfied",
+          reason:
+            `surface "${assignment.surfaceId}" has an unsatisfied placement ` +
+            "requirement (requires(snapshot) returned false)",
+        });
+        continue;
+      }
+      kept.push(assignment);
+    }
+    if (kept.length !== desired.assignments.length) {
+      spec = { ...desired, assignments: kept };
+    }
+  }
+
+  // ---- deterministic validity fallback -----------------------------------
+  // Dropping surfaces can break composition rules (no primary left, empty
+  // composition). The frozen gate decides: an invalid filtered spec must
+  // never be returned as the committed one — keep `current` instead.
+  if (spec !== desired && registry) {
+    try {
+      validateLayoutSpec(spec, registry.registeredIds());
+    } catch {
+      if (current) spec = current;
+      // current == null: no valid composition exists that satisfies the
+      // requirements; return the filtered spec (caller's gate rejects it —
+      // nothing here throws, per the header note above).
+    }
+  }
+
+  // ---- per-surfaceId diff (deterministic order) --------------------------
+  const specIds = spec.assignments.map((a) => a.surfaceId);
+  const currentIds = current ? current.assignments.map((a) => a.surfaceId) : [];
+  const currentSet = new Set(currentIds);
+  const specSet = new Set(specIds);
+  const addedSurfaceIds = specIds.filter((id) => !currentSet.has(id));
+  const removedSurfaceIds = currentIds.filter((id) => !specSet.has(id));
+  const unchangedSurfaceIds = specIds.filter((id) => currentSet.has(id));
+
+  return {
+    spec,
+    addedSurfaceIds,
+    removedSurfaceIds,
+    unchangedSurfaceIds,
+    rejections,
+  };
 }

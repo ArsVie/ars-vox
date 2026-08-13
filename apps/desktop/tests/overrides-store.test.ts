@@ -9,12 +9,13 @@
  * and invalid user arrangements degrading to the nearest valid composition
  * without throwing.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { LayoutSpec } from "../src/adaptive/contracts";
 import { TEMPLATE_FIXTURES } from "../src/adaptive/fixtures";
 import { isOverridesEmpty } from "../src/adaptive/overrides";
 import { createAppStore } from "../src/store";
+import { TRANSITION_MS } from "../src/layout/transitionGate";
 
 const sidecar = TEMPLATE_FIXTURES.sidecar;
 const focus = TEMPLATE_FIXTURES.focus;
@@ -87,10 +88,19 @@ describe("applyAdaptiveSpec — overrides apply AFTER planner output", () => {
   });
 
   it("the constrained spec (not the raw planner spec) becomes layout state", () => {
-    const store = createAppStore(() => {});
-    store.getState().applyAdaptiveSpec(sidecar);
-    store.getState().applyAdaptiveSpec(sidecarWide);
-    expect(store.getState().adaptive.spec?.proportion).toBe("wide");
+    // B2 transition gate: the first proposal commits and opens a 260ms
+    // transition window; the second agent proposal would QUEUE inside it.
+    // Settle the window so the second proposal commits synchronously.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const store = createAppStore(() => {});
+      store.getState().applyAdaptiveSpec(sidecar);
+      vi.advanceTimersByTime(TRANSITION_MS + 50);
+      store.getState().applyAdaptiveSpec(sidecarWide);
+      expect(store.getState().adaptive.spec?.proportion).toBe("wide");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

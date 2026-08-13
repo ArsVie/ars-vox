@@ -24,6 +24,7 @@ import { computeAdaptiveGeometry } from "../src/layout/adaptiveEngine";
 import { createSurfaceRegistry } from "../src/roles/registry";
 import { createAppStore } from "../src/store";
 import { registerProductSurfaces } from "../src/adaptive/surfaces";
+import type { ServerEvent } from "../src/contracts";
 
 const registry = createSurfaceRegistry([
   { surfaceId: "browser", roles: ["primary", "companion", "support"] },
@@ -342,10 +343,29 @@ describe("planLayout — determinism", () => {
 
 const ts = (): string => new Date().toISOString();
 
+/**
+ * B1 (cordis-discipline): agent compositions hosting document_editor
+ * require an OPEN document — load one before proposing the layout (the
+ * agent opens the document first in the real flow; reconcileLayout drops
+ * the surface when the requirement is unsatisfied).
+ */
+function openDocument(store: ReturnType<typeof createAppStore>): void {
+  store.getState().applyEvent({
+    type: "document.load",
+    title: "Receta.pdf",
+    kind: "pdf",
+    path: "C:\\docs\\receta.pdf",
+    content: "harina, agua, sal",
+    chapters: [],
+    created_at: ts(),
+  } as ServerEvent);
+}
+
 describe("store applyLayoutIntent — UI-301 routing (inertia guard active)", () => {
   it("applies a valid agent intent through the planner", () => {
     registerProductSurfaces(); // product ids must be in the shared registry
     const store = createAppStore(() => {});
+    openDocument(store);
     const rejection = store.getState().applyLayoutIntent(sidecarIntent);
     expect(rejection).toBeNull();
     const { adaptive } = store.getState();
@@ -359,6 +379,7 @@ describe("store applyLayoutIntent — UI-301 routing (inertia guard active)", ()
 
   it("rejects an invalid intent and records the reason — state never corrupts", () => {
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyLayoutIntent(sidecarIntent);
     const before = store.getState().adaptive;
 
@@ -380,6 +401,7 @@ describe("store applyLayoutIntent — UI-301 routing (inertia guard active)", ()
   it("respects the spatial-inertia guard: identical re-send is kept (zero churn)", () => {
     registerProductSurfaces();
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyLayoutIntent(sidecarIntent);
     const specAfterFirst = store.getState().adaptive.spec;
     expect(specAfterFirst).not.toBeNull();
@@ -394,6 +416,7 @@ describe("store applyLayoutIntent — UI-301 routing (inertia guard active)", ()
   it("respects the inertia guard: unjustified template change is damped", () => {
     registerProductSurfaces();
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyLayoutIntent(sidecarIntent);
     const kept = store.getState().adaptive.spec;
 
@@ -439,6 +462,7 @@ describe("store wire routing — ui_command/layout.apply flows through the plann
   it("routes the H1 wire command into the adaptive layer when valid", () => {
     registerProductSurfaces(); // idempotent; registers the real surface ids
     const store = createAppStore(() => {});
+    openDocument(store);
     store.getState().applyEvent({
       type: "ui_command",
       command: {
@@ -521,6 +545,7 @@ describe("store wire routing — ui_command/layout.apply flows through the plann
   it("identical wire re-sends stay inertia-damped (adaptive spec untouched)", () => {
     registerProductSurfaces();
     const store = createAppStore(() => {});
+    openDocument(store);
     const command = {
       action: "layout.apply" as const,
       template: "split" as const,

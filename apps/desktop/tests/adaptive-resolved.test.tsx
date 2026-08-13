@@ -12,7 +12,7 @@
  * Node env + renderToStaticMarkup (repo convention — no jsdom). App is the
  * REAL shell: StatusBar, AdaptiveStage, PersistentRegions, overlays.
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import App from "../src/App";
@@ -21,6 +21,15 @@ import { registerProductSurfaces } from "../src/adaptive/surfaces";
 import { surfaceRegistry } from "../src/roles/registry";
 import { appStore, EMPTY_ADAPTIVE } from "../src/store";
 import type { ServerEvent } from "../src/contracts";
+
+// B2 transition gate: the gate host state lives in the store closure and
+// survives setState. Fake timers are armed ONCE for the whole file (each
+// useFakeTimers call resets the clock, losing the store's pending settle
+// timer) — the beforeEach advance then settles any transition left over
+// from the previous test so every test starts IDLE. A leftover
+// TRANSITIONING gate would queue this test's first agent proposal instead
+// of committing it.
+vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
 function ts(): string {
   return new Date().toISOString();
@@ -34,7 +43,7 @@ function seedPlayingMedia(): void {
     source: "local",
     kind: "audio",
     title: "Sinfonía Nº 5 — Adagietto",
-    url: null,
+    url: "file:///C:/música/sinfonia.mp3",
     video_id: null,
     position_s: 142,
     duration_s: 642,
@@ -47,6 +56,9 @@ beforeEach(() => {
   (appStore as unknown as { getServerState: () => unknown }).getServerState =
     () => appStore.getState();
   registerProductSurfaces();
+  // Settle any transition left over from the previous test FIRST (the
+  // advance may commit a queued target), then reset the state below.
+  vi.advanceTimersByTime(1000);
   // Fresh adaptive + content + messages per test (shared singleton store).
   // notifications reset too (A6/R34: rendered list is per-test state).
   appStore.setState({
@@ -55,6 +67,18 @@ beforeEach(() => {
     messages: [],
     notifications: [],
   });
+});
+
+afterEach(() => {
+  // No timer restore here: the fake clock is armed once per file (see the
+  // module-scope note) — restoring would clear the store's pending settle
+  // timer and re-break gate isolation between tests.
+});
+
+afterAll(() => {
+  // Worker hygiene: restore real timers when this file finishes so a
+  // reused worker thread never leaks the fake clock into another file.
+  vi.useRealTimers();
 });
 
 /** A sidecar spec with the media surface as PRIMARY (in a template slot). */
@@ -140,8 +164,10 @@ describe("H7: live renderer uses resolved assignments", () => {
 
 describe("H7: conditional persistent media (no duplicates, no empty chrome)", () => {
   it("media PRIMARY in the layout -> NO persistent duplicate bar", () => {
-    appStore.getState().applyAdaptiveSpec(MEDIA_PRIMARY_SPEC);
+    // B1 dependency spec: media must be ACTIVE before the composition is
+    // proposed — an inactive media surface is dropped by reconcileLayout.
     seedPlayingMedia();
+    appStore.getState().applyAdaptiveSpec(MEDIA_PRIMARY_SPEC);
 
     const html = renderToStaticMarkup(<App />);
     // The stage hosts the full media player…
@@ -154,8 +180,8 @@ describe("H7: conditional persistent media (no duplicates, no empty chrome)", ()
   });
 
   it("media active but NOT in a slot -> persistent bar present", () => {
-    appStore.getState().applyAdaptiveSpec(NO_MEDIA_SPEC);
     seedPlayingMedia();
+    appStore.getState().applyAdaptiveSpec(NO_MEDIA_SPEC);
 
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain("media-dock--persistent");
