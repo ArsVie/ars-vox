@@ -137,7 +137,13 @@ export function ConversationPanel({ meta, panelId }: { meta?: PanelMeta; panelId
           aria-label="Escribe una petición"
         />
         <MicButton />
-        <button type="button" className="send-button" onClick={submit} disabled={!draft.trim()}>
+        <button
+          type="button"
+          className="send-button"
+          onClick={submit}
+          disabled={!draft.trim()}
+          aria-label="Enviar"
+        >
           <SendIcon size={15} />
           <span className="btn-label">Enviar</span>
         </button>

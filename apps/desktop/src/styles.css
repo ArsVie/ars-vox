@@ -404,6 +404,16 @@ body,
   inset: 0;
 }
 
+/* ADVISOR P0-1: the floating home affordance (.shell-chrome) hovers at
+   the stage's top-left corner. The main slot reaches that corner and its
+   panel (.panel) is absolutely positioned inset:0, so the panel header
+   would render underneath the pill. Offsetting the panel's top edge keeps
+   every primary surface clear of the wordmark — pure CSS, geometry
+   fractions untouched. */
+.panel-slot--main > .panel {
+  top: 44px;
+}
+
 .panel-slot.fade {
   animation: panel-fade 0.25s var(--ease);
 }
@@ -866,6 +876,21 @@ body,
 
 .composer button:active:not(:disabled) {
   transform: translateY(0);
+}
+
+/* ADVISOR P0-2: in narrow companion/support columns the composer must
+   never clip the send action. The send button collapses to an icon
+   circle (52px = the input height) and the text label drops out — the
+   accessible name lives on the button via aria-label. */
+.conversation--companion .send-button,
+.conversation--support .send-button {
+  width: 52px;
+  padding: 0;
+  flex: none;
+}
+.conversation--companion .send-button .btn-label,
+.conversation--support .send-button .btn-label {
+  display: none;
 }
 
 .composer .mic-button {

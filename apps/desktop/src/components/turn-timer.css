@@ -49,6 +49,15 @@
   animation: turn-timer-shimmer 1.6s linear infinite;
 }
 
+/* ADVISOR P3: the shimmer is motion for motion's sake — under the
+   reduced-motion preference the running timer keeps its static state. */
+@media (prefers-reduced-motion: reduce) {
+  .turn-timer.running .turn-timer__shimmer {
+    opacity: 0.35;
+    animation: none;
+  }
+}
+
 @keyframes turn-timer-shimmer {
   from {
     background-position: 200% 0;
