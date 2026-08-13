@@ -35,6 +35,11 @@ The backlog is always the present state; it is not tied to a date.
   prioritazed" With only two activities, the layout must use the
   available space — no wasted space, and the more important panel gets
   priority.
+- **Conversation is always present.** The agent arranged the layout
+  without the conversation panel at all (tasks primary, media
+  companion) — dropping the chat entirely. The conversation surface
+  must appear in every composition the agent builds; it is the core of
+  the app and must never be composed away.
 
 ## Media
 
@@ -43,6 +48,31 @@ The backlog is always the present state; it is not tied to a date.
   a YouTube track must show the real playback time (tracked from the
   player), or it must be removed in favor of the player's own
   controls.
+- **Video removal is complete.** The user asks to remove the video;
+  the assistant claims it did ("Quité el video" / "El video ya estaba
+  quitado") but the media region remains — a title and play button
+  over an empty area, or the video still shown. Removal must clear the
+  surface and its content entirely: no ghost region.
+  Root cause (live-verified 2026-08-13): the request is currently
+  UNFULFILLABLE — `media.stop` keeps the loaded track
+  (services/agent/arsvox_agent/media.py:139 "keeping the loaded
+  track"), and NO tool clears title/videoId/url/localPath. In a live
+  turn asking to quit the video the model replied "Listo" without
+  touching media; the persistent bar kept showing "KT vs T1 | WORLDS
+  2025 | Gran final | Día 17" (DOM probe: media-dock--persistent with
+  stale title). Fix needs: (a) a media disposal tool (e.g. media.clear)
+  that clears the track and emits an empty media state, and (b)
+  app.get_state reporting media content so the model can see the stale
+  track and knows to call it. (The ghost-guard in MediaDock.tsx covers
+  the title-with-no-target variant only.)
+
+## Browser
+
+- **Browser must respond.** Asking for news ("noticias de Mexicali")
+  fails with "El escritorio no respondió" — the browser surface does
+  not show the requested page in the packaged app. The browser panel
+  must open and navigate reliably; a failed navigation must be
+  reported honestly.
 
 ## Status bar
 
