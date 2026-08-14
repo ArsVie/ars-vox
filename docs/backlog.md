@@ -63,6 +63,7 @@ The backlog is always the present state; it is not tied to a date.
   removes the conversation and the composer from the screen entirely;
   only a faint Restaurar icon brings them back. The chat must remain
   reachable from any maximized/fullscreen state.
+- **The conversation must never collapse to a sliver.** After the document/media turns the conversation panel shrank to a ~76px strip at the top with the messages scrolled out of view, while the media dock (672×316) filled the window and the composer row overlapped the media panel's top edge — the user could not read the assistant's last reply at all. Severity: MAJOR. Every composition must keep the conversation readable, and no panel may overlap the composer.
 
 ## Media
 
@@ -110,6 +111,7 @@ The backlog is always the present state; it is not tied to a date.
   ("MUSICA Z…") and the document panel header truncates ("DOCU…"),
   with no way to see the full name. Titles must fit their area or be
   expandable.
+- **The dock play button is dead.** After "Listo, reproduciendo Música Zen Ultra Relajante. Que disfrutes." the docked track shows a play symbol; tapping it does nothing — no player opens, no audio, no feedback, the lone title and button stay. Severity: MAJOR. The dock must actually start the track when its play control is pressed, or show an honest non-playing state without a dead control.
 
 ## Browser
 
@@ -153,6 +155,7 @@ The backlog is always the present state; it is not tied to a date.
 - **STOP is a red symbol.** The stop control is a small red symbol,
   nothing more. Reference:
   `docs/screenshots/backlog-minimal-statusbar-example.png`.
+- **Stop must be a clearly visible red symbol.** The stop control in the composer row renders a near-black glyph (rgb(11,18,32)) over a faint 22%-alpha red square on the dark background — hard to find for an elderly user who needs to stop the assistant mid-turn. Severity: MINOR. The stop symbol must be clearly red and stand out against the dark theme, as in the reference screenshot.
 
 ## Reminders
 
@@ -166,6 +169,7 @@ The backlog is always the present state; it is not tied to a date.
   daily)") and no reminders surface appears on screen at all. The
   reply must be plain language and the created reminder must be
   visible somewhere (a surface or a plain chat summary).
+- **The reminder confirmation lacks when-it-rings, and reminders cannot be reviewed or cancelled.** "poné un recordatorio a las 9 de la noche para regar las plantas" answers "Listo. Recordatorio para regar las plantas a las 9 de la noche." and nothing appears on screen — the user never learns if it will ring today or tomorrow, and no view ever lists the pending reminders to check or delete them. Severity: MINOR. The confirmation must state the next firing time, and a manual reminders view (list, cancel) must exist.
 
 ## Library / reading
 
@@ -173,6 +177,10 @@ The backlog is always the present state; it is not tied to a date.
   is answered with "Listo" but the book text is read inside the chat
   with no reader surface. Reading must have a dedicated surface or an
   explicit in-chat reading mode — never a claim without a view.
+
+## Documents
+
+- **Creating a document must show a document.** "creá un documento" titled "mis recetas" was answered "Encontré una receta guardada: receta de avena. Ya la abrí." and no editor or document panel appeared anywhere on screen — the user cannot see, type, or save anything. Severity: MAJOR. Creating or opening a document must open a visible editor panel with its content, or plainly say it could not.
 
 ## Chat input
 
@@ -193,6 +201,8 @@ The backlog is always the present state; it is not tied to a date.
   needs it restated.
 - **User-friendly, human-readable.** Replies are written for a casual
   user, not as tool-output dumps.
+- **No claiming panels that are not on screen.** Twice in a row the assistant said a results panel was open ("Te dejo las opciones en el panel", "El panel ya está abierto con los resultados") while the screen showed only the chat — the user looks for the promised panel and finds nothing. Severity: MAJOR. The agent must not announce a panel that is not visible; when search results are offered in a panel, the panel must actually open and show them.
+- **Context must resolve "nota" before acting on it.** After the assistant listed news articles, "abrí la primera nota en pantalla grande" was answered "Listo, abrí la primera nota —\"comprar leche y pan\"—" — the assistant opened a saved shopping note instead of the first news article, so the user never sees the article they asked for. Severity: MAJOR. The agent must resolve "nota" against the current context (the news list) before assuming a saved note.
 
 ## Data persistence
 
@@ -213,6 +223,10 @@ The backlog is always the present state; it is not tied to a date.
 - SPIKE: logging of user queries to derive personalized behavior — what
   to log, where it lives (local SQLite), retention, and how the agent
   consumes it.
+
+## Messaging
+
+- **The family contact must be configurable from the screen.** "mandale un mensaje a mi familia" is answered "No pude preparar el mensaje: no hay un contacto aprobado configurado en la aplicación... configurar el destinatario en los ajustes" — but no settings or contact setup exists anywhere in the visible UI, so the request ends in a dead end for the user. Severity: MAJOR. The recipient must be configurable from within the app, and the failure message must point to a visible way to do it.
 
 ## Conversation steering
 
