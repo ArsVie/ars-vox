@@ -29,10 +29,13 @@ function slotRole(slot: string): "primary" | "companion" | "support" {
 /**
  * R19 (GATE-3.5): place a surface into a composition deterministically —
  * the first FREE slot of the current template (main→primary, side→
- * companion, rail→support); when the template is full, step up to triple;
- * when nowhere to go, return the input unchanged (the degrade layer would
- * drop the newcomer anyway). Mirrors the legacy engine's "fill empty
- * slots" rule for the manual-open source.
+ * companion, rail→support); when the template is full, step up through
+ * sidecar BEFORE triple. (Reviewer round 3, 2026-08-14: jumping straight
+ * from focus to triple silently killed panel.open at short viewports —
+ * triple's rail needs ≥160px, e.g. 124.8px at 780px wide, so the geometry
+ * guard rejected the whole composition and the panel never appeared.)
+ * Mirrors the legacy engine's "fill empty slots" rule for the manual-open
+ * source.
  */
 export function addSurfaceToSpec(
   spec: AdaptiveLayoutSpec,
@@ -40,7 +43,7 @@ export function addSurfaceToSpec(
 ): AdaptiveLayoutSpec {
   if (spec.assignments.some((a) => a.surfaceId === surfaceId)) return spec;
   const occupied = new Set(spec.assignments.map((a) => a.slot));
-  const candidates = [spec.template, "triple"] as const;
+  const candidates = [spec.template, "sidecar", "triple"] as const;
   for (const template of candidates) {
     const free = TEMPLATE_SLOTS[template].find(
       (s: string) => !occupied.has(s),

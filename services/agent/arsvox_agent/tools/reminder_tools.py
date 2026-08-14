@@ -9,6 +9,54 @@ as LOCAL wall time (the store's configured/system zone), never UTC.
 from arsvox_agent.tools.context import ToolContext
 from arsvox_memory.repos.reminders import normalize_due_utc
 
+WEEKDAYS_ES = [
+    "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo",
+]
+
+
+def _due_plain_words(due_iso: str, tz) -> str:
+    """Render a UTC ISO instant in plain local words the user understands:
+    'hoy a las 9 de la noche' / 'mañana a las 9 de la mañana' / weekday.
+
+    Reviewer round 3 (2026-08-14): reminders_list pasted raw ISO codes
+    ("2026-08-15T15:00:00+00:00") that no normal user can read. The list
+    must speak like the confirmation does.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    try:
+        dt = datetime.fromisoformat(due_iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+        local = dt.astimezone(tz)
+    except Exception:
+        return due_iso
+
+    hour = local.hour
+    if hour < 6:
+        period = "de la madrugada"
+    elif hour < 12:
+        period = "de la mañana"
+    elif hour < 19:
+        period = "de la tarde"
+    else:
+        period = "de la noche"
+    h12 = hour % 12 or 12
+
+    from datetime import datetime as _dt
+
+    today_local = _dt.now(tz).date()
+    tomorrow_local = today_local.fromordinal(today_local.toordinal() + 1)
+    due_day = local.date()
+    if due_day == today_local:
+        when = "hoy"
+    elif due_day == tomorrow_local:
+        when = "mañana"
+    else:
+        when = WEEKDAYS_ES[local.weekday()]
+    return f"{when} a las {h12} {period}"
+
 
 def _normalize_due(due_at: str, tz) -> str | None:
     """Parse ``due_at`` into a UTC instant (``+00:00`` ISO string).
@@ -44,8 +92,8 @@ async def reminders_list(tctx: ToolContext) -> str:
     if not active:
         return "No hay recordatorios activos."
     lines = [
-        f"#{r['id']} {r['due_at']} — {r['text']}"
-        + (f" ({r['repeat_rule']})" if r["repeat_rule"] != "none" else "")
+        f"#{r['id']} {_due_plain_words(r['due_at'], tctx.deps.reminders.tz)} — {r['text']}"
+        + (f" (se repite {r['repeat_rule']})" if r["repeat_rule"] != "none" else "")
         for r in active
     ]
     return "\n".join(lines)

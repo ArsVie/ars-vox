@@ -47,7 +47,7 @@ from arsvox_agent.tools.context import ToolContext
 #: vocabulary guard). media IS assignable (MediaDock renders per role);
 #: the shell keeps the persistent media bar independent of compositions.
 REGISTERED_SURFACES: frozenset[str] = frozenset(
-    {"browser", "conversation", "document_editor", "tasks", "media"}
+    {"browser", "conversation", "document_editor", "book_reader", "tasks", "media"}
 )
 
 #: Deterministic role → semantic slot mapping (contract: each template

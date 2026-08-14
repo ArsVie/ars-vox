@@ -1557,6 +1557,41 @@ select:focus-visible,
   flex: none;
 }
 
+/* ROUND-3 (2026-08-14): the persistent compact bar's real player
+   element — visually muted (1px, transparent) but mounted and audible.
+   Absolute positioning keeps it out of the flex flow so the bar stays
+   compact; opacity 0.01 (not 0) keeps some engines from freezing the
+   element, pointer-events none keeps it unclickable. */
+.media-player-compact-embed,
+.media-player-compact-audio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
+  pointer-events: none;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+}
+
+/* ROUND-3 (2026-08-14): the persistent dock must never exceed the
+   viewport — at 480px wide the compact bar was 862px (progress row's
+   flex-basis 220px + title + gaps all refused to shrink), pushing the
+   play controls off-screen. min-width:0 + overflow clipping on the row
+   lets the title ellipsis do its job. */
+.media-player--compact {
+  max-width: 100%;
+  overflow: hidden;
+}
+.media-player--compact .media-player-progress {
+  flex: 0 1 120px;
+  min-width: 0;
+}
+.media-player--compact input[type="range"] {
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* --------------------------------------------- generic content panel */
 .content-panel-body {
   flex: 1;

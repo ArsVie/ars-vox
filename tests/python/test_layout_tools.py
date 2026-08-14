@@ -358,7 +358,7 @@ class TestR18NoNewsVocabulary:
         # (A4-owned). The frontend planner rejects anything outside this
         # set, so the Python gate and the registry must agree.
         assert REGISTERED_SURFACES == frozenset(
-            {"browser", "conversation", "document_editor", "tasks", "media"}
+            {"browser", "conversation", "document_editor", "book_reader", "tasks", "media"}
         )
 
 

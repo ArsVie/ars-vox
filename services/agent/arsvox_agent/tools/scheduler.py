@@ -23,6 +23,7 @@ from arsvox_memory import NotificationStore, ReminderStore, TaskStore
 
 from arsvox_agent.confirmations import ConfirmationCoordinator
 from arsvox_agent.events import EventBus
+from arsvox_agent.tools.reminder_tools import _due_plain_words
 
 log = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ class ReminderScheduler:
         if not active:
             return "No tienes recordatorios activos."
         lines = [
-            f"#{r['id']} {r['due_at']} — {r['text']}"
+            f"#{r['id']} {_due_plain_words(r['due_at'], self.reminders.tz)} — {r['text']}"
             + (f" (se repite {r['repeat_rule']})" if r["repeat_rule"] != "none" else "")
             for r in active
         ]

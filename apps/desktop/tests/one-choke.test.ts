@@ -16,6 +16,8 @@ import { describe, expect, it } from "vitest";
 
 import type { ServerEvent } from "../src/contracts";
 import { registerProductSurfaces } from "../src/adaptive/surfaces";
+import { surfaceRegistry } from "../src/roles/registry";
+import { computeAdaptiveGeometry } from "../src/layout/adaptiveEngine";
 import { createAppStore } from "../src/store";
 
 registerProductSurfaces();
@@ -124,6 +126,37 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
     const spec = store.getState().adaptive.spec!;
     expect(spec.template).toBe("triple");
     expect(spec.assignments.map((a) => a.surfaceId)).toContain("tasks");
+  });
+
+  it("manual source: panel.open on the boot focus steps to SIDECAR, not triple (R3: short-viewport regression)", () => {
+    // Reviewer round 3 (2026-08-14): at 780×437 the boot default (focus,
+    // conversation in main) + panel.open went straight to triple, whose
+    // rail slot needs ≥160px (124.8px at 780px wide) — the geometry guard
+    // rejected the whole composition and the panel silently never
+    // appeared ("Listo, te puse la música" with no player on screen).
+    // The step-up ladder must try sidecar before triple so the open
+    // composes at short viewports.
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.open", panel_type: "media", title: "Música" },
+      created_at: ts(),
+    });
+    const spec = store.getState().adaptive.spec!;
+    expect(spec.template).toBe("sidecar");
+    expect(spec.assignments.map((a) => a.surfaceId)).toEqual([
+      "conversation",
+      "media",
+    ]);
+    // And the sidecar composition must actually render at 780×437
+    // (the reviewer's window): geometry must not throw.
+    expect(() =>
+      computeAdaptiveGeometry(
+        spec,
+        { width: 780, height: 437 },
+        surfaceRegistry.registeredIds(),
+      ),
+    ).not.toThrow();
   });
 
   it("spoken source: handleSpokenText applies through the choke", () => {

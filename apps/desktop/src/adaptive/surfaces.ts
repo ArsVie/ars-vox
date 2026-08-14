@@ -24,6 +24,7 @@ import type { SurfaceRegistration } from "./contracts";
 import type { PanelId } from "../contracts";
 import { surfaceRegistry } from "../roles/registry";
 import { BrowserPanel } from "../components/BrowserPanel";
+import { ContentPanel } from "../components/ContentPanel";
 import { ConversationPanel } from "../components/ConversationPanel";
 import { DocumentPanel } from "../components/DocumentPanel";
 import { TasksPanel } from "../components/TasksPanel";
@@ -43,8 +44,16 @@ export const PRODUCT_SURFACES: SurfaceRegistration[] = [
     persistentCapable: false,
   },
   {
-    // Reading surface — the document panel id in the wire vocabulary
-    // (content.document_editor + surfaceState bag key).
+    // Reading surface — the wire's book_reader panel id. The library
+    // tools emit panel.open book_reader; without a registered surface
+    // the open silently no-ops (reviewer round 3, 2026-08-14). The
+    // generic titled panel is the honest host: it shows the book title
+    // + reference; the agent reads the text aloud in the chat.
+    surfaceId: "book_reader",
+    roles: ["primary", "companion", "support"],
+    persistentCapable: false,
+  },
+  {
     surfaceId: "document_editor",
     roles: ["primary", "companion", "support"],
     persistentCapable: false,
@@ -72,6 +81,7 @@ export const SURFACE_COMPONENTS: Record<string, ComponentType<any>> = {
   browser: BrowserPanel,
   conversation: ConversationPanel,
   document_editor: DocumentPanel,
+  book_reader: ContentPanel,
   tasks: TasksPanel,
   media: MediaDock,
 };

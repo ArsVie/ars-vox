@@ -433,6 +433,32 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
             </span>
             {playPauseButton}
             {progressControl}
+            {/* ROUND-3 (2026-08-14): the persistent compact bar is a real
+                player, not a display-only stub. Without an actual media
+                element the dock could claim "Pausar" while nothing can
+                sound — the reviewer's core finding. Mount the real
+                element (visually muted 1px, still audible): the YouTube
+                embed for video tracks, the HTML5 element for local. */}
+            {m.videoId ? (
+              <iframe
+                key={m.videoId}
+                ref={iframeRef}
+                src={youtubeEmbedSrc(m.videoId, isPlaying)}
+                title={m.title}
+                allow="autoplay; encrypted-media"
+                className="media-player-compact-embed"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+            ) : playableSrc ? (
+              <audio
+                ref={audioRef}
+                src={playableSrc}
+                className="media-player-compact-audio"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+            ) : null}
           </div>
         )}
       </section>
