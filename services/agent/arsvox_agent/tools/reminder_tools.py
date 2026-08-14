@@ -70,6 +70,49 @@ def _normalize_due(due_at: str, tz) -> str | None:
     return normalize_due_utc(due_at, tz)
 
 
+_PLACEHOLDER_WORDS = {
+    "recordatorio", "recuérdame", "recuerdame", "para", "de", "del", "el", "la",
+    "los", "las", "a", "al", "y", "mañana", "manana", "hoy", "pasado", "pasada",
+    "día", "dia", "días", "semana", "mes", "año", "noche", "tarde", "temprano",
+    "a las", "de la", "de las",
+}
+
+
+def _is_placeholder_text(text: str, due: str, tz: str) -> bool:
+    """True when the model invented a generic placeholder instead of a
+    real reminder text (R10 finding 4: "Recordatorio para mañana a las
+    9"). Strategy: if every significant word in the text is either a
+    filler word or a digit, there is no real content — treat as empty."""
+    import re
+
+    tokens = re.findall(r"[a-záéíóúñ]+|\d+", text.lower())
+    significant = [
+        t
+        for t in tokens
+        if t not in _PLACEHOLDER_WORDS and not t.isdigit()
+    ]
+    return len(significant) == 0
+
+
+async def _register_draft(tctx: ToolContext, due: str) -> str:
+    """Register a pending reminder draft so the NEXT user message
+    completes this reminder in the runtime (deterministic, no model in
+    the loop). R9 finding 3 / R10 finding 4."""
+    pending_id = tctx.deps.pending.create(
+        run_id=tctx.run_id,
+        tool="reminders.create_draft",
+        args={"due_at": due},
+        title="Recordatorio (falta el texto)",
+        detail=_due_plain_words(due, tctx.deps.reminders.tz),
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=60)).isoformat(timespec="seconds"),
+    )
+    tctx.deps.audit.log("reminders", "draft_registered", {"pending_id": pending_id, "due_at": due})
+    return (
+        f"¿Qué te recuerdo {_due_plain_words(due, tctx.deps.reminders.tz)}? "
+        "Decime el texto y lo agendo."
+    )
+
+
 async def reminders_create(
     tctx: ToolContext,
     text: str,
@@ -82,25 +125,18 @@ async def reminders_create(
     if due is None:
         return f"No entendí la fecha '{due_at}'. Usa formato ISO (2026-08-06T08:00:00)."
     if not text.strip():
-        # R9 (2026-08-14, reviewer round 9 finding 3): the assistant used
-        # to ask "¿Qué te recuerdo?" in plain chat, and the user's answer
-        # was treated as a NEW request (often wildly off — a reminder text
-        # became a Telegram call). Deterministic cure: register a PENDING
-        # DRAFT so the NEXT user message completes this reminder in the
-        # runtime (no model in the loop).
-        pending_id = tctx.deps.pending.create(
-            run_id=tctx.run_id,
-            tool="reminders.create_draft",
-            args={"due_at": due, "repeat_rule": repeat_rule},
-            title="Recordatorio (falta el texto)",
-            detail=_due_plain_words(due, tctx.deps.reminders.tz),
-            expires_at=(datetime.now(timezone.utc) + timedelta(minutes=60)).isoformat(timespec="seconds"),
+        return await _register_draft(tctx, due)
+    # R10 (2026-08-14, reviewer round 10 finding 4): the model invented
+    # placeholder text ("Recordatorio para mañana a las 9") instead of
+    # passing empty — no draft registered, reminder created with a
+    # nonsense title, and the user's follow-up answer was ignored.
+    # Treat auto-generated placeholders as missing text (same draft path).
+    placeholder = _is_placeholder_text(text, due, tctx.deps.reminders.tz)
+    if placeholder:
+        tctx.deps.audit.log(
+            "reminders", "placeholder_as_empty", {"text": text[:80], "due_at": due}
         )
-        tctx.deps.audit.log("reminders", "draft_registered", {"pending_id": pending_id, "due_at": due})
-        return (
-            f"¿Qué te recuerdo {_due_plain_words(due, tctx.deps.reminders.tz)}? "
-            "Decime el texto y lo agendo."
-        )
+        return await _register_draft(tctx, due)
     reminder_id = tctx.deps.reminders.create(text, due, repeat_rule)
     tctx.deps.audit.log(
         "reminders", "create", {"reminder_id": reminder_id, "due_at": due, "repeat": repeat_rule}
@@ -138,8 +174,10 @@ SPECS = [
         "reminders.create",
         "Schedule a reminder. due_at must be ISO format (e.g. 2026-08-06T08:00:00)."
         " repeat_rule: none, daily or weekly. If the user gave the TIME but"
-        " NOT the text, call this with text='' (empty) — it registers a"
-        " draft and the user's next message completes it automatically.",
+        " NOT the text, pass text='' — the system asks for the text and"
+        " completes it on the next message. NEVER invent a generic text"
+        " like 'Recordatorio para mañana a las 9': if the user didn't say"
+        " what to remind, text must be empty.",
         reminders_create,
         PolicyKind.REVERSIBLE,
         effect="emission",

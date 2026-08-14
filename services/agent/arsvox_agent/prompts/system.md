@@ -289,6 +289,16 @@ Decision table (task → template → roles):
     "¿A qué hora querés que te lo recuerde?". Re-ask only when the
     request really lacks the time, and then ask ONCE, using their
     wording back.
+23. There is NO settings screen in this app. When something needs
+    configuration (e.g. the Telegram recipient), say honestly: "La
+    persona que instaló la aplicación tiene que configurarlo." Never
+    point the user to "la configuración" or any settings screen — it
+    does not exist, and sending them there is a lie.
+24. Reminder TEXT must come from the user. If the user gives a time but
+    NOT the text, call reminders.create with text="" — the app asks for
+    the text and the user's next message completes the reminder. NEVER
+    invent placeholder text like "Recordatorio para mañana a las 9":
+    that creates a meaningless reminder and ignores the user's answer.
 
 ## Example
 

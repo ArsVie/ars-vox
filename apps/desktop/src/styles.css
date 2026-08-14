@@ -1126,7 +1126,11 @@ select:focus-visible,
   margin-left: auto;
 }
 
-/* The visible stop square: ~18px red rounded square, glyph inside. */
+/* The visible stop square: ~18px red rounded square, glyph inside.
+   R10 finding 2: the old man sees a "blue button with a tiny red icon"
+   because the idle glyph was only 22% red on a transparent pill (the
+   chrome's blue showed through). A STOP must READ as red in every
+   state: solid red fill + dark ink (AA), matching the active state. */
 .stop-glyph {
   display: inline-flex;
   align-items: center;
@@ -1135,8 +1139,8 @@ select:focus-visible,
   height: 18px;
   border-radius: var(--av-r-chip);
   border: 1px solid rgba(238, 92, 97, 0.55);
-  background: rgba(238, 92, 97, 0.22);
-  color: inherit;
+  background: #ee5c61;
+  color: #0b1220;
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
@@ -1145,9 +1149,9 @@ select:focus-visible,
 }
 
 .stop-button:hover .stop-glyph {
-  background: rgba(238, 92, 97, 0.38);
+  background: #f26f74;
   border-color: rgba(238, 92, 97, 0.8);
-  color: #ffb3b5;
+  color: #0b1220;
 }
 
 .stop-button:active {

@@ -366,7 +366,7 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
       type="button"
       className="media-play-btn"
       aria-label={isPlaying ? "Pausar" : "Reproducir"}
-      disabled={m.state === "stopped" || !hasPlayableContent}
+      disabled={!hasPlayableContent}
       onClick={() => dispatchCommand({ action: "media.play_pause" })}
     >
       {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}

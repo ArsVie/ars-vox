@@ -784,6 +784,11 @@ export function createAppStore(send: SendFn): StoreApi<AppState> {
           return;
         case "agent_message":
           set({ messages: appendAgentMessage(state.messages, event) });
+          // R10 finding 1: the busy-guard ErrorEvent ("Todavía estoy
+          // trabajando...") rendered a persistent banner that never
+          // cleared. An agent reply means the machine is no longer
+          // busy — dismiss the stale error banner when a reply lands.
+          if (state.error) set({ error: null });
           return;
         case "ui_command":
           // C5/A3 (GATE-3.5): the SINGLE wire-boundary normalization site —
