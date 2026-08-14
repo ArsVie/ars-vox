@@ -40,6 +40,25 @@ The backlog is always the present state; it is not tied to a date.
   companion) — dropping the chat entirely. The conversation surface
   must appear in every composition the agent builds; it is the core of
   the app and must never be composed away.
+- **The composed primary is the primary.** "the agent put the news to
+  the side": a layout.compose naming surface X as primary must render
+  X primary. Verified (2026-08-14): a persistent conversation
+  constraint (panel.set_primary / home click pins the surface to main)
+  silently degrades every later agent compose — the requested surface
+  is demoted, while the agent is still told "Disposición aplicada";
+  after layout.restore the identical compose applied exactly as
+  requested. The agent must learn what actually applied, and the
+  pinned state must be visible to the user and resettable.
+- **Opening a panel is not composing.** For "Put the news from today,
+  mexicali" the agent opened the browser panel (ui.open_panel) but
+  never composed it to primary, so the browser stayed a side strip.
+  When browsing/news is the user's ask, the browser is the primary
+  activity — it must go primary (same rule as video).
+- **Panels must fit their slots.** "the side panels have weird
+  cropping": the document panel (min-width 360px) is wider than the
+  companion slot (~242-288px) and gets clipped at the right edge
+  (toolbar controls cut off). Panels must adapt to their slot size or
+  slots must respect panel minimums.
 
 ## Media
 
@@ -65,6 +84,24 @@ The backlog is always the present state; it is not tied to a date.
   app.get_state reporting media content so the model can see the stale
   track and knows to call it. (The ghost-guard in MediaDock.tsx covers
   the title-with-no-target variant only.)
+- **Playing means playing.** "the youtube panel doens't seem to work
+  again": the YouTube embed mounts but autoplay is blocked in the web
+  renderer (player unstarted, poster with play overlay) while the UI
+  shows a pause button — nothing plays, nothing audible. The playing
+  state must reflect the real player, and a blocked/stopped embed must
+  show honest state.
+- **The announced title must match the video.** Verified (2026-08-14):
+  for result CnHGab2JMYw the search metadata says "Música Para Dormir
+  Profundamente En Menos De 5 Minutos; Musica Relajante Para Dormir
+  #8" while the embed's own player reports the same ID as "Relaxing
+  music with the sound of nature Bamboo Water Fountain 2021 #2" (both
+  Helios Piano, same 7h duration). The UI announces one thing and the
+  player delivers another — the played content must match what the
+  UI states.
+- **No silent fake dock.** When the media surface is not in the
+  composition, the persistent dock shows the track as "playing" but
+  nothing plays (the persistent variant renders no embed element for
+  YouTube). A docked track that cannot play must show honest state.
 
 ## Browser
 
@@ -93,6 +130,12 @@ The backlog is always the present state; it is not tied to a date.
   - **Click by visible text**: current click target matching covers
     aria-label/visible text on a/button/input; full text-fragment
     search (any element) is a possible refinement.
+- **The browser surface must show the page.** "why no view on the
+  browser?" — after a real navigation the panel header shows the true
+  title but the viewport stays empty: the view is an Electron-owned
+  WebContentsView that does not exist in the web renderer (and the
+  engine is text-first, no screenshots). The user must see the page or
+  an explicit no-view state — never a silent blank.
 
 ## Status bar
 
@@ -116,6 +159,10 @@ The backlog is always the present state; it is not tied to a date.
   character restriction currently swallows it.
 - **Markdown rendering.** The chat renders markdown: `**`, `__`, `##`
   and friends must display formatted.
+- **STOP next to the input controls.** "the red stop button should be
+  along the microphone and send button": the stop control must sit in
+  the same row as Micrófono/Enviar, not on a separate status row above
+  the composer.
 
 ## Agent responses
 
