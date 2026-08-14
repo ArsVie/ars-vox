@@ -547,6 +547,56 @@ mensaje ("poneme un recordatorio para mañana a las 9 de la mañana de
 llamar a mi nieta"). Un abuelo que responde la pregunta del asistente ve
 que no le hace caso.
 
+## Backlog (reviewer round 10)
+
+1. MINOR: El aviso rojo "Todavía estoy trabajando en lo anterior. Espera un
+momento." debe desaparecer cuando el asistente termina de responder. En
+cambio el aviso quedó visible en pantalla durante toda la sesión de prueba
+(más de 25 minutos), incluso con el asistente ya respondido y con el botón
+DETENER presionado: un abuelo cree que la app sigue ocupada para siempre y
+no sabe cuándo puede hablar.
+
+2. MINOR: El botón DETENER debe verse claramente rojo cuando la app está
+trabajando/escuchando (estado activo). En cambio, con el estado activo
+(indicador "Escuchando" con punto verde y contador), el botón se ve azul
+brillante con un ícono rojo pequeño adentro: es visible, pero no es el
+botón rojo de parada esperado. El botón sí funciona al hacerle clic
+(detiene el estado de escucha), pero su color no comunica "rojo = parar".
+
+3. MAJOR: Al pedir "mandale un mensaje a mi familia" y darle el texto
+("decile que los extraño y que vengan a visitarme el domingo"), el
+asistente debe responder con honestidad (enviado o explicando qué falta),
+sin mandar al usuario a una pantalla de configuración que no existe. En
+cambio respondió: "Todavía no pude preparar el mensaje: la aplicación no
+tiene configurado un destinatario aprobado para mensajes. Eso hay que
+hacerlo desde la configuración, no se puede desde la pantalla todavía."
+Pero la app NO tiene ninguna pantalla ni botón de configuración en toda su
+interfaz (no hay rueda de ajustes, ni panel de configuración, ni menú: lo
+solo visible es Inicio, Micrófono, Enviar y DETENER). Un abuelo al que le
+dicen "andá a la configuración" no tiene a dónde ir.
+
+4. MAJOR: Al pedir "poneme un recordatorio para mañana a las 9 de la
+mañana", el asistente no debe re-preguntar la hora, y si falta el texto
+puede preguntarlo; cuando el usuario contesta con el texto ("que llame a
+mi nieta"), el recordatorio DEBE crearse con esa respuesta (defecto de la
+ronda 9 que se daba por corregido). En cambio el asistente creó el
+recordatorio solo, con el texto genérico "Recordatorio para mañana a las
+9" (nº 14), sin preguntar el texto; y cuando el usuario respondió "que
+llame a mi nieta" lo ignoró por completo y derivó a "No puedo hacer
+llamadas telefónicas desde acá... ¿Cuál preferís?" — exactamente el
+mismo descarrilamiento de la ronda 9. En la lista de recordatorios no
+existe ningún recordatorio con el texto "que llame a mi nieta" creado
+por esta respuesta: un abuelo que contesta la pregunta del asistente ve
+que no le hace caso.
+
+5. MINOR: La barra persistente de música (que muestra la última canción
+reproducida, "MUSICA ZEN ULTRA RELAJANTE...") debe ofrecer un control de
+reproducir utilizable si muestra un botón de play. En cambio el botón de
+reproducir se ve como un botón normal con el ícono de play, pero está
+DESHABILITADO (disabled) de forma permanente: al hacerle clic no hace
+nada. Un abuelo que ve el botón de play en la barra y quiere volver a
+escuchar la música no puede usarlo y cree que la app está rota.
+
 ## Backlog (reviewer round 9 — fixed 2026-08-14)
 
 1. (MINOR) RECORDATORIOS raw ISO — the humanize fix WAS in the tree; the
@@ -568,3 +618,28 @@ que no le hace caso.
    "Listo. Te puse un recordatorio para pasado mañana, domingo 16, a las
    7 de la noche. Suena una sola vez." Regression tests.
 4. (Ars) agent temperature 0.2 -> 1.0 (config + contract default).
+
+## Backlog (reviewer round 10 — fixed 2026-08-14)
+
+1. (MINOR) "Todavía estoy trabajando..." banner never disappears —
+   FIXED: the error banner now auto-dismisses when the next agent
+   message lands (store.ts agent_message case).
+2. (MINOR) DETENER reads as a blue button with a tiny red icon — the
+   idle glyph was 22% red on a transparent pill over the blue chrome.
+   FIXED: solid red fill + dark ink (AA) in every state (styles.css).
+3. (MAJOR) Family-message flow points at "la configuración" — no
+   settings screen exists. The tool's reply was honest; the MODEL
+   paraphrased it into a lie. FIXED: prompt rule 23 — never point at a
+   settings screen; say "la persona que instaló la aplicación tiene que
+   configurarlo". Verified live.
+4. (MAJOR) Reminder text answer ignored AGAIN (round-9 regression) —
+   the model invented placeholder text ("Recordatorio para mañana a las
+   9") instead of passing empty, so no draft registered. FIXED: (a)
+   tool description forbids inventing text; (b) _is_placeholder_text
+   catches filler-only texts and routes them to the draft path; (c)
+   rule 24. Verified live: "que le dé de comer al gato" became the
+   reminder text.
+5. (MINOR) Persistent dock play button permanently disabled (looks
+   clickable, does nothing) — disabled when state=stopped, but the
+   backend R24 RESUMES a stopped-with-track. FIXED: disabled only when
+   no playable content (MediaDock.tsx).
