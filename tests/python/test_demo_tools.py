@@ -265,8 +265,8 @@ def test_mock_guard_blocks_when_mock_disabled():
 def test_demo_populate_registered_in_registry():
     registry = ToolRegistry()
     n = register_all(registry)
-    # 48: browser.navigate (W2-NAVIGATE) added next to browser.dom_action.
-    assert n == 48
+    # 59: 48 granular tools + 11 model-surface dispatchers.
+    assert n == 59
     spec = registry.get("demo_populate")
     assert spec is not None
     assert spec.handler is demo_populate

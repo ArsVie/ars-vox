@@ -244,9 +244,9 @@ def test_scripted_media_play_emits_tool_call_and_media_state(script_client):
             ws.receive_json()  # state_snapshot
             events = _collect_turn(ws, "pon música")
 
-        calls = _tool_calls(events, tool="media.play")
+        calls = _tool_calls(events, tool="media.play_youtube")
         assert calls, "scripted media_play turn must emit tool_call events"
-        assert calls[-1]["status"] == "done", "the media.play call must finish done"
+        assert calls[-1]["status"] == "done", "the media.play_youtube call must finish done"
 
         states = _media_states(events)
         assert states and states[-1][0] == "playing", (
@@ -259,8 +259,8 @@ def test_scripted_media_play_emits_tool_call_and_media_state(script_client):
         services = c.app.state.services
         rows = services.tool_calls.for_run(calls[0]["run_id"])
         assert any(
-            r["tool"] == "media.play" and r["status"] == "done" for r in rows
-        ), "ToolCallStore must record the executed media.play row"
+            r["tool"] == "media.play_youtube" and r["status"] == "done" for r in rows
+        ), "ToolCallStore must record the executed media.play_youtube row"
 
         assert not [e for e in events if e["type"] == "error"], (
             "the turn must not surface error events"

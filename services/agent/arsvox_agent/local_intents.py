@@ -60,10 +60,11 @@ LIST_REMINDER_PATTERNS = [
 # R35 (GATE-3.5): spoken confirmation vocabulary. Same discipline as STOP:
 # whole-utterance, accent-stripped, optional politeness filler. These
 # entries are post-_normalize forms (lowercased, accent-stripped — "sí"
-# normalizes to "si"). A confirmation utterance only ever resolves the
-# single global pending confirmation; with none pending it is IGNORED
-# (R36 — conservative: never approve random things, never start a turn
-# on a bare sí/no).
+# normalizes to "si"). A confirmation utterance resolves the single global
+# pending confirmation when one exists; with none pending it is a NORMAL
+# message (backlog: "Short replies send") — the funnel in
+# runtime.handle_user_text falls through to a regular turn instead of
+# swallowing it.
 CONFIRM_UTTERANCES = {
     "confirmar",
     "confirmo",

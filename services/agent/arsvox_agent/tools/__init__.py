@@ -236,18 +236,99 @@ class ToolRegistry:
 
 
 # --------------------------------------------------------------------- #
+# Tool-surface collapse: granular specs the MODEL never sees. They stay
+# REGISTERED (client-command routing in actions.py, policy, audit, and
+# the effect ledger depend on them) but are filtered out of the
+# pydantic-ai tool build — the model's surface is the 11 dispatchers in
+# tools/surface.py plus the 4 always-visible tools below.
+MODEL_HIDDEN: frozenset[str] = frozenset({
+    # app / preferences
+    "app.get_state",
+    "preferences.set",
+    # ui
+    "ui.open_panel",
+    "ui.close_panel",
+    "ui.set_primary_panel",
+    "ui.set_fullscreen",
+    "ui.restore_layout",
+    # documents
+    "document.create",
+    "document.open",
+    "document.list",
+    "document.search",
+    "document.save",
+    "document.insert_text",
+    "document.undo",
+    "document.redo",
+    # library
+    "library.scan",
+    "library.search",
+    "library.open",
+    "library.continue_reading",
+    "library.get_position",
+    "library.set_position",
+    "library.read_selection",
+    "library.read_next_section",
+    # notes / tasks
+    "notes.add",
+    "notes.search",
+    "notes.today",
+    "tasks.add",
+    "tasks.list",
+    "tasks.complete",
+    # reminders
+    "reminders.create",
+    "reminders.list",
+    "reminders.cancel",
+    # media
+    "media.search_youtube",
+    "media.search_local",
+    # media.play_youtube: granular play-by-result — the model-visible
+    # "media.play" name belongs to the surface dispatcher (surface.py)
+    "media.play_youtube",
+    "media.play_local",
+    "media.pause",
+    "media.resume",
+    "media.stop",
+    "media.seek",
+    "media.set_volume",
+    # telegram
+    "telegram.prepare_message",
+    "telegram.send_pending",
+    # demo
+    "demo_populate",
+})
+
+# The 4 granular tools that remain directly model-visible (everything
+# else the model sees goes through tools/surface.py dispatchers).
+MODEL_VISIBLE: frozenset[str] = frozenset({
+    "browser.navigate",
+    "browser.dom_action",
+    "layout.compose",
+    "memory.search",
+})
+
+
+# --------------------------------------------------------------------- #
 def build_pydantic_tools(registry: ToolRegistry) -> list:
     """Build pydantic-ai Tool objects from the registry.
 
     Each tool is a dynamically-created async function whose signature
     matches the handler's typed parameters (pydantic-ai derives the JSON
     schema from it) and whose first parameter is the RunContext.
+
+    MODEL_HIDDEN specs are skipped: they stay registered for client-
+    command routing/policy/audit but are never exposed to the model.
+    The filter applies to the instrumented registry copy too (runtime
+    builds it from the same specs) — that is intended.
     """
     from pydantic_ai import RunContext
     from pydantic_ai.tools import Tool
 
     tools: list = []
     for spec in registry.all():
+        if spec.name in MODEL_HIDDEN:
+            continue
         sig = inspect.signature(spec.handler)
         params = [p for p in sig.parameters.values() if p.name != "tctx"]
         param_src = []

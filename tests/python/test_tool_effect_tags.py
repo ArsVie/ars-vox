@@ -20,6 +20,7 @@ VALID_TAGS = ("revertible", "emission")
 EXPECTED_EMISSIONS = {
     "telegram.send_pending",  # hands the message to the provider (approval=True)
     "reminders.create",  # schedules an irreversible future delivery
+    "telegram.message",  # surface dispatcher whose send action commits irreversibly
 }
 
 
@@ -31,7 +32,7 @@ def _registry() -> ToolRegistry:
 
 def test_every_registered_tool_has_a_valid_effect_tag():
     registry = _registry()
-    assert len(registry.all()) == 48  # keep in sync with test_tools_api
+    assert len(registry.all()) == 59  # keep in sync with test_tools_api
     for tool_spec in registry.all():
         assert tool_spec.effect in VALID_TAGS, tool_spec.name
 

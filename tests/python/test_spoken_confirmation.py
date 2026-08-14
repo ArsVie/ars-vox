@@ -160,7 +160,7 @@ def _open_pending(ws, client):
 def test_spoken_approve_executes_frozen_pending(script_client):
     """R35 approve: the utterance 'sí' resolves the pending confirmation
     and the FROZEN stored args execute (never model-supplied)."""
-    c = script_client(_scripted("telegram_prepare_message", {"text": "Hola, necesito ayuda"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "Hola, necesito ayuda"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
@@ -184,7 +184,7 @@ def test_spoken_approve_executes_frozen_pending(script_client):
 def test_spoken_reject_cancels_pending(script_client):
     """R35 reject: the utterance 'no' cancels the pending confirmation —
     nothing executes."""
-    c = script_client(_scripted("telegram_prepare_message", {"text": "Hola"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "Hola"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
@@ -209,7 +209,7 @@ def test_spoken_reject_cancels_pending(script_client):
 
 
 def test_spoken_cancelar_vocabulary_rejects(script_client):
-    c = script_client(_scripted("telegram_prepare_message", {"text": "Hola"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "Hola"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
@@ -228,12 +228,12 @@ def test_spoken_cancelar_vocabulary_rejects(script_client):
         assert resolved["status"] == "cancelled"
 
 
-def test_ambiguous_si_no_outside_confirmation_mode_ignored(script_client):
-    """R36: a bare 'sí'/'no' with NO pending confirmation is ignored —
-    no model turn starts (the scripted model would answer 'Listo.' and
-    emit an agent_message; none may appear), nothing executes. A ping
-    synchronizes the assertion (the ignore path emits nothing)."""
-    c = script_client(_scripted("telegram_prepare_message", {"text": "Hola"}))
+def test_ambiguous_si_no_outside_confirmation_mode_starts_turn(script_client):
+    """R36 (flipped 2026-08-14): a bare 'sí'/'no' with NO pending
+    confirmation is a NORMAL message (backlog: "Short replies send" —
+    a simple 'si' must be sendable): it starts a model turn and must
+    not resolve anything. A ping synchronizes the assertion."""
+    c = script_client(_scripted("notes_manage", {"action": "add", "text": "nada"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
@@ -243,19 +243,22 @@ def test_ambiguous_si_no_outside_confirmation_mode_ignored(script_client):
             ws.send_json({"type": "ping"})
             events = ws_collect(
                 client=c, ws=ws,
-                expected_break=lambda e: e["type"] == "pong",
-                max_events=12,
+                expected_break=lambda e: (
+                    e["type"] in ("agent_message", "tool_call", "confirmation_requested")
+                ),
+                max_events=30,
             )
-            assert not [e for e in events if e["type"] == "agent_message"], (
-                f"bare '{utterance}' outside confirmation mode must not start a turn"
-            )
+            assert any(
+                e["type"] in ("agent_message", "tool_call", "confirmation_requested")
+                for e in events
+            ), f"bare '{utterance}' outside confirmation mode must start a turn"
             assert not [e for e in events if e["type"] == "confirmation_resolved"]
 
 
 def test_longer_phrasing_still_reaches_the_model(script_client):
     """R36 boundary: 'sí quiero' is NOT a confirmation utterance — it is
     a normal turn the model answers."""
-    c = script_client(_scripted("notes.add", {"text": "nada"}))
+    c = script_client(_scripted("notes_manage", {"action": "add", "text": "nada"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update

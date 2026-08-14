@@ -113,7 +113,7 @@ def test_r01_other_stop_utterances_are_commands(script_client):
 
 
 # --------------------------------------------------------------------- #
-# R36 — ambiguous sí/no outside confirmation mode is ignored
+# R36 — ambiguous sí/no outside confirmation mode starts a normal turn
 # --------------------------------------------------------------------- #
 
 
@@ -124,13 +124,12 @@ def test_r36_ambiguous_si_no_never_match_intent():
         assert match_intent(text) is None, text
 
 
-def test_r36_bare_si_ignored_without_pending(script_client):
-    """With NO pending confirmation, a bare 'sí'/'no' is IGNORED
-    (conservative, R35/R36): the utterance is consumed — it must not
-    resolve anything and must not start a model turn (no agent_message,
-    no confirmation_resolved). A ping synchronizes the assertion (the
-    ignore path emits nothing)."""
-    c = script_client(_scripted("telegram_prepare_message", {"text": "hola"}))
+def test_r36_bare_si_starts_turn_without_pending(script_client):
+    """With NO pending confirmation, a bare 'sí'/'no' is a NORMAL message
+    (backlog: "Short replies send" — a simple 'si' must be sendable): it
+    starts a model turn (agent_message or tool activity appears) and must
+    not resolve anything. A ping synchronizes the assertion."""
+    c = script_client(_scripted("notes_manage", {"action": "add", "text": "hola"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
         ws.receive_json()  # config_update
@@ -140,12 +139,15 @@ def test_r36_bare_si_ignored_without_pending(script_client):
             ws.send_json({"type": "ping"})
             events = ws_collect(
                 client=c, ws=ws,
-                expected_break=lambda e: e["type"] == "pong",
-                max_events=12,
+                expected_break=lambda e: (
+                    e["type"] in ("agent_message", "tool_call", "confirmation_requested")
+                ),
+                max_events=30,
             )
-            assert not [e for e in events if e["type"] == "agent_message"], (
-                f"bare '{utterance}' outside confirmation mode must not start a turn"
-            )
+            assert any(
+                e["type"] in ("agent_message", "tool_call", "confirmation_requested")
+                for e in events
+            ), f"bare '{utterance}' outside confirmation mode must start a turn"
             assert not [e for e in events if e["type"] == "confirmation_resolved"]
 
 
@@ -161,7 +163,7 @@ def test_r35_spoken_confirmar_approves_pending(script_client):
     event for THIS pending_id — turn-1 leftovers (tool_call,
     agent_message) arrive after confirmation_requested, so a loose break
     on agent_message would terminate on the stale turn-1 reply."""
-    c = script_client(_scripted("telegram_prepare_message", {"text": "hola"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "hola"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()
@@ -284,7 +286,7 @@ def test_spoken_approve_during_pending_tts_does_not_settle(tts_client, monkeypat
     with the fresh (now empty) pending state."""
     c = _patch_model(
         tts_client, monkeypatch,
-        _tool_then_text_model("telegram_prepare_message", {"text": "Hola, confirma esto"}),
+        _tool_then_text_model("telegram_message", {"action": "prepare", "text": "Hola, confirma esto"}),
     )
     runtime = c.app.state.services.runtime
     with c.websocket_connect("/ws") as ws:
@@ -344,7 +346,7 @@ def test_spoken_approve_after_speech_ends_settles_with_fresh_pending(
     the fresh pending state."""
     c = _patch_model(
         tts_client, monkeypatch,
-        _tool_then_text_model("telegram_prepare_message", {"text": "Hola, confirma esto"}),
+        _tool_then_text_model("telegram_message", {"action": "prepare", "text": "Hola, confirma esto"}),
     )
     runtime = c.app.state.services.runtime
     with c.websocket_connect("/ws") as ws:

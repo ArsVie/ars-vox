@@ -5,6 +5,7 @@ run, stores and services are shared singletons from the app lifespan.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from arsvox_contracts import AppConfig
 from arsvox_memory import (
@@ -31,6 +32,9 @@ from arsvox_agent.events import EventBus
 from arsvox_agent.policy import PolicyEngine
 from arsvox_agent.telegram_client import TelegramClient
 
+if TYPE_CHECKING:  # runtime-inert: tools/__init__.py imports Deps (cycle)
+    from arsvox_agent.tools import ToolRegistry
+
 
 @dataclass
 class Deps:
@@ -54,6 +58,14 @@ class Deps:
     telegram: TelegramClient
     # None in unit tests that never run tools through the registry.
     tool_calls: ToolCallStore | None = None
+    # Tool-surface collapse: the instrumented tool registry attached per
+    # agent build (runtime._build_agent) so dispatcher tools (tools/
+    # surface.py) can delegate to hidden granular specs via
+    # registry.execute_gated. String annotation to avoid a circular
+    # import (tools/__init__.py imports Deps). None in unit tests that
+    # never run tools through the registry — same convention as
+    # tool_calls.
+    registry: "ToolRegistry | None" = None
     # W2-VIEW (ADR 0007): latest real navigation state of the desktop
     # WebContentsView (in-process mirror; None in unit tests that never
     # emit browser events — emitters fall back to the contract defaults).

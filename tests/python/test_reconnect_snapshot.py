@@ -111,7 +111,7 @@ def test_snapshot_event_accepts_empty_state():
 
 
 def test_reconnect_recovers_pending_confirmation(script_client):
-    c = script_client(_scripted("telegram_prepare_message", {"text": "hola"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "hola"}))
     # connection 1: request a confirmation, then drop the socket
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()  # state_update
@@ -167,8 +167,8 @@ def test_reconnect_snapshot_includes_layout_panels(script_client):
             return ModelResponse(
                 parts=[
                     ToolCallPart(
-                        tool_name="ui_open_panel",
-                        args={"panel_type": "document_editor"},
+                        tool_name="ui_panel",
+                        args={"action": "open", "panel_type": "document_editor"},
                     )
                 ]
             )
@@ -213,7 +213,7 @@ def test_stop_cancels_pending_confirmation(script_client):
     """H5: the stop path invalidates pending confirmations — the row is
     cancelled and a cancelled event is emitted (documented semantic:
     stop/cancel aborts the action)."""
-    c = script_client(_scripted("telegram_prepare_message", {"text": "x"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "x"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()

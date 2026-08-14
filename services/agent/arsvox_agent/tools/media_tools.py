@@ -164,7 +164,7 @@ SPECS = [
         effect="revertible",
     ),
     ToolSpec(
-        "media.play",
+        "media.play_youtube",
         "Play one of the results the search just offered; opens the media panel.",
         media_play,
         PolicyKind.REVERSIBLE,

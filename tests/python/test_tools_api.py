@@ -9,8 +9,8 @@ from arsvox_agent.tools.register import register_all
 def test_registry_registers_all_tools():
     registry = ToolRegistry()
     n = register_all(registry)
-    # 48: browser.navigate (W2-NAVIGATE) added next to browser.dom_action.
-    assert n == 48
+    # 59: 48 granular tools + 11 model-surface dispatchers (surface.py).
+    assert n == 59
     assert registry.get("layout.compose") is not None
     assert registry.get("shell.exec") is None
 

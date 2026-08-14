@@ -14,7 +14,7 @@ Integration scope (the seams runtime.py exposes):
   * _instrumented_registry: model-visible tools get recording wrappers
     while the SHARED registry (execute_direct / approval executor) keeps
     the original handlers — verified by driving the real media handlers
-    end-to-end: media.play records the inverse, rollback stops the media
+    end-to-end: media.play_youtube records the inverse, rollback stops the media
     controller through the real execute_direct path.
   * _run_turn: fresh ledger per turn; abort (exception or cancellation)
     rolls back; normal completion keeps effects; cancellation is silent
@@ -191,11 +191,11 @@ def test_disarmed_token_is_skipped():
 
 def test_has_armed_tracks_armed_entries():
     ledger = EffectLedger()
-    assert not ledger.has_armed("media.play")
-    ledger.add("media.play", _async_append([], "x"))
-    assert ledger.has_armed("media.play")
+    assert not ledger.has_armed("media.play_youtube")
+    ledger.add("media.play_youtube", _async_append([], "x"))
+    assert ledger.has_armed("media.play_youtube")
     asyncio.run(ledger.rollback())
-    assert not ledger.has_armed("media.play")
+    assert not ledger.has_armed("media.play_youtube")
 
 
 def test_rollback_empty_ledger_is_noop():
@@ -224,7 +224,7 @@ def test_rollback_propagates_cancellation_but_previous_inverses_ran():
 # Opt-in pair table (what may record, and the deliberate omissions)
 
 def test_inverted_tools_only_wired_pairs():
-    assert "media.play" in inverted_tools()
+    assert "media.play_youtube" in inverted_tools()
     # Omitted pairs must NEVER record: no registered inverse tool
     # (document.delete / tasks.remove do not exist) or emissions.
     for tool in (
@@ -247,7 +247,7 @@ def test_inverted_tools_only_wired_pairs():
 
 def test_inverse_for_media_play_success():
     assert inverse_for(
-        "media.play",
+        "media.play_youtube",
         {"result_id": "dQw4w9WgXcQ"},
         "Reproduciendo: Taller de carpintería para principiantes",
     ) == ("media.stop", {})
@@ -255,8 +255,8 @@ def test_inverse_for_media_play_success():
 
 def test_inverse_for_failed_effect_records_nothing():
     # honest refusals / validation errors: no effect -> no inverse
-    assert inverse_for("media.play", {"result_id": "xyz"}, "No conozco ese resultado: busca primero y elige uno de los resultados ofrecidos.") is None
-    assert inverse_for("media.play", {"result_id": "bad"}, "El resultado «bad» no es un id de vídeo de YouTube válido.") is None
+    assert inverse_for("media.play_youtube", {"result_id": "xyz"}, "No conozco ese resultado: busca primero y elige uno de los resultados ofrecidos.") is None
+    assert inverse_for("media.play_youtube", {"result_id": "bad"}, "El resultado «bad» no es un id de vídeo de YouTube válido.") is None
 
 
 def test_inverse_for_omitted_tools_is_none():
@@ -278,18 +278,18 @@ def test_media_play_records_inverse_and_rollback_stops_media():
     instrumented = runtime._instrumented_registry()
     tctx = ToolContext(deps=deps, run_id="turn-1", session_id="sess-1", bus=bus)
 
-    out = asyncio.run(instrumented.get("media.play").handler(tctx, result_id="dQw4w9WgXcQ"))
+    out = asyncio.run(instrumented.get("media.play_youtube").handler(tctx, result_id="dQw4w9WgXcQ"))
 
     assert out.startswith("Reproduciendo:")
     assert media_controller.state == MediaState.PLAYING
     assert len(ledger) == 1
-    assert ledger.has_armed("media.play")
+    assert ledger.has_armed("media.play_youtube")
 
     asyncio.run(ledger.rollback())
 
     # the inverse rode the real execute_direct path (media.stop handler)
     assert media_controller.state == MediaState.STOPPED
-    assert not ledger.has_armed("media.play")
+    assert not ledger.has_armed("media.play_youtube")
     assert any(getattr(e, "tool", None) == "media.stop" for e in bus.events)
 
 
@@ -303,12 +303,12 @@ def test_media_play_records_at_most_one_inverse_per_run():
     instrumented = runtime._instrumented_registry()
     tctx = ToolContext(deps=deps, run_id="turn-1", session_id="sess-1", bus=bus)
 
-    asyncio.run(instrumented.get("media.play").handler(tctx, result_id="dQw4w9WgXcQ"))
-    asyncio.run(instrumented.get("media.play").handler(tctx, result_id="9bZkp7q19f0"))
+    asyncio.run(instrumented.get("media.play_youtube").handler(tctx, result_id="dQw4w9WgXcQ"))
+    asyncio.run(instrumented.get("media.play_youtube").handler(tctx, result_id="9bZkp7q19f0"))
 
     # "clear media ONLY when the same run opened it" — one armed inverse
     assert len(ledger) == 1
-    assert ledger.has_armed("media.play")
+    assert ledger.has_armed("media.play_youtube")
     asyncio.run(ledger.rollback())
     assert media_controller.state == MediaState.STOPPED
 
@@ -325,11 +325,11 @@ def test_media_play_via_execute_gated_records_inverse():
     tctx = ToolContext(deps=deps, run_id="turn-1", session_id="sess-1", bus=bus)
 
     out = asyncio.run(
-        instrumented.execute_gated(instrumented.get("media.play"), tctx, {"result_id": "dQw4w9WgXcQ"})
+        instrumented.execute_gated(instrumented.get("media.play_youtube"), tctx, {"result_id": "dQw4w9WgXcQ"})
     )
 
     assert out.startswith("Reproduciendo:")
-    assert ledger.has_armed("media.play")
+    assert ledger.has_armed("media.play_youtube")
 
 
 def test_shared_registry_handlers_are_not_wrapped():
@@ -338,9 +338,9 @@ def test_shared_registry_handlers_are_not_wrapped():
     runtime._run_ledger = EffectLedger()
     instrumented = runtime._instrumented_registry()
 
-    wrapped = instrumented.get("media.play")
-    assert wrapped.handler is not registry.get("media.play").handler
-    assert wrapped.handler.__wrapped__ is registry.get("media.play").handler
+    wrapped = instrumented.get("media.play_youtube")
+    assert wrapped.handler is not registry.get("media.play_youtube").handler
+    assert wrapped.handler.__wrapped__ is registry.get("media.play_youtube").handler
     # non-opted-in specs pass through as the SAME object
     assert instrumented.get("document.create") is registry.get("document.create")
     assert instrumented.get("telegram.send_pending") is registry.get("telegram.send_pending")
@@ -355,7 +355,7 @@ def test_execute_direct_never_records_inverses():
     runtime = AgentRuntime(config=AppConfig(), deps_base=deps, registry=registry, bus=bus)
     runtime._run_ledger = EffectLedger()
 
-    out = asyncio.run(registry.execute_direct("media.play", {"result_id": "dQw4w9WgXcQ"}, run_id="approved"))
+    out = asyncio.run(registry.execute_direct("media.play_youtube", {"result_id": "dQw4w9WgXcQ"}, run_id="approved"))
 
     assert out.startswith("Reproduciendo:")
     assert len(runtime._run_ledger) == 0
@@ -371,7 +371,7 @@ def test_completed_turn_keeps_media_playing():
     instrumented = runtime._instrumented_registry()
     tctx = ToolContext(deps=deps, run_id="turn-1", session_id="sess-1", bus=bus)
 
-    asyncio.run(instrumented.get("media.play").handler(tctx, result_id="dQw4w9WgXcQ"))
+    asyncio.run(instrumented.get("media.play_youtube").handler(tctx, result_id="dQw4w9WgXcQ"))
     assert media_controller.state == MediaState.PLAYING
 
     # normal completion: ledger dropped, never rolled back

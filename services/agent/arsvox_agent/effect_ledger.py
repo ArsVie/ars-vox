@@ -111,15 +111,18 @@ class EffectLedger:
 # only when the effect REALLY happened (policy denials, PENDING_APPROVAL
 # stubs and error strings never record).
 #
-#   media.play -> media.stop: media.play opens the media surface (panel
-#   open + PLAYING track); its exact registered inverse is media.stop
-#   (existing handler, same controller). Recorded at most once per run
-#   (has_armed guard): the run that opened the media surface is the run
-#   that clears it. media.stop keeps the loaded track (STOPPED — the
-#   controller has no unload transition); rollback stops playback, it
+#   media.play_youtube -> media.stop: media.play_youtube opens the media
+#   surface (panel open + PLAYING track); its exact registered inverse is
+#   media.stop (existing handler, same controller). Recorded at most once
+#   per run (has_armed guard): the run that opened the media surface is
+#   the run that clears it. media.stop keeps the loaded track (STOPPED —
+#   the controller has no unload transition); rollback stops playback, it
 #   does not forget the video. That is the honest limit of the inverse.
+#   (Tool-surface collapse: the model-visible name "media.play" now
+#   belongs to the surface dispatcher; the granular spec was renamed to
+#   media.play_youtube and the inverse pair follows the granular spec.)
 _INVERSE_PAIRS: dict[str, dict[str, Any]] = {
-    "media.play": {
+    "media.play_youtube": {
         "inverse_tool": "media.stop",
         "inverse_args": {},
         "success": lambda result: result.startswith("Reproduciendo:"),

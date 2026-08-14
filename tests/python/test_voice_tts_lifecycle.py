@@ -276,7 +276,7 @@ def test_confirm_during_tts_does_not_settle_to_listening(tts_client, monkeypatch
     monkeypatch.setattr(
         "arsvox_agent.runtime.build_model",
         lambda cfg: _tool_then_text_model(
-            "telegram_prepare_message", {"text": "Hola, confirma esto"}
+            "telegram_message", {"action": "prepare", "text": "Hola, confirma esto"}
         ),
     )
     c = tts_client

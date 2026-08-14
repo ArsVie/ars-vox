@@ -91,11 +91,17 @@ class AgentRuntime:
         if self._agent is None:
             from pydantic_ai import Agent, ModelSettings
 
+            instrumented = self._instrumented_registry()
+            # Tool-surface collapse: the instrumented registry travels
+            # with the run deps so dispatcher tools (tools/surface.py)
+            # can delegate to hidden granular specs via
+            # tctx.deps.registry.execute_gated.
+            self.deps_base.registry = instrumented
             self._agent = Agent(
                 build_model(self.config),
                 system_prompt=self._load_system_prompt(),
                 deps_type=Deps,
-                tools=build_pydantic_tools(self._instrumented_registry()),
+                tools=build_pydantic_tools(instrumented),
                 model_settings=ModelSettings(
                     temperature=self.config.agent.model.temperature
                 ),
@@ -148,11 +154,13 @@ class AgentRuntime:
         # R35/R36: spoken/typed confirmation vocabulary is resolved here —
         # the single funnel for ALL user text (typed via ws, spoken via
         # the voice pipeline's on_user_text). A confirmation utterance
-        # with a pending confirmation resolves it; without one it is
-        # IGNORED (conservative: never approve random things, never start
-        # a turn on a bare sí/no).
+        # resolves a pending confirmation when one EXISTS. With none
+        # pending it is a NORMAL message (backlog: "Short replies send" —
+        # a simple 'si' must be sendable): it falls through and starts a
+        # turn so the model answers in conversation context; it is never
+        # silently swallowed.
         decision = match_confirmation_utterance(text)
-        if decision is not None:
+        if decision is not None and self.deps_base.confirmations.current_pending() is not None:
             await self._handle_confirmation_utterance(decision, text)
             return
         if self._busy or (self._active_task and not self._active_task.done()):

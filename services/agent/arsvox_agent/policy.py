@@ -23,7 +23,10 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     "ui.restore_layout": PolicyKind.REVERSIBLE,
     # media
     "media.search_youtube": PolicyKind.READ_ONLY,
-    "media.play": PolicyKind.REVERSIBLE,
+    # media.play_youtube: granular play-by-result (renamed from media.play
+    # by the tool-surface collapse — the model-visible "media.play" name
+    # now belongs to the surface dispatcher below)
+    "media.play_youtube": PolicyKind.REVERSIBLE,
     "media.pause": PolicyKind.REVERSIBLE,
     "media.resume": PolicyKind.REVERSIBLE,
     "media.stop": PolicyKind.REVERSIBLE,
@@ -76,6 +79,22 @@ TOOL_KINDS: dict[str, PolicyKind] = {
     "browser.navigate": PolicyKind.REVERSIBLE,
     # demo (mock mode only — the handler guards itself)
     "demo_populate": PolicyKind.REVERSIBLE,
+    # model-surface dispatchers (tool-surface collapse): the model sees
+    # only these 11 umbrella tools; each delegates to the hidden granular
+    # specs above via tctx.deps.registry.execute_gated.
+    # app.state also handles set_preference, so REVERSIBLE (matches the
+    # surface.py spec kind).
+    "app.state": PolicyKind.REVERSIBLE,
+    "ui.panel": PolicyKind.REVERSIBLE,
+    "document.manage": PolicyKind.REVERSIBLE,
+    "library.read": PolicyKind.REVERSIBLE,
+    "notes.manage": PolicyKind.REVERSIBLE,
+    "tasks.manage": PolicyKind.REVERSIBLE,
+    "reminders.manage": PolicyKind.REVERSIBLE,
+    "media.search": PolicyKind.READ_ONLY,
+    "media.play": PolicyKind.REVERSIBLE,
+    "media.control": PolicyKind.REVERSIBLE,
+    "telegram.message": PolicyKind.REVERSIBLE,
 }
 
 # Tools that need explicit user confirmation even though their class is

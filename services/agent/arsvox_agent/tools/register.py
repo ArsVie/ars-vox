@@ -24,6 +24,14 @@ _MODULES = [
     "arsvox_agent.tools.browser_tools",
 ]
 
+# Tool-surface collapse: the dispatcher module registers the 11
+# model-visible umbrella tools (48 granular + 11 dispatchers = 59).
+# Guarded append: if the parallel surface.py author also adds the module
+# to the literal above, this stays a no-op — register() raises on
+# duplicates, so double registration would crash startup.
+if "arsvox_agent.tools.surface" not in _MODULES:
+    _MODULES.append("arsvox_agent.tools.surface")
+
 
 def register_all(registry: ToolRegistry) -> int:
     count = 0

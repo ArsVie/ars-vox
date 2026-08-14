@@ -133,7 +133,7 @@ def test_slots_bearing_layout_survives_wire(script_client):
 
 
 def test_telegram_confirmation_flow(script_client):
-    c = script_client(_scripted("telegram_prepare_message", {"text": "Hola, necesito ayuda"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "Hola, necesito ayuda"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()
@@ -164,7 +164,7 @@ def test_telegram_confirmation_flow(script_client):
 
 
 def test_cancel_aborts_pending(script_client):
-    c = script_client(_scripted("telegram_prepare_message", {"text": "no enviar"}))
+    c = script_client(_scripted("telegram_message", {"action": "prepare", "text": "no enviar"}))
     with c.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.receive_json()
