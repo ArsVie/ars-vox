@@ -8,6 +8,7 @@ import { useSurfaceRole } from "../roles/context";
 import { MicButton } from "./MicButton";
 import { MicHero } from "./MicHero";
 import { SendIcon } from "./icons";
+import { StopButton } from "./StopButton";
 import { ComposerStatus } from "./StatusBar";
 import { FollowUpChips } from "./FollowUpChips";
 import { MarkdownText } from "./MarkdownText";
@@ -147,6 +148,10 @@ export function ConversationPanel({ meta, panelId }: { meta?: PanelMeta; panelId
           <SendIcon size={15} />
           <span className="btn-label">Enviar</span>
         </button>
+        {/* STOP next to the input controls (backlog): the red stop sits in
+            the composer row, grouped with Micrófono/Enviar — not on a
+            separate status row above. */}
+        <StopButton />
       </div>
     </section>
   );

@@ -946,7 +946,9 @@
 
 .reader-mount--book {
   max-width: 72ch;
-  min-width: 300px;
+  /* Panels must fit their slots (backlog): no fixed min-width — the
+     reader adapts to narrow companion slots instead of clipping. */
+  min-width: 0;
   margin: 0 auto;
 }
 

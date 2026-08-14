@@ -10,7 +10,11 @@
       is never hidden; the `title` tooltip exposes the complete name. */
 
 .document-panel {
-  min-width: min(360px, 100%);
+  /* Panels must fit their slots (backlog): min-width: 0 lets the panel
+     shrink into narrow companion slots (~240px); the layout engine
+     sizes it. max-width: 100% is the hard guard against any overflow. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .document-panel-title {

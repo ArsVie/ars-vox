@@ -59,6 +59,10 @@ The backlog is always the present state; it is not tied to a date.
   companion slot (~242-288px) and gets clipped at the right edge
   (toolbar controls cut off). Panels must adapt to their slot size or
   slots must respect panel minimums.
+- **Maximize must not exile the chat.** Clicking Maximizar on a panel
+  removes the conversation and the composer from the screen entirely;
+  only a faint Restaurar icon brings them back. The chat must remain
+  reachable from any maximized/fullscreen state.
 
 ## Media
 
@@ -102,6 +106,10 @@ The backlog is always the present state; it is not tied to a date.
   composition, the persistent dock shows the track as "playing" but
   nothing plays (the persistent variant renders no embed element for
   YouTube). A docked track that cannot play must show honest state.
+- **Titles are fully readable.** The media panel truncates titles
+  ("MUSICA Z…") and the document panel header truncates ("DOCU…"),
+  with no way to see the full name. Titles must fit their area or be
+  expandable.
 
 ## Browser
 
@@ -152,6 +160,19 @@ The backlog is always the present state; it is not tied to a date.
   horizontal space; a single reminder must not take over the whole
   screen. Reference:
   `docs/screenshots/backlog-reminders-fullscreen-problem.png`.
+- **Reminder replies are human, reminders are visible.** After
+  creating a reminder the assistant answers with a raw dump ("Tienes:
+  #2 2026-08-14T14:00:00+00:00 — Tomar las pastillas (se repite
+  daily)") and no reminders surface appears on screen at all. The
+  reply must be plain language and the created reminder must be
+  visible somewhere (a surface or a plain chat summary).
+
+## Library / reading
+
+- **Reading has a surface.** Asking to open a book ("abrí un libro")
+  is answered with "Listo" but the book text is read inside the chat
+  with no reader surface. Reading must have a dedicated surface or an
+  explicit in-chat reading mode — never a claim without a view.
 
 ## Chat input
 
