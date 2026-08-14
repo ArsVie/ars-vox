@@ -494,3 +494,22 @@ asistente todavía está hablando (botón DETENER activo).
 dos veces no duplique la entrada, o que al menos se distinga claramente;
 un abuelo que pide "agregá comprar pan" cada semana ve una lista llena
 de copias idénticas.
+
+## Backlog (reviewer round 8 — fixed 2026-08-14)
+
+1. (MINOR) RECORDATORIOS raw ISO in the tasks panel — FIXED the same
+   session (humanizeDue now covers the cadence rows; the reviewer saw
+   the pre-fix build). Tests updated; 828/828 frontend.
+2. (MINOR) Sending while the assistant is busy: the text vanished
+   (renderer renders chat ONLY from the server echo, no optimistic
+   append) and the user retyped — the retry started a SECOND turn once
+   the first finished ("answered twice with the same list"). FIXED: the
+   busy guard now echoes the user's message BEFORE the "Espera un
+   momento" error — the text always renders and the wait is explained.
+   Verified live + regression tests.
+3. (MINOR) Duplicate tasks from repeated adds. FIXED: tasks_add dedups
+   open (pending/in-progress) tasks with the same normalized title —
+   the second ask returns "ya está en tu lista (#id)" and opens the
+   panel instead of stacking a copy. The 13 accumulated "Comprar pan"
+   duplicates were cleaned from the live store (1 pending kept).
+   Verified live: "Listo, 'Comprar pan' ya estaba en tu lista (#4)."
