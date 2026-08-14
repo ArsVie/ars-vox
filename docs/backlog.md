@@ -440,3 +440,36 @@ The backlog is always the present state; it is not tied to a date.
    that no composition can fit, focus included. Harness clamp artifact
    (the honest 640px-width test passed at 600px height). NO CODE
    CHANGE — below-floor viewport is outside the supported envelope.
+
+## Backlog (reviewer round 7)
+
+2. (MAJOR) Al pedir "abrime las noticias" el asistente dice "Listo, te abrí las noticias en BBC Mundo", pero el panel del navegador muestra una página vacía/error (ícono de página rota, sin titulares ni contenido). Se esperaba una página de noticias REAL visible en el panel. El iframe de respaldo (browser-iframe-fallback) apunta a https://www.bbc.com/mundo y existe en el DOM, pero el sitio no se renderiza dentro del iframe: BBC, Clarín y El País rechazan el embebido (X-Frame-Options / error de aplicación), mientras que en una pestaña directa BBC carga bien y Wikipedia sí se renderiza en iframe. Verificado con iframes de control: BBC = área gris con ícono de error, clarin.com = "Application error", elpais.com = "Access is temporarily restricted", es.wikipedia.org = contenido real. El mecanismo de iframe funciona solo para sitios que permiten embebido; los sitios de noticias principales elegidos por el modelo nunca se mostrarán en el harness web, por lo que la promesa "te abrí las noticias" queda incumplida en pantalla. NOTA DE SEGUNDA VERIFICACIÓN: en un segundo pedido el modelo eligió clarin.com y el panel SÍ mostró una página real de Clarín (logo, franja "En Vivo", titular "Corrupción en la AFA") — el respaldo funciona cuando el sitio elegido permite embebido. El defecto queda: la app dice "Listo" sin verificar que la página realmente se renderizó, y el resultado depende del sitio que elija el modelo (BBC nunca se muestra).
+
+## Backlog (reviewer round 7)
+
+1. (MINOR) Al pedir tareas con recordatorios, el panel de tareas muestra los recordatorios con códigos de fecha crudos ("próxima 2026-08-15T14:00:00+00:00") en la sección RECORDATORIOS. Se esperaba que todo recordatorio se muestre en palabras simples (hoy/mañana + hora), nunca con códigos de fecha/hora.
+
+## Backlog (reviewer round 7)
+
+3. (MINOR) Al pedir "poneme un recordatorio para mañana a las 9 de la mañana", el asistente vuelve a preguntar "¿A qué hora querés que te lo recuerde?" después de que el usuario ya dio la hora en el pedido inicial. Se esperaba que el asistente conserve los datos ya dichos y solo pida lo que falta (el texto del recordatorio), en vez de hacer repetir la hora al usuario.
+
+## Backlog (reviewer round 7 — fixed 2026-08-14)
+
+1. (MINOR) The tasks panel shows the next reminder as a raw ISO code
+("próxima 2026-08-15T14:00:00+00:00") instead of plain words. FIXED:
+the panel's next-reminder line now goes through humanizeDue
+("sábado 15 ago, 9:00"). No contract change (frozen wire).
+2. (MAJOR) News: the app said "Listo, te abrí BBC Mundo" while the
+panel showed an empty gray error — BBC/Clarín/El País send
+X-Frame-Options/CSP that forbid iframe embedding; the agent can't
+see that from the wire. FIXED: browser.navigate now probes the
+landing page's headers after navigation and appends an honest AVISO
+when the site blocks embedding, instructing the agent to tell the
+truth instead of claiming success. Verified live: "Te abrí Google
+Noticias en el navegador, pero este sitio no se ve bien dentro del
+panel. ¿Querés que pruebe con otro?" — honest.
+3. (MINOR) The reminder flow re-asked "¿A qué hora querés que te lo
+recuerde?" after the user gave the hour in the request. FIXED: prompt
+rule 22 — never re-ask what the user already gave; create immediately
+and confirm. Verified live: "Te puse un recordatorio para mañana,
+sábado 15 de agosto, a las 9 de la mañana. No se repite."
