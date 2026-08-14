@@ -39,7 +39,7 @@ from arsvox_agent.browser_engine import (
     BrowserEngineError,
     BrowserTimeoutError,
 )
-from arsvox_agent.browser_state import BrowserState
+from arsvox_agent.browser_state import BrowserState, BrowserStatePayload
 from arsvox_agent.tools import ToolSpec
 from arsvox_agent.tools.context import ToolContext
 
@@ -254,6 +254,37 @@ async def browser_navigate(tctx: ToolContext, url: str) -> str:
             return _engine_unavailable(exc.detail)
         except BrowserBlockedError as exc:
             return _engine_blocked(exc.reason)
+        # BROWSER-USE: complete the mirror with the REAL landing state.
+        # The legacy path gets the post-navigation state back from
+        # Electron main (PUT /api/browser-state); the engine knows it
+        # in-process, so emit it directly — the renderer bag reduces the
+        # same frozen field set and the panel shows the true url/title
+        # (loading=False clears the spinner). Main dedupes a re-navigate
+        # to the URL already displayed, so the Electron view is
+        # untouched by this second event.
+        await tctx.emit(
+            BrowserNavigateEvent(
+                url=state.url,
+                title=state.title,
+                can_go_back=state.can_go_back,
+                can_go_forward=state.can_go_forward,
+                loading=False,
+                created_at=created_at,
+            )
+        )
+        # Keep the server-side mirror coherent with the engine (the
+        # loading event's baseline for the NEXT navigation reads this).
+        store = tctx.deps.browser_state
+        if store is not None:
+            store.update(
+                BrowserStatePayload(
+                    url=state.url,
+                    title=state.title,
+                    can_go_back=state.can_go_back,
+                    can_go_forward=state.can_go_forward,
+                    loading=False,
+                )
+            )
         return _landing_detail(state, url)
 
     # Legacy fallback (engine disabled): snapshot the view's current

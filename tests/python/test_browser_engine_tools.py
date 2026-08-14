@@ -137,12 +137,18 @@ def test_navigate_engine_path_returns_real_landing_and_emits_mirror_event():
     # The engine executed — the tool never touched the round-trip store
     # (deps.browser_state is None here and the tool did not fail).
     assert engine.navigated == ["https://es.wikipedia.org/wiki/Pasta"]
-    # The frozen mirror event still went on the wire for the desktop.
-    assert len(bus.events) == 1
-    ev = bus.events[-1]
-    assert ev.type == "browser.navigate"
-    assert ev.url == "https://es.wikipedia.org/wiki/Pasta"
-    assert ev.loading is True
+    # The frozen mirror events still went on the wire for the desktop:
+    # the loading event first, then the REAL landing state (url/title,
+    # loading cleared) — the renderer bag reduces both.
+    assert len(bus.events) == 2
+    ev_loading, ev_landed = bus.events
+    assert ev_loading.type == "browser.navigate"
+    assert ev_loading.url == "https://es.wikipedia.org/wiki/Pasta"
+    assert ev_loading.loading is True
+    assert ev_landed.type == "browser.navigate"
+    assert ev_landed.url == "https://es.wikipedia.org/wiki/Pasta"
+    assert ev_landed.title == "Página real"
+    assert ev_landed.loading is False
 
 
 def test_navigate_blocked_refuses_before_any_emission():
