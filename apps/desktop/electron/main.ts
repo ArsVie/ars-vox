@@ -18,9 +18,10 @@
  *  - Browser story (GATE-5 W2-VIEW, ADR 0007): the integrated browser
  *    is a hardened WebContentsView OWNED by this process (./browser-view.ts
  *    + ./hardened-view.ts + ./security-policy.ts) — isolated persistent
- *    partition, deny-by-default permissions, CSP injection, allowlist +
+ *    partition, deny-by-default permissions, CSP injection, scheme +
  *    local/private blocking enforced at the session webRequest layer and
- *    on every navigate, NO privileged preload in the view. Navigation is
+ *    on every navigate (any PUBLIC http(s) page is allowed — no domain
+ *    allowlist), NO privileged preload in the view. Navigation is
  *    main-owned (renderer asks via arsvox:browser-* IPC); real
  *    can_go_back/can_go_forward/url/title/loading are published to the
  *    renderer (arsvox:browser-state) and to the agent service
@@ -46,7 +47,6 @@ import {
   installGlobalWebContentsGuard,
   registerLocalDocProtocol,
 } from "./hardened-view";
-import { DEFAULT_REMOTE_ALLOWLIST } from "./security-policy";
 
 import {
   generateAuthToken,
@@ -417,7 +417,6 @@ app.whenReady().then(() => {
   // W2-VIEW (ADR 0007): defense in depth — any WebContents that is not
   // the app window gets the remote navigation guards + window-open deny.
   installGlobalWebContentsGuard({
-    allowlist: DEFAULT_REMOTE_ALLOWLIST,
     isAppWebContents,
   });
 
@@ -470,7 +469,6 @@ function createWindow(): void {
   // WebContentsView sized by the renderer's reported panel bounds
   // (arsvox:browser-set-bounds); hidden (0x0) until the panel mounts.
   browserView = BrowserView.create({
-    allowlist: DEFAULT_REMOTE_ALLOWLIST,
     onStateChange: pushBrowserState,
   });
   browserView.attach(win);

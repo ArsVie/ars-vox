@@ -635,6 +635,7 @@
       "properties": {
         "action": {
           "const": "panel.set_primary",
+          "default": "panel.set_primary",
           "title": "Action",
           "type": "string"
         },
@@ -643,7 +644,6 @@
         }
       },
       "required": [
-        "action",
         "panel_type"
       ],
       "title": "PanelSetPrimary",

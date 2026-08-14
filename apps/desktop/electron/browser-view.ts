@@ -12,7 +12,7 @@
  *  - attach it to the window's contentView (bounds come from the
  *    renderer via arsvox:browser-set-bounds);
  *  - MAIN-owned navigation: navigate/back/forward/refresh, every
- *    navigate pre-checked against the allowlist policy BEFORE loadURL;
+ *    navigate pre-checked against the navigation policy BEFORE loadURL;
  *  - publish REAL navigation state (url/title/can_go_back/can_go_forward/
  *    loading) on every did-* event, so main.ts can forward it to the
  *    renderer (IPC) and the agent service (authenticated HTTP) —
@@ -25,7 +25,7 @@
 
 import { WebContentsView, type BrowserWindow, type Rectangle, type WebContents } from "electron";
 import { createHardenedRemoteView } from "./hardened-view";
-import { DEFAULT_REMOTE_ALLOWLIST, decideRemoteNavigation } from "./security-policy";
+import { decideRemoteNavigation } from "./security-policy";
 import { executeDomAction, type DomActionRequest } from "./dom-driver";
 
 /** Real navigation state of the view (frozen wire shape — BrowserNavigateEvent fields). */
@@ -38,8 +38,6 @@ export interface BrowserViewState {
 }
 
 export interface BrowserViewOptions {
-  /** Domain allowlist; default DEFAULT_REMOTE_ALLOWLIST (app.yaml mirror). */
-  allowlist?: readonly string[];
   /** Called on every navigation-state change (did-* events). */
   onStateChange?: (state: BrowserViewState) => void;
 }
@@ -78,22 +76,17 @@ export class BrowserView {
   private readonly view: WebContentsView;
   /** CACHED at construction — never read view.webContents later (v41 drift). */
   private readonly wc: WebContents;
-  private readonly allowlist: readonly string[];
   private readonly onStateChange?: (state: BrowserViewState) => void;
 
   private constructor(view: WebContentsView, options: BrowserViewOptions) {
     this.view = view;
     this.wc = view.webContents;
-    this.allowlist = options.allowlist ?? DEFAULT_REMOTE_ALLOWLIST;
     this.onStateChange = options.onStateChange;
     this.wireStateEvents();
   }
 
   static create(options: BrowserViewOptions = {}): BrowserView {
-    return new BrowserView(
-      createHardenedRemoteView({ allowlist: options.allowlist }),
-      options,
-    );
+    return new BrowserView(createHardenedRemoteView(), options);
   }
 
   /** Push the current state after every event that can change it. */
@@ -119,10 +112,10 @@ export class BrowserView {
   }
 
   /**
-   * MAIN-owned navigation. The allowlist policy is enforced BEFORE any
-   * load (decideRemoteNavigation — scheme/local/private/allowlist); the
-   * session webRequest layer and the will-navigate guards are the
-   * belt-and-braces behind it.
+   * MAIN-owned navigation. The navigation policy is enforced BEFORE any
+   * load (decideRemoteNavigation — scheme/local/private; any PUBLIC
+   * http(s) page is allowed); the session webRequest layer and the
+   * will-navigate guards are the belt-and-braces behind it.
    *
    * Dedupe: the service echoes a browser.navigate event back to the
    * renderer after the user's own command, which would re-trigger this
@@ -130,7 +123,7 @@ export class BrowserView {
    * explicit refresh affordance covers reloads.
    */
   navigate(url: string): NavigateResult {
-    const decision = decideRemoteNavigation(url, this.allowlist);
+    const decision = decideRemoteNavigation(url);
     if (!decision.allowed) {
       return { ok: false, reason: decision.reason };
     }

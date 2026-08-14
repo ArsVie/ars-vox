@@ -8,16 +8,14 @@
  *
  * Design rules (frozen in docs/consolidation-contract-2026-08-08.md, R40):
  *  - Remote content is untrusted data. Deny by default.
- *  - Navigation is filtered INDEPENDENTLY of the domain allowlist:
- *    dangerous schemes and local/private-network destinations are blocked
- *    even when the host matches an allowlist entry.
- *  - The allowlist here mirrors configs/app.yaml browser.allowlist
- *    (Electron does not read app.yaml); keep the two in sync.
+ *  - Navigation is filtered by dangerous schemes and local/private-
+ *    network destinations. Any PUBLIC http(s) page is allowed — there
+ *    is NO domain allowlist (removed by user directive).
  *
  * W2-VIEW (GATE-5, ADR 0007): this module is REINSTATED after 8d1fb3f
  * deleted it. The R42 allowlist gap is CLOSED — youtube-nocookie.com is
- * now in the default (docs/migration-note-electron-upgrade-2026-08-08.md
- * §4 + configs/app.yaml updated in the same lane).
+ * now covered by the open policy (docs/migration-note-electron-upgrade-
+ * 2026-08-08.md §4).
  */
 
 /** Partition for remote content — persist: prefix = persistent session. */
@@ -35,21 +33,6 @@ export const LOCAL_DOC_SCHEME = "arsvox-doc";
  */
 export const REMOTE_CSP =
   "default-src 'self' https:; script-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'self' https:";
-
-/**
- * Mirrors configs/app.yaml browser.allowlist default. W2-VIEW CLOSES the
- * R42 gap: youtube-nocookie.com + *.youtube-nocookie.com are REQUIRED by
- * the privacy-enhanced embed flow (www.youtube-nocookie.com) and are a
- * DIFFERENT registrable domain from youtube.com.
- */
-export const DEFAULT_REMOTE_ALLOWLIST: readonly string[] = [
-  "youtube.com",
-  "*.youtube.com",
-  "youtube-nocookie.com",
-  "*.youtube-nocookie.com",
-  "wikipedia.org",
-  "openstreetmap.org",
-];
 
 /**
  * Schemes remote content may never navigate to. `about:blank` is allowed
@@ -73,10 +56,9 @@ export const BLOCKED_NAVIGATION_SCHEMES: ReadonlySet<string> = new Set([
 
 /**
  * Exact origin set the YouTube embed/player flow uses (R42 deliverable,
- * migration note §4). Host-level allowlist entries required:
- *   youtube.com, *.youtube.com            (covers www/m/music/consent)
- *   youtube-nocookie.com, *.youtube-nocookie.com   (privacy-enhanced embeds)
- * Both registrable domains are now in DEFAULT_REMOTE_ALLOWLIST.
+ * migration note §4). Kept as a reference enumeration — the navigation
+ * policy itself has NO domain allowlist, so every public origin is
+ * navigable and this list needs no sync.
  */
 export const YOUTUBE_EMBED_ORIGINS: readonly string[] = [
   "https://www.youtube.com",
@@ -88,19 +70,8 @@ export const YOUTUBE_EMBED_ORIGINS: readonly string[] = [
   "https://youtube-nocookie.com",
 ];
 
-/** Host-level allowlist semantics — kept identical to the pre-A8 main.ts matcher. */
-export function hostMatchesAllowlist(host: string, allowlist: readonly string[]): boolean {
-  // URL parsers lowercase hostnames, so matching is case-insensitive here.
-  const h = host.toLowerCase();
-  return allowlist.some((entry) => {
-    if (entry.startsWith("*.")) return h.endsWith(entry.slice(1));
-    return h === entry || h.endsWith(`.${entry}`);
-  });
-}
-
 /* ------------------------------------------------------------------ */
-/* Local / private network detection (defense-in-depth, allowlist-     */
-/* independent per R40)                                                */
+/* Local / private network detection (defense-in-depth per R40)        */
 /* ------------------------------------------------------------------ */
 
 function parseIpv4(host: string): number[] | null {
@@ -216,20 +187,20 @@ export function isLocalOrPrivateHost(host: string): boolean {
 
 export interface NavigationDecision {
   allowed: boolean;
-  /** Machine-readable reason, e.g. "blocked-scheme:file:" | "local-or-private" | "not-allowlisted". */
+  /** Machine-readable reason, e.g. "blocked-scheme:file:" | "local-or-private". */
   reason: string;
 }
 
 /**
  * Decide whether a remote-content WebContents may navigate to `url`.
- * Order of checks (all independent of the allowlist except the last):
+ * Order of checks:
  *  1. unparseable URL            -> deny
  *  2. dangerous scheme           -> deny (about:blank exempt)
  *  3. non-http(s) scheme         -> deny
  *  4. local/private destination  -> deny
- *  5. allowlist membership       -> deny if absent
+ * Any PUBLIC http(s) page is allowed — there is no domain allowlist.
  */
-export function decideRemoteNavigation(url: string, allowlist: readonly string[]): NavigationDecision {
+export function decideRemoteNavigation(url: string): NavigationDecision {
   let u: URL;
   try {
     u = new URL(url);
@@ -251,9 +222,6 @@ export function decideRemoteNavigation(url: string, allowlist: readonly string[]
   if (!u.hostname) return { allowed: false, reason: "no-host" };
   if (isLocalOrPrivateHost(u.hostname)) {
     return { allowed: false, reason: "local-or-private" };
-  }
-  if (!hostMatchesAllowlist(u.hostname, allowlist)) {
-    return { allowed: false, reason: "not-allowlisted" };
   }
   return { allowed: true, reason: "ok" };
 }

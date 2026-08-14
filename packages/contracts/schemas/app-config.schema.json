@@ -92,19 +92,6 @@
     "BrowserSection": {
       "additionalProperties": false,
       "properties": {
-        "allowlist": {
-          "default": [
-            "youtube.com",
-            "*.youtube.com",
-            "wikipedia.org",
-            "openstreetmap.org"
-          ],
-          "items": {
-            "type": "string"
-          },
-          "title": "Allowlist",
-          "type": "array"
-        },
         "home_url": {
           "default": "https://www.youtube.com",
           "title": "Home Url",
@@ -636,12 +623,6 @@
     "browser": {
       "$ref": "#/$defs/BrowserSection",
       "default": {
-        "allowlist": [
-          "youtube.com",
-          "*.youtube.com",
-          "wikipedia.org",
-          "openstreetmap.org"
-        ],
         "home_url": "https://www.youtube.com",
         "engine_enabled": true,
         "engine_headless": true

@@ -33,8 +33,6 @@ from arsvox_agent.deps import Deps
 from arsvox_agent.tools import browser_tools
 from arsvox_agent.tools.context import ToolContext
 
-ALLOWLIST = ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org"]
-
 
 class _CaptureBus:
     def __init__(self) -> None:
@@ -58,7 +56,7 @@ class FakeEngine:
         self.op_error: Exception | None = None
 
     def check_url(self, url: str) -> NavigationDecision:
-        return NavigationDecision(self._allow, "ok" if self._allow else "not-allowlisted")
+        return NavigationDecision(self._allow, "ok" if self._allow else "local-or-private")
 
     async def navigate(self, url: str) -> BrowserState:
         if self.navigate_error is not None:
@@ -151,13 +149,25 @@ def test_navigate_engine_path_returns_real_landing_and_emits_mirror_event():
     assert ev_landed.loading is False
 
 
-def test_navigate_blocked_refuses_before_any_emission():
-    engine = FakeEngine(allow=False)
+def test_navigate_allows_any_public_domain() -> None:
+    engine = FakeEngine()
     tctx, bus = _make_context(engine=engine)
 
     result = asyncio.run(browser_tools.browser_navigate(tctx, "https://example.com/"))
 
-    assert result == "Página bloqueada: esta dirección no está permitida (not-allowlisted)."
+    # No domain allowlist: example.com navigates like any public page.
+    assert result == "Navegación completada: https://example.com/ — Página real"
+    assert engine.navigated == ["https://example.com/"]
+    assert len(bus.events) == 2
+
+
+def test_navigate_blocked_refuses_before_any_emission() -> None:
+    engine = FakeEngine(allow=False)
+    tctx, bus = _make_context(engine=engine)
+
+    result = asyncio.run(browser_tools.browser_navigate(tctx, "http://192.168.1.50/"))
+
+    assert result == "Página bloqueada: esta dirección no está permitida (local-or-private)."
     # Policy gate ran first: nothing emitted, engine never navigated.
     assert bus.events == []
     assert engine.navigated == []

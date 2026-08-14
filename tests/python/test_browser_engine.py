@@ -24,11 +24,8 @@ from arsvox_agent.browser_engine import (
     BrowserEngine,
     NavigationDecision,
     decide_remote_navigation,
-    host_matches_allowlist,
     is_local_or_private_host,
 )
-
-ALLOWLIST = ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org"]
 
 
 # --------------------------------------------------------------------- #
@@ -36,33 +33,29 @@ ALLOWLIST = ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org
 # --------------------------------------------------------------------- #
 
 
-def test_allowlist_host_semantics():
-    assert host_matches_allowlist("www.youtube.com", ALLOWLIST)  # wildcard entry
-    assert host_matches_allowlist("youtube.com", ALLOWLIST)  # exact
-    assert host_matches_allowlist("m.youtube.com", ALLOWLIST)  # subdomain of exact entry
-    assert host_matches_allowlist("es.wikipedia.org", ALLOWLIST)
-    assert host_matches_allowlist("WIKIPEDIA.ORG", ALLOWLIST)  # case-insensitive
-    assert not host_matches_allowlist("evil.com", ALLOWLIST)
-    assert not host_matches_allowlist("notyoutube.com", ALLOWLIST)
-    assert not host_matches_allowlist("youtube.com.evil.com", ALLOWLIST)
-
-
-def test_decide_allows_allowlisted_public_https():
-    assert decide_remote_navigation("https://es.wikipedia.org/wiki/Pasta", ALLOWLIST) == (
+def test_decide_allows_any_public_https() -> None:
+    assert decide_remote_navigation("https://es.wikipedia.org/wiki/Pasta") == (
         NavigationDecision(True, "ok")
     )
-    assert decide_remote_navigation("http://www.youtube.com/watch?v=1", ALLOWLIST) == (
+    assert decide_remote_navigation("http://www.youtube.com/watch?v=1") == (
         NavigationDecision(True, "ok")
     )
 
 
-def test_decide_blocks_non_allowlisted_hosts():
-    d = decide_remote_navigation("https://example.com/docs", ALLOWLIST)
-    assert not d.allowed
-    assert d.reason == "not-allowlisted"
+def test_decide_allows_public_hosts_no_allowlist() -> None:
+    # No domain allowlist: ANY public http(s) page is navigable.
+    for url in [
+        "https://example.com/docs",
+        "https://duckduckgo.com/?q=pasta",
+        "https://www.bbc.com/news",
+        "http://example.org/",
+    ]:
+        d = decide_remote_navigation(url)
+        assert d.allowed, url
+        assert d.reason == "ok", url
 
 
-def test_decide_blocks_dangerous_schemes_regardless_of_allowlist():
+def test_decide_blocks_dangerous_schemes() -> None:
     for url in [
         "file:///etc/passwd",
         "javascript:alert(1)",
@@ -74,19 +67,19 @@ def test_decide_blocks_dangerous_schemes_regardless_of_allowlist():
         "ws://www.youtube.com",
         "wss://www.youtube.com",
     ]:
-        d = decide_remote_navigation(url, ALLOWLIST)
+        d = decide_remote_navigation(url)
         assert not d.allowed, url
         assert d.reason.startswith("blocked-scheme:"), url
 
 
-def test_decide_allows_only_about_blank():
-    assert decide_remote_navigation("about:blank", ALLOWLIST).allowed
-    d = decide_remote_navigation("about:config", ALLOWLIST)
+def test_decide_allows_only_about_blank() -> None:
+    assert decide_remote_navigation("about:blank").allowed
+    d = decide_remote_navigation("about:config")
     assert not d.allowed
     assert d.reason == "blocked-scheme:about:"
 
 
-def test_decide_blocks_local_and_private_destinations_even_when_allowlisted():
+def test_decide_blocks_local_and_private_destinations() -> None:
     for url in [
         "http://localhost/",
         "http://foo.localhost/",
@@ -103,14 +96,14 @@ def test_decide_blocks_local_and_private_destinations_even_when_allowlisted():
         "http://[::ffff:127.0.0.1]/",
         "http://[fe80::1]/",
     ]:
-        d = decide_remote_navigation(url, ALLOWLIST + ["localhost", "10.0.0.5"])
+        d = decide_remote_navigation(url)
         assert not d.allowed, url
         assert d.reason == "local-or-private", url
 
 
-def test_decide_blocks_unparseable_and_hostless():
-    assert decide_remote_navigation("esto no es una url", ALLOWLIST).reason == "unparseable-url"
-    assert decide_remote_navigation("http://", ALLOWLIST).reason == "no-host"
+def test_decide_blocks_unparseable_and_hostless() -> None:
+    assert decide_remote_navigation("esto no es una url").reason == "unparseable-url"
+    assert decide_remote_navigation("http://").reason == "no-host"
 
 
 def test_local_host_classification():
@@ -197,9 +190,8 @@ def _text_target_in(js: str) -> str | None:
 # --------------------------------------------------------------------- #
 
 
-def _engine(session_factory, allowlist=None):
+def _engine(session_factory):
     return BrowserEngine(
-        allowlist if allowlist is not None else list(ALLOWLIST),
         session_factory=session_factory,
         navigate_timeout_s=2.0,
         dom_timeout_s=2.0,
@@ -234,18 +226,30 @@ def test_navigate_second_call_reuses_the_page():
     ]
 
 
-def test_navigate_blocked_by_policy_before_any_session_work():
+def test_navigate_blocked_by_policy_before_any_session_work() -> None:
     session = FakeSession(FakePage(lambda js: None))
     engine = _engine(lambda: session)
 
     with pytest.raises(BrowserBlockedError):
-        asyncio.run(engine.navigate("https://example.com/"))
+        asyncio.run(engine.navigate("file:///etc/passwd"))
     with pytest.raises(BrowserBlockedError):
         asyncio.run(engine.navigate("http://192.168.1.50/"))
 
     # Policy refusal happens BEFORE the session is ever created.
     assert session.new_page_calls == []
     assert not engine.ready
+
+
+def test_navigate_allows_any_public_http_page() -> None:
+    # No domain allowlist: a public page outside the old allowlist
+    # (youtube/wikipedia/openstreetmap) navigates fine.
+    session = FakeSession(FakePage(lambda js: None))
+    engine = _engine(lambda: session)
+
+    state = asyncio.run(engine.navigate("https://example.com/"))
+
+    assert state.url == "https://example.com/"
+    assert session.navigate_to_calls == ["https://example.com/"]
 
 
 def test_navigate_unavailable_factory_error_is_honest():
@@ -372,15 +376,19 @@ def test_scroll_pixels_and_close():
     assert session.stopped == 1
 
 
-def test_update_config_swaps_allowlist():
+def test_update_config_applies_headless_and_policy_stays_open() -> None:
     session = FakeSession(FakePage(lambda js: None))
     engine = _engine(lambda: session)
 
-    # Wikipedia is allowlisted — navigation works.
+    # Any public page navigates — no allowlist to swap.
     assert asyncio.run(engine.navigate("https://es.wikipedia.org/x")).url
-    # Flip to an allowlist without it.
-    engine.update_config(["youtube.com"])
 
-    d = engine.check_url("https://es.wikipedia.org/x")
-    assert not d.allowed
-    assert d.reason == "not-allowlisted"
+    # update_config no longer takes an allowlist; headless still applies.
+    engine.update_config(headless=False)
+    assert engine._headless is False
+    engine.update_config()
+    assert engine._headless is False
+
+    d = engine.check_url("https://example.com/x")
+    assert d.allowed
+    assert d.reason == "ok"

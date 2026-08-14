@@ -53,7 +53,6 @@ import * as fs from "fs";
 import * as path from "path";
 import { pathToFileURL } from "url";
 import {
-  DEFAULT_REMOTE_ALLOWLIST,
   REMOTE_CSP,
   decideRemoteNavigation,
   LOCAL_DOC_SCHEME,
@@ -64,8 +63,6 @@ import {
 export interface HardenedRemoteOptions {
   /** Session partition; default REMOTE_CONTENT_PARTITION (persistent). */
   partition?: string;
-  /** Domain allowlist; default DEFAULT_REMOTE_ALLOWLIST (app.yaml mirror). */
-  allowlist?: readonly string[];
   /** Extra webPreferences; security-critical defaults cannot be weakened. */
   webPreferences?: Partial<WebPreferences>;
 }
@@ -73,15 +70,14 @@ export interface HardenedRemoteOptions {
 /**
  * R40 + R42 — isolated persistent session for remote content.
  * Deny-by-default: every permission request/check answers false,
- * including media. The allowlist is enforced at the session webRequest
- * layer BEFORE any remote load (main-frame requests only), and every
- * response gets the remote CSP injected (migration note §3).
+ * including media. The navigation policy is enforced at the session
+ * webRequest layer BEFORE any remote load (main-frame requests only),
+ * and every response gets the remote CSP injected (migration note §3).
  */
 export function createRemoteContentSession(options: HardenedRemoteOptions = {}): Session {
   const ses = session.fromPartition(options.partition ?? REMOTE_CONTENT_PARTITION, {
     cache: false,
   });
-  const allowlist = options.allowlist ?? DEFAULT_REMOTE_ALLOWLIST;
   ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   ses.setPermissionCheckHandler(() => false);
   ses.webRequest.onBeforeRequest((details, callback) => {
@@ -91,7 +87,7 @@ export function createRemoteContentSession(options: HardenedRemoteOptions = {}):
       callback({});
       return;
     }
-    const decision = decideRemoteNavigation(details.url, allowlist);
+    const decision = decideRemoteNavigation(details.url);
     if (!decision.allowed) {
       console.warn(`[hardened-view] webRequest blocked main-frame load (${decision.reason}): ${details.url}`);
       callback({ cancel: true });
@@ -113,19 +109,18 @@ export interface RemoteGuardHandle {
 
 /**
  * R40 — navigation filter + window-open denial for a remote-content
- * WebContents. Blocks dangerous schemes, local/private destinations and
- * non-allowlisted hosts at the MAIN frame; subframes are allowed to load
- * cross-origin resources (CDNs etc.) but a main-frame navigation anywhere
- * outside the policy is prevented.
+ * WebContents. Blocks dangerous schemes and local/private destinations
+ * at the MAIN frame; subframes are allowed to load cross-origin
+ * resources (CDNs etc.) but a main-frame navigation anywhere outside
+ * the policy is prevented. Any PUBLIC http(s) page is allowed — there
+ * is no domain allowlist.
  */
 export function attachRemoteNavigationGuards(
   wc: WebContents,
   options: HardenedRemoteOptions = {},
 ): RemoteGuardHandle {
-  const allowlist = options.allowlist ?? DEFAULT_REMOTE_ALLOWLIST;
-
   const onWillNavigate = (details: ElectronEvent<WebContentsWillNavigateEventParams>): void => {
-    const decision = decideRemoteNavigation(details.url, allowlist);
+    const decision = decideRemoteNavigation(details.url);
     if (!decision.allowed) {
       console.warn(`[hardened-view] blocked main-frame navigation (${decision.reason}): ${details.url}`);
       details.preventDefault();
@@ -136,7 +131,7 @@ export function attachRemoteNavigationGuards(
     details: ElectronEvent<WebContentsWillFrameNavigateEventParams>,
   ): void => {
     if (!details.isMainFrame) return; // subframe loads are not navigations of the document
-    const decision = decideRemoteNavigation(details.url, allowlist);
+    const decision = decideRemoteNavigation(details.url);
     if (!decision.allowed) {
       console.warn(`[hardened-view] blocked frame navigation (${decision.reason}): ${details.url}`);
       details.preventDefault();
@@ -261,11 +256,10 @@ export { isTrustedIpcSender } from "./ipc-guard";
  * so a stray window.open / helper process can never escape the policy.
  */
 export function installGlobalWebContentsGuard(options: {
-  allowlist?: readonly string[];
   isAppWebContents: (wc: WebContents) => boolean;
 }): void {
   app.on("web-contents-created", (_event, wc) => {
     if (options.isAppWebContents(wc)) return;
-    attachRemoteNavigationGuards(wc, { allowlist: options.allowlist });
+    attachRemoteNavigationGuards(wc);
   });
 }

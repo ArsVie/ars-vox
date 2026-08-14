@@ -1,8 +1,9 @@
 /**
  * A8 (GATE-3.5 wave 1) / W2-VIEW (GATE-5) — tests for the Electron glue
  * (R40/R41/R42): hardened session/view creation, session webRequest
- * allowlist enforcement + CSP injection, navigation guards, local-doc
- * protocol handler, IPC sender validation, global WebContents guard.
+ * navigation-policy enforcement + CSP injection, navigation guards,
+ * local-doc protocol handler, IPC sender validation, global WebContents
+ * guard.
  *
  * `electron` is fully mocked (vitest node env cannot load the real
  * module — it resolves to the binary path). The mock records handler
@@ -216,16 +217,16 @@ describe("createRemoteContentSession (R40)", () => {
     expect(checkHandler({}, "notifications")).toBe(false);
   });
 
-  it("enforces the allowlist at the session webRequest layer BEFORE any load (W2-VIEW)", () => {
+  it("enforces the navigation policy at the session webRequest layer BEFORE any load (W2-VIEW)", () => {
     const ses = createRemoteContentSession() as unknown as FakeSession;
     expect(ses.webRequest.onBeforeRequest).toHaveBeenCalled();
     expect(ses.webRequest.onHeadersReceived).toHaveBeenCalled();
   });
 });
 
-describe("session webRequest allowlist enforcement (W2-VIEW)", () => {
+describe("session webRequest navigation policy enforcement (W2-VIEW)", () => {
   function beforeRequestHandler(): (details: Record<string, unknown>, cb: (r: unknown) => void) => void {
-    createRemoteContentSession({ allowlist: ["youtube.com"] });
+    createRemoteContentSession();
     const ses = lastSession()!;
     // Electron's webRequest.onBeforeRequest(listener) takes ONE argument
     // (the listener); the filter is optional. Index 0 is the listener.
@@ -235,11 +236,13 @@ describe("session webRequest allowlist enforcement (W2-VIEW)", () => {
     ) => void;
   }
 
-  it("cancels a main-frame load outside the allowlist", () => {
+  it("passes ANY public http(s) main-frame load through (no domain allowlist)", () => {
     const handler = beforeRequestHandler();
-    const result: unknown[] = [];
-    handler({ url: "https://example.com/", resourceType: "mainFrame" }, (r) => result.push(r));
-    expect(result).toEqual([{ cancel: true }]);
+    for (const url of ["https://example.com/", "https://duckduckgo.com/"]) {
+      const result: unknown[] = [];
+      handler({ url, resourceType: "mainFrame" }, (r) => result.push(r));
+      expect(result).toEqual([{}]);
+    }
   });
 
   it("cancels main-frame loads to dangerous schemes and local destinations", () => {
@@ -251,7 +254,7 @@ describe("session webRequest allowlist enforcement (W2-VIEW)", () => {
     }
   });
 
-  it("passes allowlisted main-frame loads through", () => {
+  it("passes public https main-frame loads through", () => {
     const handler = beforeRequestHandler();
     const result: unknown[] = [];
     handler({ url: "https://www.youtube.com/watch?v=x", resourceType: "mainFrame" }, (r) => result.push(r));
@@ -316,9 +319,9 @@ describe("attachRemoteNavigationGuards (R40)", () => {
     return { preventDefault: vi.fn(), defaultPrevented: false };
   }
 
-  it("blocks dangerous schemes and non-allowlisted hosts at the main frame", () => {
+  it("blocks dangerous schemes and local destinations at the main frame", () => {
     const wc = makeFakeWebContents();
-    attachRemoteNavigationGuards(asWC(wc), { allowlist: ["youtube.com"] });
+    attachRemoteNavigationGuards(asWC(wc));
 
     const fileEvt = makeEvent();
     wc.__fire("will-navigate", { url: "file:///etc/passwd", preventDefault: fileEvt.preventDefault });
@@ -327,23 +330,21 @@ describe("attachRemoteNavigationGuards (R40)", () => {
     const localEvt = makeEvent();
     wc.__fire("will-navigate", { url: "http://127.0.0.1:8765/", preventDefault: localEvt.preventDefault });
     expect(localEvt.preventDefault).toHaveBeenCalled();
-
-    const foreignEvt = makeEvent();
-    wc.__fire("will-navigate", { url: "https://example.com/", preventDefault: foreignEvt.preventDefault });
-    expect(foreignEvt.preventDefault).toHaveBeenCalled();
   });
 
-  it("allows allowlisted public destinations", () => {
+  it("allows ANY public destination (no domain allowlist)", () => {
     const wc = makeFakeWebContents();
-    attachRemoteNavigationGuards(asWC(wc), { allowlist: ["youtube.com"] });
-    const evt = makeEvent();
-    wc.__fire("will-navigate", { url: "https://www.youtube.com/watch?v=x", preventDefault: evt.preventDefault });
-    expect(evt.preventDefault).not.toHaveBeenCalled();
+    attachRemoteNavigationGuards(asWC(wc));
+    for (const url of ["https://www.youtube.com/watch?v=x", "https://example.com/"]) {
+      const evt = makeEvent();
+      wc.__fire("will-navigate", { url, preventDefault: evt.preventDefault });
+      expect(evt.preventDefault).not.toHaveBeenCalled();
+    }
   });
 
   it("does not block subframe navigations (cross-origin resources)", () => {
     const wc = makeFakeWebContents();
-    attachRemoteNavigationGuards(asWC(wc), { allowlist: ["youtube.com"] });
+    attachRemoteNavigationGuards(asWC(wc));
     const evt = makeEvent();
     wc.__fire("will-frame-navigate", {
       url: "https://cdn.example.com/asset.js",
@@ -353,16 +354,16 @@ describe("attachRemoteNavigationGuards (R40)", () => {
     expect(evt.preventDefault).not.toHaveBeenCalled();
   });
 
-  it("blocks main-frame frame navigations outside the policy", () => {
+  it("allows main-frame frame navigations to public pages", () => {
     const wc = makeFakeWebContents();
-    attachRemoteNavigationGuards(asWC(wc), { allowlist: ["youtube.com"] });
+    attachRemoteNavigationGuards(asWC(wc));
     const evt = makeEvent();
     wc.__fire("will-frame-navigate", {
       url: "https://example.com/",
       isMainFrame: true,
       preventDefault: evt.preventDefault,
     });
-    expect(evt.preventDefault).toHaveBeenCalled();
+    expect(evt.preventDefault).not.toHaveBeenCalled();
   });
 
   it("denies window.open unconditionally", () => {

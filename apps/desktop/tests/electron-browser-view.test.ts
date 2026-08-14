@@ -8,9 +8,10 @@
  *    via toServicePayload — PUTs it to /api/browser-state);
  *  - BOUNDS IPC: renderer-reported panel bounds → view.setBounds
  *    (clamped; zeroed on unmount);
- *  - ALLOWLIST ENFORCEMENT: every navigate() is pre-checked by
+ *  - NAVIGATION POLICY ENFORCEMENT: every navigate() is pre-checked by
  *    decideRemoteNavigation BEFORE loadURL — a request outside the
- *    allowlist never reaches the view.
+ *    policy (dangerous scheme / local or private destination) never
+ *    reaches the view. Any PUBLIC http(s) page is allowed.
  *
  * `electron` is fully mocked (vitest node env cannot load the real
  * module). The mock records handler registrations so tests can fire the
@@ -153,9 +154,9 @@ function lastView(): FakeWebContents | undefined {
 }
 
 /** A live view with an onStateChange spy; returns the view + its wc. */
-function makeView(allowlist?: readonly string[]) {
+function makeView() {
   const onStateChange = vi.fn();
-  const view = BrowserView.create({ allowlist, onStateChange });
+  const view = BrowserView.create({ onStateChange });
   const wc = lastView();
   if (!wc) throw new Error("no webContents created");
   return { view, wc, onStateChange };
@@ -300,24 +301,33 @@ describe("bounds IPC: renderer panel bounds → view setBounds", () => {
   });
 });
 
-describe("allowlist enforcement on main-owned navigate", () => {
-  it("blocks a URL outside the allowlist BEFORE any load", () => {
-    const { view, wc } = makeView(["youtube.com"]);
+describe("navigation policy on main-owned navigate (no domain allowlist)", () => {
+  it("allows ANY public http(s) URL and loads it", () => {
+    const { view, wc } = makeView();
     const result = view.navigate("https://example.com/");
-    expect(result.ok).toBe(false);
-    expect(result.reason.length).toBeGreaterThan(0);
+    expect(result).toEqual({ ok: true, reason: "ok" });
+    expect(wc.loadURL).toHaveBeenCalledWith("https://example.com/");
+  });
+
+  it("blocks dangerous schemes and local destinations BEFORE any load", () => {
+    const { view, wc } = makeView();
+    for (const url of ["file:///etc/passwd", "http://127.0.0.1:8765/", "https://localhost/"]) {
+      const result = view.navigate(url);
+      expect(result.ok).toBe(false);
+      expect(result.reason.length).toBeGreaterThan(0);
+    }
     expect(wc.loadURL).not.toHaveBeenCalled();
   });
 
-  it("allows allowlisted URLs and loads them", () => {
-    const { view, wc } = makeView(["youtube.com"]);
+  it("allows public https URLs and loads them", () => {
+    const { view, wc } = makeView();
     const result = view.navigate("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     expect(result).toEqual({ ok: true, reason: "ok" });
     expect(wc.loadURL).toHaveBeenCalledWith("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   });
 
   it("dedupes a navigate to the URL already displayed (service echo)", () => {
-    const { view, wc } = makeView(["youtube.com"]);
+    const { view, wc } = makeView();
     wc.getURL.mockReturnValue("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     const result = view.navigate("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     expect(result).toEqual({ ok: true, reason: "already-loaded" });

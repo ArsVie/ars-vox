@@ -18,9 +18,10 @@ Legacy fallback (engine disabled in config, or unit tests without an
 engine): the previous emit -> await Electron-main round-trip through
 the browser_state/browser_dom stores is preserved unchanged.
 
-Navigation policy: the engine enforces the SAME scheme/local-private/
-allowlist gate as the desktop view (config.browser.allowlist), so the
-in-process browser is never weaker than the Electron one.
+Navigation policy: the engine enforces the SAME scheme/local-private
+gate as the desktop view, so the in-process browser is never weaker
+than the Electron one. Any PUBLIC http(s) page is navigable — there is
+no domain allowlist.
 
 Mock mode (config.agent.mock — the demo path): same frozen event shape,
 canned result explicitly marked "[mock]". The demo never pretends a
@@ -53,7 +54,7 @@ DOM_ACTION_TIMEOUT_S = 10.0
 
 # Same bounded window for browser.navigate: main PUTs the view's
 # post-navigation state (url/title) on every did-* event; if it never
-# reports (no Electron, view unattached, allowlist-blocked, failed
+# reports (no Electron, view unattached, policy-blocked, failed
 # load) the handler answers honestly after this wait.
 NAVIGATE_TIMEOUT_S = 10.0
 
@@ -328,10 +329,11 @@ SPECS = [
     ToolSpec(
         "browser.navigate",
         "Open a page in the browser: navigate to the given URL "
-        "(allowlist-checked by the engine — only configured domains, "
-        "no local addresses or non-http schemes). Returns the REAL "
-        "resulting url/title, including redirects. The desktop view "
-        "mirrors the navigation when the app is open.",
+        "(any PUBLIC page over http(s) is allowed — no domain "
+        "allowlist; local/private addresses and non-http schemes "
+        "remain blocked). Returns the REAL resulting url/title, "
+        "including redirects. The desktop view mirrors the navigation "
+        "when the app is open.",
         browser_navigate,
         PolicyKind.REVERSIBLE,
         effect="revertible",

@@ -155,7 +155,6 @@ class AppServices:
         # on the first browser tool call, never at service boot.
         self.browser_engine = (
             BrowserEngine(
-                list(config.browser.allowlist),
                 headless=config.browser.engine_headless,
             )
             if config.browser.engine_enabled
@@ -238,7 +237,6 @@ class AppServices:
         self.deps_base.config = config
         if self.browser_engine is not None:
             self.browser_engine.update_config(
-                list(config.browser.allowlist),
                 headless=config.browser.engine_headless,
             )
         self.runtime.set_config(config)

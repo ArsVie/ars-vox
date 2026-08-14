@@ -15,9 +15,10 @@ Text-first, by construction:
   * telemetry disabled (ANONYMIZED_TELEMETRY=false) BEFORE browser_use
     is ever imported;
   * navigation policy mirrors the desktop's (blocked schemes / local-
-    or-private / allowlist — ported 1:1 from apps/desktop/electron/
+    or-private — ported 1:1 from apps/desktop/electron/
     security-policy.ts) so the in-process engine is never weaker than
-    the Electron view.
+    the Electron view. Any PUBLIC http(s) page is navigable; there is
+    no domain allowlist.
 
 browser_use is imported LAZILY (its top-level modules are heavy) and
 the Chromium session starts on first use, so service startup stays lean
@@ -57,15 +58,6 @@ _BLOCKED_SCHEMES: frozenset[str] = frozenset(
 # 'about:blank' is allowed explicitly (initial/empty documents); every
 # other 'about:' URL is blocked (mirrors the TS BLOCKED_NAVIGATION_SCHEMES
 # + about:blank exemption).
-
-
-def host_matches_allowlist(host: str, allowlist: list[str]) -> bool:
-    """Host-level allowlist semantics — identical to the TS matcher."""
-    h = host.lower()
-    return any(
-        h.endswith(entry[1:]) if entry.startswith("*.") else h == entry or h.endswith(f".{entry}")
-        for entry in allowlist
-    )
 
 
 def _parse_ipv4(host: str) -> list[int] | None:
@@ -200,12 +192,13 @@ class NavigationDecision:
         return self.allowed == other.allowed and self.reason == other.reason
 
 
-def decide_remote_navigation(url: str, allowlist: list[str]) -> NavigationDecision:
+def decide_remote_navigation(url: str) -> NavigationDecision:
     """Decide whether the engine may navigate to ``url``.
 
     Order of checks (mirrors decideRemoteNavigation): unparseable ->
     dangerous scheme (about:blank exempt) -> non-http(s) -> local/
-    private -> allowlist membership.
+    private. Any PUBLIC http(s) page is allowed — there is no domain
+    allowlist.
     """
     try:
         u = urlparse(url)
@@ -227,8 +220,6 @@ def decide_remote_navigation(url: str, allowlist: list[str]) -> NavigationDecisi
         return NavigationDecision(False, "no-host")
     if is_local_or_private_host(hostname):
         return NavigationDecision(False, "local-or-private")
-    if not host_matches_allowlist(hostname, allowlist):
-        return NavigationDecision(False, "not-allowlisted")
     return NavigationDecision(True, "ok")
 
 
@@ -280,14 +271,12 @@ class BrowserEngine:
 
     def __init__(
         self,
-        allowlist: list[str],
         *,
         headless: bool = True,
         navigate_timeout_s: float = 20.0,
         dom_timeout_s: float = 10.0,
         session_factory: Callable[[], object] | None = None,
     ) -> None:
-        self._allowlist = list(allowlist)
         self._headless = headless
         self._navigate_timeout_s = navigate_timeout_s
         self._dom_timeout_s = dom_timeout_s
@@ -301,15 +290,10 @@ class BrowserEngine:
     # config
     # ------------------------------------------------------------------ #
 
-    def update_config(self, allowlist: list[str], *, headless: bool | None = None) -> None:
-        """Live config reload: new allowlist/headless apply to future ops."""
-        self._allowlist = list(allowlist)
+    def update_config(self, *, headless: bool | None = None) -> None:
+        """Live config reload: a new headless mode applies to future ops."""
         if headless is not None:
             self._headless = headless
-
-    @property
-    def allowlist(self) -> list[str]:
-        return list(self._allowlist)
 
     @property
     def ready(self) -> bool:
@@ -320,7 +304,7 @@ class BrowserEngine:
     # ------------------------------------------------------------------ #
 
     def check_url(self, url: str) -> NavigationDecision:
-        return decide_remote_navigation(url, self._allowlist)
+        return decide_remote_navigation(url)
 
     # ------------------------------------------------------------------ #
     # session lifecycle

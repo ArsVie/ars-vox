@@ -235,7 +235,6 @@ class RemindersSection(BaseModel):
 
 class BrowserSection(BaseModel):
     model_config = _STRICT
-    allowlist: list[str] = ["youtube.com", "*.youtube.com", "wikipedia.org", "openstreetmap.org"]
     home_url: str = "https://www.youtube.com"
     # BROWSER-USE INTEGRATION: the agent's in-process, text-first browser
     # engine (local Chromium via CDP). engine_enabled=True replaces the

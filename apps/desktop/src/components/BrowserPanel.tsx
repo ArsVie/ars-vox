@@ -18,7 +18,8 @@ const START_URL = "about:blank";
  * Integrated browser panel — W2-VIEW (GATE-5, ADR 0007).
  *
  * The browser surface is a WebContentsView OWNED BY THE ELECTRON MAIN
- * PROCESS (isolated partition, allowlist, CSP, no privileged preload).
+ * PROCESS (isolated partition, navigation policy, CSP, no privileged
+ * preload).
  * This panel is its chrome + placeholder:
  *  - the .browser-viewport div is a transparent placeholder — the native
  *    view is layered over it, sized to the bounds THIS component measures

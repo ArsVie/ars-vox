@@ -86,7 +86,6 @@ reminders:
   confirmation_timeout_s: 120
 
 browser:
-  allowlist: ["youtube.com", "*.youtube.com", "youtube-nocookie.com", "*.youtube-nocookie.com", "wikipedia.org", "openstreetmap.org"]
   engine_enabled: true
   engine_headless: true
   home_url: https://www.youtube.com

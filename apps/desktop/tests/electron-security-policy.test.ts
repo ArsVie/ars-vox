@@ -11,35 +11,12 @@
 import { describe, expect, it } from "vitest";
 import {
   BLOCKED_NAVIGATION_SCHEMES,
-  DEFAULT_REMOTE_ALLOWLIST,
   REMOTE_CSP,
   YOUTUBE_EMBED_ORIGINS,
   decideRemoteNavigation,
-  hostMatchesAllowlist,
   isLocalOrPrivateHost,
   resolveLocalDocPath,
 } from "../electron/security-policy";
-
-const ALLOW = DEFAULT_REMOTE_ALLOWLIST;
-
-describe("hostMatchesAllowlist (pre-A8 semantics preserved)", () => {
-  it("matches exact hosts and subdomains for plain entries", () => {
-    expect(hostMatchesAllowlist("youtube.com", ["youtube.com"])).toBe(true);
-    expect(hostMatchesAllowlist("www.youtube.com", ["youtube.com"])).toBe(true);
-    expect(hostMatchesAllowlist("evil-youtube.com", ["youtube.com"])).toBe(false);
-    expect(hostMatchesAllowlist("youtube.com.evil.example", ["youtube.com"])).toBe(false);
-  });
-
-  it("wildcard entries match subdomains but NOT the bare domain", () => {
-    expect(hostMatchesAllowlist("www.youtube.com", ["*.youtube.com"])).toBe(true);
-    expect(hostMatchesAllowlist("consent.youtube.com", ["*.youtube.com"])).toBe(true);
-    expect(hostMatchesAllowlist("youtube.com", ["*.youtube.com"])).toBe(false);
-  });
-
-  it("is case-insensitive on the host", () => {
-    expect(hostMatchesAllowlist("WWW.YOUTUBE.COM", ["youtube.com"])).toBe(true);
-  });
-});
 
 describe("isLocalOrPrivateHost — IPv4", () => {
   it("flags RFC1918, loopback, link-local, CGNAT and reserved ranges", () => {
@@ -104,63 +81,57 @@ describe("isLocalOrPrivateHost — IPv6 and local names", () => {
 });
 
 describe("decideRemoteNavigation (R40)", () => {
-  it("allows allowlisted public https destinations", () => {
-    expect(decideRemoteNavigation("https://www.youtube.com/watch?v=dQw4w9WgXcQ", ALLOW).allowed).toBe(true);
-    expect(decideRemoteNavigation("https://es.wikipedia.org/wiki/Don_Quijote", ALLOW).allowed).toBe(true);
-    expect(decideRemoteNavigation("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ", ALLOW).allowed).toBe(true);
+  it("allows public https destinations — no domain allowlist", () => {
+    expect(decideRemoteNavigation("https://www.youtube.com/watch?v=dQw4w9WgXcQ").allowed).toBe(true);
+    expect(decideRemoteNavigation("https://es.wikipedia.org/wiki/Don_Quijote").allowed).toBe(true);
+    expect(decideRemoteNavigation("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ").allowed).toBe(true);
+    expect(decideRemoteNavigation("https://example.com/").allowed).toBe(true);
+    expect(decideRemoteNavigation("https://duckduckgo.com/?q=pasta").allowed).toBe(true);
   });
 
-  it("blocks dangerous schemes regardless of allowlist", () => {
+  it("blocks dangerous schemes", () => {
     for (const scheme of ["file:", "javascript:", "data:", "blob:", "chrome:", "chrome-extension:", "devtools:", "ws:", "wss:", "arsvox-doc:"]) {
-      const d = decideRemoteNavigation(`${scheme}//example.com/x`, ALLOW);
+      const d = decideRemoteNavigation(`${scheme}//example.com/x`);
       expect(d.allowed).toBe(false);
       expect(d.reason.startsWith("blocked-scheme:")).toBe(true);
     }
-    // a file: URL pointing at an allowlisted host is still blocked
-    expect(decideRemoteNavigation("file://youtube.com/index.html", ALLOW).allowed).toBe(false);
+    // a file: URL pointing at a public host is still blocked
+    expect(decideRemoteNavigation("file://youtube.com/index.html").allowed).toBe(false);
   });
 
   it("allows only about:blank from the about: scheme", () => {
-    expect(decideRemoteNavigation("about:blank", ALLOW).allowed).toBe(true);
-    expect(decideRemoteNavigation("about:config", ALLOW).allowed).toBe(false);
+    expect(decideRemoteNavigation("about:blank").allowed).toBe(true);
+    expect(decideRemoteNavigation("about:config").allowed).toBe(false);
   });
 
   it("blocks unparseable URLs", () => {
-    expect(decideRemoteNavigation("not a url", ALLOW).allowed).toBe(false);
+    expect(decideRemoteNavigation("not a url").allowed).toBe(false);
   });
 
-  it("blocks non-allowlisted public hosts", () => {
-    const d = decideRemoteNavigation("https://example.com/", ALLOW);
-    expect(d.allowed).toBe(false);
-    expect(d.reason).toBe("not-allowlisted");
-  });
-
-  it("blocks local/private destinations EVEN when allowlisted (R40)", () => {
-    const withLocal = [...ALLOW, "localhost", "127.0.0.1", "192.168.0.10"];
-    expect(decideRemoteNavigation("http://localhost:8765/", withLocal).allowed).toBe(false);
-    expect(decideRemoteNavigation("http://127.0.0.1:8765/", withLocal).allowed).toBe(false);
-    expect(decideRemoteNavigation("http://192.168.0.10/", withLocal).allowed).toBe(false);
-    expect(decideRemoteNavigation("http://10.0.0.5/", withLocal).allowed).toBe(false);
+  it("blocks local/private destinations (R40)", () => {
+    expect(decideRemoteNavigation("http://localhost:8765/").allowed).toBe(false);
+    expect(decideRemoteNavigation("http://127.0.0.1:8765/").allowed).toBe(false);
+    expect(decideRemoteNavigation("http://192.168.0.10/").allowed).toBe(false);
+    expect(decideRemoteNavigation("http://10.0.0.5/").allowed).toBe(false);
   });
 
   it("blocks local-doc protocol for remote content", () => {
-    expect(decideRemoteNavigation("arsvox-doc://docs/book.epub", ALLOW).allowed).toBe(false);
+    expect(decideRemoteNavigation("arsvox-doc://docs/book.epub").allowed).toBe(false);
   });
 });
 
 describe("YOUTUBE_EMBED_ORIGINS (R42 enumeration)", () => {
-  it("covers the registrable domains the allowlist needs", () => {
+  it("covers the registrable domains the embed flow needs", () => {
     expect(YOUTUBE_EMBED_ORIGINS).toContain("https://www.youtube.com");
     expect(YOUTUBE_EMBED_ORIGINS).toContain("https://www.youtube-nocookie.com");
     expect(YOUTUBE_EMBED_ORIGINS).toContain("https://consent.youtube.com");
   });
 
-  it("R42 gap CLOSED (W2-VIEW): nocookie domains are in the default allowlist", () => {
+  it("R42 gap moot under the open policy (W2-VIEW): the nocookie embed origin navigates without any allowlist", () => {
     // The spike recorded the gap: DEFAULT_REMOTE_ALLOWLIST lacked the
-    // nocookie domain. ADR 0007 + configs/app.yaml close it in this lane.
-    expect(DEFAULT_REMOTE_ALLOWLIST).toContain("youtube-nocookie.com");
-    expect(DEFAULT_REMOTE_ALLOWLIST).toContain("*.youtube-nocookie.com");
-    expect(decideRemoteNavigation("https://www.youtube-nocookie.com/embed/x", ALLOW).allowed).toBe(true);
+    // nocookie domain. The navigation policy now has NO allowlist, so
+    // every public origin — including youtube-nocookie.com — navigates.
+    expect(decideRemoteNavigation("https://www.youtube-nocookie.com/embed/x").allowed).toBe(true);
   });
 });
 
