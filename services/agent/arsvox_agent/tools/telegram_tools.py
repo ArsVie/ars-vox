@@ -13,7 +13,14 @@ from arsvox_agent.tools.context import ToolContext
 async def telegram_prepare_message(tctx: ToolContext, text: str) -> str:
     chat_id = tctx.deps.config.telegram.chat_id
     if not chat_id:
-        return "No hay un destinatario aprobado configurado (telegram.chat_id en la configuración)."
+        # Honest no-contact reply (reviewer round 2): never point at a
+        # settings screen that does not exist — say plainly the approved
+        # contact must be set up by whoever installed the app.
+        return (
+            "Todavía no hay un destinatario aprobado para mensajes. "
+            "La persona que instaló la aplicación tiene que configurar el "
+            "contacto; no se puede hacer desde la pantalla todavía."
+        )
     await tctx.emit(
         UiCommandEvent(
             command=PanelOpen(
@@ -41,7 +48,10 @@ async def telegram_prepare_message(tctx: ToolContext, text: str) -> str:
 async def telegram_send_pending(tctx: ToolContext, text: str) -> str:
     chat_id = tctx.deps.config.telegram.chat_id
     if not chat_id:
-        return "No hay un destinatario aprobado configurado."
+        return (
+            "Todavía no hay un destinatario aprobado para mensajes; "
+            "la persona que instaló la aplicación tiene que configurarlo."
+        )
     # R38 point of no return: the instant telegram.send() is invoked the
     # message is handed to the provider and may be delivered even if STOP
     # arrives right after. STOP before this line cancels the execution;
