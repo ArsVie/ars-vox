@@ -311,3 +311,48 @@ The backlog is always the present state; it is not tied to a date.
    DEFERRED (content-selection quality; the picker offers the first
    result which may be unembeddable — needs a filter or a retry, next
    round candidate).
+
+## Backlog (reviewer round 5)
+
+1. (MAJOR) Al pedir "leeme el Don Quijote" con la música sonando, se abre en pantalla un panel de libro con título "Libro", pero el cuerpo del panel dice "No hay ningún libro abierto." mientras el asistente afirma en voz "Te abrí el Don Quijote donde lo dejaste". Se esperaba que el panel de lectura mostrara el libro abierto (título del libro y su texto); en cambio el panel queda en estado vacío y el texto solo aparece en la charla.
+
+2. (MAJOR) Al pedir "creá un documento y llamalo mis recetas" con la música sonando y el panel de libro ocupando el lateral, el asistente responde "Ya tenías un documento llamado 'mis recetas', así que te lo abrí. Está visible en el editor", pero NO aparece ningún editor de documento en pantalla: el panel lateral sigue mostrando el libro vacío y no existe ningún elemento de documento/editor en el DOM. Se esperaba que el editor apareciera visible con un área editable; en cambio la app afirma que el documento está visible cuando no hay nada en la pantalla.
+
+3. (MAJOR) Al pedir "agregá comprar pan a mis tareas" con la música sonando y el panel de libro ocupando el lateral, el asistente responde "Listo, agregué 'comprar pan' a tus tareas. Ya lo ves en el panel", pero NO aparece ninguna lista de tareas en pantalla: el lateral sigue mostrando el panel de libro vacío y "comprar pan" no se ve en ninguna parte (ni en el panel ni en la charla). Se esperaba que la tarea quedara visible en una lista; en cambio la app afirma que está en el panel cuando no hay ningún panel de tareas.
+
+4. (MAJOR) Al pedir "abrime las noticias" con la música sonando y el panel de libro ocupando el lateral, el asistente responde "Listo, te abrí Google Noticias en español", pero NO aparece ningún navegador ni sitio de noticias en pantalla: no existe ningún iframe ni panel de navegador (solo el iframe de música oculto de 1px en la barra) y el lateral sigue mostrando el panel de libro vacío. Se esperaba que el sitio de noticias quedara visible en pantalla para leerlo; en cambio la app afirma haberlo abierto y no hay nada.
+
+5. (MAJOR) Al pedir "creá un documento y llamalo mis recetas" después de cerrar el panel de libro (con el lateral libre), se abre en pantalla un panel con el título "mis recetas" en el encabezado, pero el cuerpo dice "No hay documento abierto. Pídeme que abra uno." y no hay NINGÚN área editable (sin contenteditable, sin textarea, sin input), mientras el asistente afirma "lo abrí en el editor". Se esperaba que el editor mostrara el documento con un área para escribir; en cambio el panel abre vacío en estado "sin documento" y la app vuelve a afirmar algo que no está en pantalla. Además se confirmó la causa raíz de los puntos 2, 3 y 4: cuando el lateral está ocupado por otro panel de contenido (el libro), abrir documento/tareas/noticias falla en silencio; al liberar el lateral el panel de documento sí aparece (pero vacío).
+
+## Backlog (reviewer round 5 — fixed 2026-08-14)
+
+1. (MAJOR) A book must open a reader panel WITH the book's text, not an
+   empty "No hay ningún libro abierto" shell. FIXED: book_reader now
+   renders DocumentPanel (the reading surface reads
+   content.document_editor) and library.open emits a document.load event
+   with the book's sections as chapters. Verified live: Quijote panel
+   shows "Markdown … don-quijote.txt" + Sección 1 text.
+2. (MAJOR) Opening a document while a non-media panel (book) occupies
+   the side slot must actually open the editor. FIXED: panel.open now
+   REPLACES the newest non-anchor occupant (conversation is never
+   displaced) when the template is full — last-open-wins for the single
+   side slot. Verified live: book open + "creá un documento" → editor
+   appears with "mis recetas".
+3. (MAJOR) Adding a task must show a visible tasks list with the task.
+   FIXED: tasks_add emits tasks.update (todos + reminders) so the
+   composed tasks panel has real content; the replace rule lets the
+   tasks panel take the side slot. Verified live: "agregá comprar pan"
+   → tasks panel with "Comprar pan" visible, agent's "Te dejé la lista
+   en el panel" is now true.
+4. (MAJOR) Opening the news while another panel occupies the side slot
+   must show a real browser panel. FIXED by the same replace rule
+   (browser composes in the freed slot) + rule 18 (navigate then open
+   the browser panel). The old behavior silently dropped the open.
+5. (MAJOR) A freshly created (empty) document must show the editor, not
+   "No hay documento abierto". FIXED: DocumentPanel hasContent is now
+   `doc !== undefined` — an open document is open even when empty; the
+   empty state shows only when nothing is loaded. Verified live: new
+   document panel renders the editable surface.
+6. (FIXUP) tasks.update emission initially crashed with KeyError
+   'title' (the reminders table column is `text`, not `title`) — the
+   helper reads r.get("text").
