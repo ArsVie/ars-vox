@@ -90,7 +90,21 @@ function renderStatusBar(state: VoiceState): string {
   return renderToStaticMarkup(
     <>
       <HomeAffordance />
-      <ComposerStatus />
+      {/* R8 (2026-08-14): STOP lives in the composer row — render the
+          conversation panel so the production bar is actually tested. */}
+      <SurfaceRoleProvider
+        value={
+          {
+            surfaceId: "conversation",
+            role: "primary",
+            requestedRole: "primary",
+            capabilities: CONVERSATION_ROLES,
+            degraded: false,
+          } satisfies SurfaceRoleInfo
+        }
+      >
+        <ConversationPanel panelId="conversation" />
+      </SurfaceRoleProvider>
     </>,
   );
 }

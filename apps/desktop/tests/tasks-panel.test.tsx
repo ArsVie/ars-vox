@@ -277,7 +277,7 @@ describe("TasksPanel card + chip markup", () => {
     expect(html).toContain('<span class="filter-chip-label">Pendiente</span>');
     // Reminders still listed.
     expect(html).toContain("Revisar correo");
-    expect(html).toContain("Cada día 9:00 · próxima 2026-08-08 09:00");
+    expect(html).toContain("Cada día 9:00 · próxima sábado 8 de ago, 9:00 a.m.");
   });
 
   it("support stays a compact urgent summary: no chips, next reminder only", () => {
@@ -287,7 +287,7 @@ describe("TasksPanel card + chip markup", () => {
     expect(html).not.toContain("Organizar notas");
     expect(html).not.toContain("filter-chip");
     expect(html).not.toContain("Recordatorios");
-    expect(html).toContain("Próximo · Revisar correo · 2026-08-08 09:00");
+    expect(html).toContain("Próximo · Revisar correo · sábado 8 de ago, 9:00 a.m.");
   });
 
   it("renders the empty state with the legacy classes and copy", () => {

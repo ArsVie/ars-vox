@@ -72,7 +72,7 @@ describe("TasksPanel role variants (UI-204)", () => {
     expect(html).toContain("status-chip--done");
     expect(html).toContain("Completada");
     expect(html).toContain("Revisar correo");
-    expect(html).toContain("Cada día 9:00 · próxima 2026-08-08 09:00");
+    expect(html).toContain("Cada día 9:00 · próxima sábado 8 de ago, 9:00 a.m.");
   });
 
   it("companion renders pending to-dos plus reminders, less chrome", () => {
@@ -96,7 +96,7 @@ describe("TasksPanel role variants (UI-204)", () => {
     expect(html).not.toContain("Organizar notas"); // normal priority filtered
     expect(html).not.toContain("Llamar a María"); // done filtered
     expect(html).not.toContain("Recordatorios");
-    expect(html).toContain("Próximo · Revisar correo · 2026-08-08 09:00");
+    expect(html).toContain("Próximo · Revisar correo · sábado 8 de ago, 9:00 a.m.");
   });
 
   it("support with no urgent items falls back to a minimal summary", () => {
@@ -114,7 +114,7 @@ describe("TasksPanel role variants (UI-204)", () => {
     expect(html).toContain("Sin tareas urgentes");
     expect(html).toContain("Organizar notas");
     expect(html).not.toContain("Llamar a María");
-    expect(html).toContain("Próximo · Revisar correo · 2026-08-08 09:00");
+    expect(html).toContain("Próximo · Revisar correo · sábado 8 de ago, 9:00 a.m.");
   });
 
   it("renders the RESOLVED role when the requested role was degraded (ladder output is authoritative)", () => {

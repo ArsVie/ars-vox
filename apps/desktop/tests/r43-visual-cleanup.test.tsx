@@ -183,26 +183,30 @@ describe("R43 Spanish accessibility labels in a Spanish UI", () => {
   });
 
   it("STOP keeps its Spanish accessible name in the production bar", () => {
-    const html = renderStatusBar();
+    // R8 (2026-08-14): STOP moved to the composer row (next to
+    // Micrófono/Enviar) — render the conversation panel, not the
+    // bare ComposerStatus, so the production bar is actually tested.
+    const html = renderPrimaryConversation();
     expect(html).toContain('aria-label="Detener"');
     expect(html).toContain("DETENER");
   });
-});
+})
 
 /* --------------------------------- (f) live region has no interactive */
 
 describe("R43 role=status live region contains no interactive controls", () => {
   it("the pill is the only live region and holds no controls", () => {
+    // R8 (2026-08-14): the pill lives in ComposerStatus (voice-state row
+    // ABOVE the composer); the composer row below it holds STOP/mic/send.
+    // Render ComposerStatus alone — its only interactive-free content is
+    // the pill region — and prove the region holds no controls.
     const html = renderStatusBar();
     const matches = html.match(/role="status"/g);
     expect(matches).toHaveLength(1);
     const statusIdx = html.indexOf('role="status"');
-    // Window ends at the STOP <button> tag itself (the pill region ends
-    // right before it), so any interactive element inside the window would
-    // be INSIDE the live region.
-    const stopIdx = html.indexOf('<button type="button" class="stop-button');
-    expect(stopIdx).toBeGreaterThan(-1);
-    const regionContent = html.slice(statusIdx, stopIdx);
+    // The pill is the LAST element of ComposerStatus: no interactive
+    // element may appear after (or inside) the live region.
+    const regionContent = html.slice(statusIdx);
     expect(regionContent).not.toContain("<button");
     expect(regionContent).not.toContain("<select");
     expect(regionContent).not.toContain("<input");

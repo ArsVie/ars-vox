@@ -323,7 +323,7 @@ export function TasksPanel({
                   <li key={rem.id} className="reminder-row">
                     <span className="reminder-title">{rem.title}</span>
                     <span className="reminder-cadence">
-                      {`${rem.cadence} · próxima ${rem.next_fire}`}
+                      {`${rem.cadence} · próxima ${humanizeDue(rem.next_fire)}`}
                     </span>
                   </li>
                 ))}

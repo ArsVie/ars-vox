@@ -246,7 +246,7 @@ describe("TasksPanel", () => {
     expect(html).toContain("task-due");
     expect(html).toContain("hoy");
     expect(html).toContain("Revisar correo");
-    expect(html).toContain("Cada día 9:00 · próxima 2026-08-08 09:00");
+    expect(html).toContain("Cada día 9:00 · próxima sábado 8 de ago, 9:00 a.m.");
     expect(html).not.toContain("No hay tareas");
   });
 
