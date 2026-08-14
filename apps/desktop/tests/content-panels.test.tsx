@@ -203,9 +203,11 @@ describe("BrowserPanel", () => {
     expect(html).toContain('aria-label="Recargar"');
     const back = html.match(/<button[^>]*aria-label="Atrás"[^>]*>/)?.[0] ?? "";
     expect(back).not.toContain("disabled");
-    // The WebContentsView IS the browser surface — no iframe, no src=.
-    expect(html).not.toContain("<iframe");
-    expect(html).not.toContain("src=");
+    // R6 (2026-08-14): without an Electron bridge the panel renders a
+    // REAL iframe so the page is visible (web harness); Electron layers
+    // the WebContentsView over the placeholder instead.
+    expect(html).toContain("browser-iframe-fallback");
+    expect(html).toContain('src="http://127.0.0.1:5173/demo-news.html"');
     // The header label is the PAGE title.
     expect(html).toContain("Demo News");
     expect(html).not.toContain("Pídeme que abra una página");

@@ -94,6 +94,17 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
     window.arsvox?.browserNavigate(target);
   };
 
+  // R6 (2026-08-14, reviewer round 6 finding 3): in the packaged Electron
+  // app the page lives in a MAIN-owned WebContentsView layered over the
+  // transparent .browser-viewport placeholder. In the web harness (vite /
+  // headless browser) there is no Electron main — the placeholder is a
+  // permanent hole and the agent's "te abrí las noticias" is a lie. When
+  // the bridge is absent, render a REAL IFRAME so the page is visible.
+  const hasElectronBridge =
+    typeof window !== "undefined" &&
+    typeof window.arsvox?.browserSetBounds === "function";
+  const renderIframeFallback = !hasElectronBridge && hasPage;
+
   const nav = (action: "browser.back" | "browser.forward" | "browser.refresh"): void => {
     dispatchCommand({ action });
     if (action === "browser.back") window.arsvox?.browserBack();
@@ -161,7 +172,15 @@ export function BrowserPanel({ meta }: { meta?: { title?: string } }) {
         </div>
       ) : null}
       <div className="browser-viewport" ref={viewportRef}>
-        {hasPage ? null : (
+        {renderIframeFallback ? (
+          <iframe
+            className="browser-iframe-fallback"
+            src={url}
+            title={title ?? "Página web"}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+            referrerPolicy="no-referrer"
+          />
+        ) : hasPage ? null : (
           <div className="content-panel-empty">
             <span className="content-panel-empty-icon">
               <GlobeIcon size={30} />

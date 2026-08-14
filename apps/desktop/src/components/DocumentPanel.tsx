@@ -1,5 +1,5 @@
 import { useStore } from "zustand";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { PanelId } from "../contracts";
 import type { PanelMeta } from "../store";
@@ -81,6 +81,24 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
   );
   const [mode, setMode] = useState<"read" | "edit">("read");
   const [draft, setDraft] = useState("");
+
+  // R6 (2026-08-14, reviewer round 6 finding 1): a freshly created
+  // document must open in EDIT mode — the assistant says "ya está en el
+  // editor" and the write area must actually be visible, not hidden
+  // behind an "Editar" click. Books and loaded content stay in read mode.
+  const docKey = doc ? `${doc.title}|${doc.path}|${doc.content?.length ?? 0}` : null;
+  useEffect(() => {
+    if (
+      doc &&
+      !isBinary &&
+      content.length === 0 &&
+      chapters.length === 0
+    ) {
+      setMode("edit");
+      setDraft("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docKey]);
 
   const { role } = useSurfaceRole();
 

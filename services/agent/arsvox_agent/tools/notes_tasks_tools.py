@@ -11,7 +11,9 @@ as the demoted preferences.set there (explicit preference-setting, no
 """
 
 from arsvox_agent.tools.context import ToolContext
-from arsvox_contracts.events import ReminderItem, TasksUpdateEvent, TodoItem
+from arsvox_contracts import PanelType
+from arsvox_contracts.commands import PanelOpen
+from arsvox_contracts.events import ReminderItem, TasksUpdateEvent, TodoItem, UiCommandEvent
 
 
 async def _emit_tasks_update(tctx: ToolContext) -> None:
@@ -60,6 +62,20 @@ async def notes_today(tctx: ToolContext) -> str:
 async def tasks_add(tctx: ToolContext, title: str, due_at: str | None = None) -> str:
     task_id = tctx.deps.tasks.add(title, due_at=due_at)
     tctx.deps.audit.log("tasks", "add", {"task_id": task_id, "title": title})
+    # R6 (2026-08-14, reviewer round 6 finding 2): the tasks panel must
+    # OPEN as part of adding a task — the model may claim "ya la tenés en
+    # el panel" without ever emitting panel.open (prompt rules are weakly
+    # binding; the panel is not). Every other surface-opening tool emits
+    # its own panel.open; tasks_add must too.
+    await tctx.emit(
+        UiCommandEvent(
+            command=PanelOpen(
+                panel_type=PanelType.TASKS,
+                title="Tareas",
+                content_reference=str(task_id),
+            )
+        )
+    )
     await _emit_tasks_update(tctx)
     return f"Tarea agregada: {title} (#{task_id})."
 

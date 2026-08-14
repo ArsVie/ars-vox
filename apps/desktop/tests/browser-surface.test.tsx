@@ -72,10 +72,12 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
     expect(html).toContain("browser-viewport");
     expect(html).toContain("browser-nav-btn");
     expect(html).toContain("Demo News");
-    // W2-VIEW: the WebContentsView IS the browser surface — no iframe,
-    // no src= attribute anywhere in the panel.
-    expect(html).not.toContain("<iframe");
-    expect(html).not.toContain("src=");
+    // R6 (2026-08-14, reviewer round 6 finding 3): without an Electron
+    // bridge (web harness / tests) the panel renders a REAL iframe so the
+    // page is actually visible — the Electron story layers the main-owned
+    // WebContentsView over the placeholder INSTEAD of the iframe.
+    expect(html).toContain("browser-iframe-fallback");
+    expect(html).toContain(`src="${DEMO_URL}"`);
   });
 
   it("companion: full chrome preserved but rendered with the subdued variant", () => {
@@ -87,7 +89,7 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
     expect(html).toContain("browser-viewport");
     expect(html).toContain("browser-nav-btn");
     expect(html).toContain("Demo News");
-    expect(html).not.toContain("<iframe");
+    expect(html).toContain("browser-iframe-fallback");
   });
 
   it("support: compact contextual representation — viewport only, no toolbar", () => {
@@ -98,7 +100,7 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
     expect(html).not.toContain("browser-address");
     expect(html).not.toContain("browser-nav-btn");
     expect(html).toContain("browser-viewport");
-    expect(html).not.toContain("<iframe");
+    expect(html).toContain("browser-iframe-fallback");
   });
 
   it("live nav controls: back/forward enabled exactly per the view's real state", () => {
@@ -158,7 +160,7 @@ describe("BrowserPanel adaptive roles (UI-201)", () => {
       const html = renderAs(role);
       expect(html).toContain("Demo News");
       expect(html).toContain("browser-viewport");
-      expect(html).not.toContain("<iframe");
+      expect(html).toContain("browser-iframe-fallback");
     }
     // The role still shapes the presentation.
     expect(renderAs("primary")).toContain("browser-address");
