@@ -473,3 +473,24 @@ recuerde?" after the user gave the hour in the request. FIXED: prompt
 rule 22 — never re-ask what the user already gave; create immediately
 and confirm. Verified live: "Te puse un recordatorio para mañana,
 sábado 15 de agosto, a las 9 de la mañana. No se repite."
+
+## Backlog (reviewer round 8)
+
+1. MINOR: La sección RECORDATORIOS dentro del panel de tareas debe
+mostrar la próxima cita en palabras claras ("mañana a las 9 de la
+mañana"), como ya se corrigió en el panel de recordatorios. En cambio
+mostró códigos crudos: "daily · próxima 2026-08-15T14:00:00+00:00" y
+"none · próxima 2026-08-15T15:00:00+00:00". Un abuelo no puede leer eso.
+
+2. MINOR: Al enviar "mostrame mis recordatorios", el mensaje del
+usuario nunca apareció en el chat (quedó vacío el historial entre el
+recordatorio y la respuesta), y el asistente respondió dos veces la
+misma lista. Se esperaba que el pedido del usuario se viera en la
+conversación y una sola respuesta. Causa probable: enviar mientras el
+asistente todavía está hablando (botón DETENER activo).
+
+3. MINOR: El panel de tareas acumuló 14 copias de "Comprar pan" (todas
+"Pendiente", 16 tareas en total). Se esperaba que pedir la misma tarea
+dos veces no duplique la entrada, o que al menos se distinga claramente;
+un abuelo que pide "agregá comprar pan" cada semana ve una lista llena
+de copias idénticas.
