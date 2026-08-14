@@ -26,8 +26,13 @@ are refused BEFORE any emission. Config gains browser.engine_enabled /
 browser.engine_headless (default true); the legacy Electron round-trip
 remains the fallback when the engine is disabled (or absent in unit
 tests). Live-verified with the real model: wikipedia navigation +
-real page text + honest blocked refusal. Packaging follow-up: Chromium
-provisioning for the packaged build (backlog).
+real page text + honest blocked refusal. MIRROR COMPLETION (2026-08-14):
+after the engine lands, the tool emits a SECOND frozen browser.navigate
+event with the REAL post-navigation state (loading=False, true
+url/title/can_go_back) so any renderer shows the landing — before, only
+the loading event went on the wire and the panel header stayed empty
+without the Electron IPC mirror (screenshots 43–44). Packaging
+follow-up: Chromium provisioning for the packaged build (backlog).
 
 ## GATE-5 Wave 0 (MERGED + PACKAGED-VERIFIED 2026-08-09; wire and store.ts FROZEN)
 

@@ -1,9 +1,40 @@
 # UI Screenshots — current state
 
-Current UI screenshots, captured 2026-08-07/09 from the live app
+Current UI screenshots, captured 2026-08-07/14 from the live app
 (vite 5173 + agent on 8765, Edge CDP / built-in browser tool). Standing rule
 (owner, 2026-08-08): refresh this folder after EVERY redesign wave — new
 wave shots get the next free numbers, and the wave list below stays current.
+
+## Browser-use engine wave (2026-08-14, dev stack, real model)
+
+The agent's browser authority is now the IN-PROCESS engine (browser_use
+0.13.7, text-first, no screenshots, no vision) — browser.navigate and
+browser.dom_action execute locally and answer with REAL url/title/page
+text; the desktop never gates the turn ("El escritorio no respondió" is
+structurally gone). Captured from the dev vite tab over CDP with the real
+model (deepseek-v4-flash, mock off). The browser panel is the chrome +
+placeholder in dev (the WebContentsView page render is Electron-only);
+the PROOF is the panel header carrying the engine's REAL landing title
+and the conversation carrying REAL page text.
+
+* [Engine navigated + read](43-ui-browseruse-navigate-read.png) —
+  "Navegá a la página de Wikipedia sobre la pasta y contame qué dice":
+  panel header shows the REAL landing title ("PASTA - WIKIPEDIA, LA
+  ENCICLOPEDIA LIBRE"); assistant quotes REAL page text (sémola, trigo
+  candeal, fideos de mijo de hace 4.000 años en China). Wire: navigate
+  (loading) → navigate (landed, real title) → dom_action query → reply.
+* [Allowlist blocked honestly](44-ui-browseruse-blocked-refusal.png) —
+  "Abrí la página example.com": no navigation, no fake success — the
+  assistant answers "No puedo abrir example.com: esa dirección no está
+  en la lista de sitios permitidos del navegador…", zero error banner,
+  browser keeps the last real page. Policy gate ran BEFORE any emission
+  (wire: zero browser.navigate events for the blocked URL).
+
+Note (2026-08-14, fix included in this wave): the engine path now emits
+the REAL landing state as a second frozen browser.navigate event
+(loading=False, true url/title) after navigation completes — previously
+only the loading event went on the wire, so the panel header stayed
+empty in any renderer without the Electron IPC mirror.
 
 ## GATE-5 Wave 0 (merged 2026-08-09, packaged build)
 
