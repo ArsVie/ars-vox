@@ -1523,8 +1523,9 @@ select:focus-visible,
      the primary activity (the slot/density chrome already scopes it).
    - persistent: compact shell-level playback bar (persistent media host):
      title + play/pause + progress, minimal footprint, no video stage/art. */
-.media-player--compact {
+.media-player.media-player--compact {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: var(--spacing-md);
   flex: none;
@@ -1547,6 +1548,7 @@ select:focus-visible,
 .media-player--compact .media-player-progress {
   flex: 0 1 220px;
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: var(--spacing-sm);
 }

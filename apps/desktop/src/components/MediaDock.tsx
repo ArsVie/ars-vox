@@ -405,6 +405,10 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
   // Title + play/pause + progress, nothing that competes with the primary
   // activity — no video stage, no art, no header, no source badge.
   if (role === "persistent") {
+    // HONEST-DOCK (2026-08-14, reviewer round 2): a title with nothing
+    // playable (e.g. the agent opened the media panel but never played)
+    // must NOT render a dead play button — show the title + honest
+    // waiting state instead, so a tap never silently does nothing.
     return (
       <section
         className="media-dock media-dock--persistent"
@@ -414,6 +418,13 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
         {!hasTrack ? (
           <div className="media-dock-body">
             <span className="media-dock-empty">Reproducción en espera.</span>
+          </div>
+        ) : !hasPlayableContent ? (
+          <div className="media-player media-player--compact">
+            <span className="media-player-bar-title" title={m.title}>
+              {m.title || (m.source === "youtube" ? "YouTube" : "Local")}
+            </span>
+            <span className="media-dock-empty">En espera — nada para reproducir.</span>
           </div>
         ) : (
           <div className="media-player media-player--compact">

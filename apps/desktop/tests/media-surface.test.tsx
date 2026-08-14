@@ -199,6 +199,34 @@ describe("UI-205 MediaDock adaptive variants", () => {
     expect(html).not.toContain("media-player--compact");
   });
 
+  it("persistent bar must NOT show a dead play button for a title with nothing playable", () => {
+    // HONEST-DOCK (reviewer round 2): the agent opened the media panel
+    // and gave it a title but never played anything — a play button here
+    // would silently do nothing. The bar must show the title + an honest
+    // waiting state, with no dead control.
+    appStore.getState().applyEvent({
+      type: "media.state",
+      state: "stopped",
+      source: "youtube",
+      kind: "video",
+      title: "MUSICA ZEN ULTRA RELAJANTE",
+      video_id: null,
+      url: null,
+      position_s: 0,
+      duration_s: 0,
+      volume: 1,
+      created_at: ts(),
+    });
+
+    const html = renderWithRole("persistent");
+    expect(html).toContain("media-player--compact");
+    expect(html).toContain("MUSICA ZEN ULTRA RELAJANTE");
+    expect(html).toContain("nada para reproducir");
+    expect(html).not.toContain('aria-label="Reproducir"');
+    expect(html).not.toContain('aria-label="Pausar"');
+    expect(html).not.toContain("media-play-btn");
+  });
+
   it("renders the RESOLVED role when the requested role was degraded (ladder output is authoritative)", () => {
     seedPlayingMedia();
     // A degraded request (requestedRole != role) must render the role the
