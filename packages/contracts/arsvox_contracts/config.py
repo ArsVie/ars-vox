@@ -93,7 +93,7 @@ class ModelSection(BaseModel):
     base_url: str = "https://opencode.ai/zen/go/v1/"
     api_key_env: str = "OPENCODE_GO_API_KEY"
     name: str = "deepseek-v4-flash"
-    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    temperature: float = Field(default=1.0, ge=0.0, le=2.0)
     timeout_s: int = Field(default=90, ge=5, le=600)
     max_steps: int = Field(default=8, ge=1, le=50)
 

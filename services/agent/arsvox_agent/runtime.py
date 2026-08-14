@@ -163,6 +163,15 @@ class AgentRuntime:
         if decision is not None and self.deps_base.confirmations.current_pending() is not None:
             await self._handle_confirmation_utterance(decision, text)
             return
+        # R9 (2026-08-14, reviewer round 9 finding 3): a reminder DRAFT
+        # (registered by reminders.create with empty text) is completed
+        # by the NEXT user message — deterministically, no model in the
+        # loop. The old man's "que llame a mi nieta" answer must become
+        # the reminder text, never a brand-new Telegram request.
+        draft = self._pending_reminder_draft()
+        if draft is not None:
+            await self._complete_reminder_draft(draft, text)
+            return
         if self._busy or (self._active_task and not self._active_task.done()):
             # R8 (2026-08-14, reviewer round 8 finding 2): echo the user's
             # message BEFORE the busy error. The renderer renders chat
@@ -221,6 +230,47 @@ class AgentRuntime:
         self._busy = True
         text = f"Recordatorio activado: {reminder['text']}"
         self._active_task = asyncio.create_task(self._run_turn(text))
+
+    # ------------------------------------------------------------------ #
+    def _pending_reminder_draft(self) -> dict | None:
+        """The oldest pending reminders.create_draft action, or None."""
+        for p in self.deps_base.pending.list_pending():
+            if p["tool"] == "reminders.create_draft":
+                return p
+        return None
+
+    async def _complete_reminder_draft(self, draft: dict, text: str) -> None:
+        """R9 (2026-08-14, reviewer round 9 finding 3): deterministically
+        complete a reminder draft with the user's follow-up message —
+        echo it, create the reminder from the FROZEN stored args, refresh
+        the panel, confirm in plain words, resolve the draft."""
+        args = draft.get("args") or {}
+        due_at = args.get("due_at") or ""
+        repeat_rule = args.get("repeat_rule") or "none"
+        # Echo first — the reply must never appear without the question.
+        await self.bus.publish(
+            UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
+        )
+        reminder_id = self.deps_base.reminders.create(text, due_at, repeat_rule)
+        self.deps_base.pending.resolve(draft["id"], "executed")
+        if self.deps_base.audit is not None:
+            self.deps_base.audit.log(
+                "reminders",
+                "draft_completed",
+                {"reminder_id": reminder_id, "text": text[:120]},
+            )
+        # Refresh the tasks panel content (same payload the tools emit).
+        from arsvox_agent.tools.notes_tasks_tools import _tasks_update_payload
+        from arsvox_agent.tools.reminder_tools import _due_plain_words
+        from arsvox_contracts.events import TasksUpdateEvent
+
+        todos, reminders = _tasks_update_payload(self.deps_base)
+        await self.bus.publish(TasksUpdateEvent(todos=todos, reminders=reminders))
+        due_plain = _due_plain_words(due_at, self.deps_base.reminders.tz)
+        suffix = f" y se repetirá {repeat_rule}" if repeat_rule != "none" else ""
+        reply = f"Listo. Te puse el recordatorio para {due_plain}: {text}.{suffix}"
+        await self.bus.publish(AgentMessageEvent(text=reply, delta=False))
+        self.settle_to_terminal()
 
     # ------------------------------------------------------------------ #
     async def _handle_confirmation_utterance(self, decision: str, text: str) -> None:

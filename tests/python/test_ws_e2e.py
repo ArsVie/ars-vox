@@ -242,3 +242,12 @@ def test_list_reminders_intent(script_client):
         events = ws_collect(client=c, ws=ws, expected_break=lambda e: e["type"] == "agent_message")
         texts = [e["text"] for e in events if e["type"] == "agent_message"]
         assert any("No tienes recordatorios" in t for t in texts)
+        # R9 (2026-08-14, reviewer round 9 finding 2): the local-intent
+        # path must echo the user's message BEFORE answering — a reply
+        # with no visible question makes the user think their words
+        # vanished.
+        echoes = [e for e in events if e["type"] == "user_message"]
+        assert len(echoes) == 1 and echoes[0]["text"] == "¿qué alarmas tengo?"
+        assert events.index(echoes[0]) < next(
+            i for i, e in enumerate(events) if e["type"] == "agent_message"
+        )

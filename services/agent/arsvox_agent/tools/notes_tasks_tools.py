@@ -16,14 +16,14 @@ from arsvox_contracts.commands import PanelOpen
 from arsvox_contracts.events import ReminderItem, TasksUpdateEvent, TodoItem, UiCommandEvent
 
 
-async def _emit_tasks_update(tctx: ToolContext) -> None:
-    """Emit the tasks.update wire event so a composed tasks panel has
-    real content (R5 2026-08-14, reviewer round 5 finding 3: tasks.add
-    never emitted content — the panel, when it finally composed, was
-    empty and the claim "ya lo ves en el panel" was a lie)."""
+def _tasks_update_payload(deps) -> tuple[list[TodoItem], list[ReminderItem]]:
+    """Shared payload builder: tasks.update content from the stores.
+    Used by the tool (via tctx) and by the runtime's deterministic
+    reminder-draft completion (R9 2026-08-14) so both paths refresh
+    the panel identically."""
     todos = [
         TodoItem(id=str(t["id"]), title=t["title"], done=t["status"] == "done")
-        for t in tctx.deps.tasks.list()
+        for t in deps.tasks.list()
     ]
     reminders = [
         ReminderItem(
@@ -32,8 +32,17 @@ async def _emit_tasks_update(tctx: ToolContext) -> None:
             cadence=r.get("repeat_rule", "none"),
             next_fire=r.get("due_at") or "",
         )
-        for r in tctx.deps.reminders.list_active()
+        for r in deps.reminders.list_active()
     ]
+    return todos, reminders
+
+
+async def _emit_tasks_update(tctx: ToolContext) -> None:
+    """Emit the tasks.update wire event so a composed tasks panel has
+    real content (R5 2026-08-14, reviewer round 5 finding 3: tasks.add
+    never emitted content — the panel, when it finally composed, was
+    empty and the claim "ya lo ves en el panel" was a lie)."""
+    todos, reminders = _tasks_update_payload(tctx.deps)
     await tctx.emit(TasksUpdateEvent(todos=todos, reminders=reminders))
 
 

@@ -6,6 +6,8 @@ GATE-2.5 H2: due_at is normalized to a UTC instant. Naive input is treated
 as LOCAL wall time (the store's configured/system zone), never UTC.
 """
 
+from datetime import datetime, timedelta, timezone
+
 from arsvox_agent.tools.context import ToolContext
 from arsvox_memory.repos.reminders import normalize_due_utc
 
@@ -79,6 +81,26 @@ async def reminders_create(
     due = _normalize_due(due_at, tctx.deps.reminders.tz)
     if due is None:
         return f"No entendí la fecha '{due_at}'. Usa formato ISO (2026-08-06T08:00:00)."
+    if not text.strip():
+        # R9 (2026-08-14, reviewer round 9 finding 3): the assistant used
+        # to ask "¿Qué te recuerdo?" in plain chat, and the user's answer
+        # was treated as a NEW request (often wildly off — a reminder text
+        # became a Telegram call). Deterministic cure: register a PENDING
+        # DRAFT so the NEXT user message completes this reminder in the
+        # runtime (no model in the loop).
+        pending_id = tctx.deps.pending.create(
+            run_id=tctx.run_id,
+            tool="reminders.create_draft",
+            args={"due_at": due, "repeat_rule": repeat_rule},
+            title="Recordatorio (falta el texto)",
+            detail=_due_plain_words(due, tctx.deps.reminders.tz),
+            expires_at=(datetime.now(timezone.utc) + timedelta(minutes=60)).isoformat(timespec="seconds"),
+        )
+        tctx.deps.audit.log("reminders", "draft_registered", {"pending_id": pending_id, "due_at": due})
+        return (
+            f"¿Qué te recuerdo {_due_plain_words(due, tctx.deps.reminders.tz)}? "
+            "Decime el texto y lo agendo."
+        )
     reminder_id = tctx.deps.reminders.create(text, due, repeat_rule)
     tctx.deps.audit.log(
         "reminders", "create", {"reminder_id": reminder_id, "due_at": due, "repeat": repeat_rule}
@@ -115,7 +137,9 @@ SPECS = [
     ToolSpec(
         "reminders.create",
         "Schedule a reminder. due_at must be ISO format (e.g. 2026-08-06T08:00:00)."
-        " repeat_rule: none, daily or weekly.",
+        " repeat_rule: none, daily or weekly. If the user gave the TIME but"
+        " NOT the text, call this with text='' (empty) — it registers a"
+        " draft and the user's next message completes it automatically.",
         reminders_create,
         PolicyKind.REVERSIBLE,
         effect="emission",

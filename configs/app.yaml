@@ -34,7 +34,7 @@ agent:
     base_url: https://opencode.ai/zen/go/v1/
     api_key_env: OPENCODE_GO_API_KEY   # env var holding the API key
     name: deepseek-v4-flash            # any opencode-go model id works
-    temperature: 0.2
+    temperature: 1.0                   # Ars: 1 (provider default), not 0.2
     timeout_s: 90
     max_steps: 16       # hard cap on tool steps per turn
   system_prompt_file: null   # optional path to a custom system prompt (markdown)

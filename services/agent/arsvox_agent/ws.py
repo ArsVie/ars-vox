@@ -9,6 +9,7 @@ before the LLM, so scheduling controls never depend on the model.
 
 import asyncio
 import logging
+import uuid
 from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -19,6 +20,7 @@ from arsvox_contracts import (
     ConfigUpdateEvent,
     PongEvent,
     StateUpdateEvent,
+    UserMessageEvent,
     VoiceState,
     parse_client_message,
 )
@@ -150,7 +152,7 @@ async def _handle_client_message(
     # user_text
     intent = match_intent(message.text)
     if intent is not None:
-        await _handle_local_intent(ws, intent.kind, runtime, scheduler)
+        await _handle_local_intent(ws, intent.kind, runtime, scheduler, message.text)
         return
     if runtime.pipeline is not None:
         await runtime.pipeline.inject_text(message.text)
@@ -159,7 +161,7 @@ async def _handle_client_message(
 
 
 async def _handle_local_intent(
-    ws: WebSocket, kind: str, runtime: AgentRuntime, scheduler: ReminderScheduler
+    ws: WebSocket, kind: str, runtime: AgentRuntime, scheduler: ReminderScheduler, text: str
 ) -> None:
     if kind == "snooze":
         seconds = runtime.config.reminders.snooze_seconds
@@ -167,8 +169,19 @@ async def _handle_local_intent(
     elif kind == "dismiss":
         await scheduler.dismiss_top()
     elif kind == "list_reminders":
-        await ws.send_text(
-            AgentMessageEvent(text=scheduler.list_active_text(), delta=False).model_dump_json()
+        # R9 (2026-08-14, reviewer round 9 finding 2): local intents
+        # bypass handle_user_text, so the user's message was NEVER echoed
+        # — the chat jumped from the last confirmation to the reply and
+        # the old man thought his words vanished. Echo FIRST (same as a
+        # normal turn), then answer — BOTH through the bus so the per-
+        # connection queue keeps FIFO order (a direct ws.send_text would
+        # race ahead of the queued echo and the reply would appear before
+        # the question).
+        await runtime.deps_base.bus.publish(
+            UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
+        )
+        await runtime.deps_base.bus.publish(
+            AgentMessageEvent(text=scheduler.list_active_text(), delta=False)
         )
     elif kind == "stop":
         await runtime.cancel()
