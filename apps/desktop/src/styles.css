@@ -1592,6 +1592,17 @@ select:focus-visible,
   max-width: 100%;
 }
 
+/* ROUND-4 (2026-08-14): the dock SECTION is a flex child of
+   .app-persistent and defaults to min-width:auto — it refused to shrink
+   below the bar's content (716px at a 650px window, play button off-
+   screen, reviewer round 4 finding 6). min-width:0 lets the compact bar's
+   own max-width:100% + ellipsis do the shrinking. */
+.media-dock--persistent {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 /* --------------------------------------------- generic content panel */
 .content-panel-body {
   flex: 1;

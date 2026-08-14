@@ -159,6 +159,46 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
     ).not.toThrow();
   });
 
+  it("manual source: panel.open when the template is full DEMOTES a persistent-capable surface (R4 regression)", () => {
+    // Reviewer round 4 (2026-08-14): media already in side + a second
+    // panel.open used to step to triple, whose rail cannot fit short
+    // viewports (124.8px < 160px at 780px) — the open was silently
+    // dropped and the app claimed "listo, lo abrí" with nothing on
+    // screen. Media is persistent-capable (the shell hosts the compact
+    // dock), so the honest move is to demote media OUT of the
+    // composition and give the newcomer its slot.
+    const store = createAppStore(() => {});
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.open", panel_type: "media", title: "Música" },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "panel.open",
+        panel_type: "document_editor",
+        title: "mis recetas",
+      },
+      created_at: ts(),
+    });
+    const spec = store.getState().adaptive.spec!;
+    const ids = spec.assignments.map((a) => a.surfaceId);
+    expect(ids).toContain("document_editor");
+    expect(ids).not.toContain("media");
+    expect(
+      spec.assignments.find((a) => a.surfaceId === "document_editor")?.slot,
+    ).toBe("side");
+    // And the resulting sidecar must render at 780×437.
+    expect(() =>
+      computeAdaptiveGeometry(
+        spec,
+        { width: 780, height: 437 },
+        surfaceRegistry.registeredIds(),
+      ),
+    ).not.toThrow();
+  });
+
   it("spoken source: handleSpokenText applies through the choke", () => {
     const store = createAppStore(() => {});
     layoutApply(store);

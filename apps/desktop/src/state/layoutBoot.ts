@@ -29,11 +29,18 @@ function slotRole(slot: string): "primary" | "companion" | "support" {
 /**
  * R19 (GATE-3.5): place a surface into a composition deterministically —
  * the first FREE slot of the current template (main→primary, side→
- * companion, rail→support); when the template is full, step up through
- * sidecar BEFORE triple. (Reviewer round 3, 2026-08-14: jumping straight
- * from focus to triple silently killed panel.open at short viewports —
- * triple's rail needs ≥160px, e.g. 124.8px at 780px wide, so the geometry
- * guard rejected the whole composition and the panel never appeared.)
+ * companion, rail→support); when the template is full, DEMOTE a
+ * persistent-capable occupant (media → shell dock) before stepping up.
+ * (Reviewer round 3, 2026-08-14: jumping straight from focus to triple
+ * silently killed panel.open at short viewports — triple's rail needs
+ * ≥160px, e.g. 124.8px at 780px wide, so the geometry guard rejected the
+ * whole composition and the panel never appeared. Reviewer round 4: the
+ * same drop happened whenever media already occupied the side slot —
+ * stepping to triple failed again. Media is persistent-capable, so when
+ * the template is full the honest move is to demote media out of the
+ * composition (the shell hosts it in the compact dock) and give the new
+ * surface the freed slot — music keeps playing in the bar while the new
+ * panel is visible.)
  * Mirrors the legacy engine's "fill empty slots" rule for the manual-open
  * source.
  */
@@ -57,6 +64,23 @@ export function addSurfaceToSpec(
           { surfaceId, role: slotRole(free), slot: free },
         ],
       };
+    }
+    // Template full: demote a persistent-capable occupant (media) out of
+    // the composition — the shell hosts it in the compact dock (App.tsx:
+    // mediaActive && !mediaInLayout) — and place the newcomer in its slot.
+    if (template === spec.template) {
+      const demotable = spec.assignments.find(
+        (a) => a.slot !== "main" && surfaceRegistry.isPersistentCapable(a.surfaceId),
+      );
+      if (demotable) {
+        return {
+          ...spec,
+          assignments: [
+            ...spec.assignments.filter((a) => a.surfaceId !== demotable.surfaceId),
+            { surfaceId, role: slotRole(demotable.slot), slot: demotable.slot },
+          ],
+        };
+      }
     }
   }
   return spec;

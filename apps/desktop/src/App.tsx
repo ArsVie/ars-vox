@@ -9,8 +9,9 @@ import { PersistentRegions, type PersistentSurface } from "./components/Persiste
 import { FloatingStatus, HomeAffordance } from "./components/StatusBar";
 import { TtsPlayer } from "./components/TtsPlayer";
 import { AdaptiveStage } from "./layout/AdaptiveStage";
-import { computeAdaptiveGeometry } from "./layout/adaptiveEngine";
+import { computeAdaptiveGeometry, type AdaptiveGeometry } from "./layout/adaptiveEngine";
 import { surfaceRegistry } from "./roles/registry";
+import type { ResolvedAssignment } from "./roles/fallback";
 import { appStore } from "./store";
 
 // GATE-2 (Wave 2): the five product surfaces (browser/conversation/document/
@@ -75,6 +76,67 @@ export default function App() {
     return () => observer.disconnect();
   }, [setViewport]);
 
+  const resolvedSpec = useMemo(
+    () => resolvedSpecFrom(adaptiveSpec, adaptiveAssignments),
+    [adaptiveSpec, adaptiveAssignments],
+  );
+
+  // GATE-1 (2026-08-09): final net under the choke guard — a geometry bug
+  // must never white-screen the app. With applyAdaptiveSpec rejecting
+  // unrenderable specs this branch is unreachable; it renders no stage
+  // instead of crashing React (the shell chrome stays up).
+  // R4 (2026-08-14, reviewer round 4): a NARROW window can make the
+  // committed spec unrenderable (e.g. sidecar side = 179px < 180px floor
+  // at 640px wide). The old fallback (omit the stage) removed chat, input,
+  // mic and player from the DOM entirely — the whole app vanished. Instead,
+  // degrade to a focus composition (conversation only) so the app stays
+  // usable at any width; the media bar still hosts playback persistently.
+  const { geometry, degradedToFocus } = useMemo(() => {
+    const spec = resolvedSpec ?? adaptiveSpec;
+    if (!spec) return { geometry: null, degradedToFocus: false };
+    const tryCompute = (s: LayoutSpec): AdaptiveGeometry | null => {
+      try {
+        return computeAdaptiveGeometry(s, viewport, surfaceRegistry.registeredIds());
+      } catch (error) {
+        console.warn(
+          "[adaptive] geometry failed — degrading:",
+          (error as Error).message,
+        );
+        return null;
+      }
+    };
+    const direct = tryCompute(spec);
+    if (direct) return { geometry: direct, degradedToFocus: false };
+    // Degrade: focus = conversation alone in main (always fits while the
+    // stage is ≥360×300). Registry-gated like the boot default.
+    if (surfaceRegistry.has("conversation")) {
+      const focusSpec: LayoutSpec = {
+        template: "focus",
+        assignments: [
+          { surfaceId: "conversation", role: "primary", slot: "main" },
+        ],
+      };
+      return { geometry: tryCompute(focusSpec), degradedToFocus: true };
+    }
+    return { geometry: null, degradedToFocus: false };
+  }, [resolvedSpec, adaptiveSpec, viewport]);
+
+  // R4: when the committed spec cannot fit the viewport and the geometry
+  // degraded to focus, the STAGE assignments must match the degraded
+  // geometry (conversation only) — otherwise mediaInLayout stays true,
+  // the persistent dock is suppressed, and music vanishes at narrow
+  // widths. The focus fallback renders conversation and lets media live
+  // in the shell dock.
+  const effectiveAssignments = useMemo(
+    () =>
+      degradedToFocus
+        ? ([
+            { surfaceId: "conversation", role: "primary", slot: "main" },
+          ] as ResolvedAssignment[])
+        : adaptiveAssignments,
+    [degradedToFocus, adaptiveAssignments],
+  );
+
   // H7: conditional persistent media/notifications. Persistent surfaces are
   // shell-owned infra, NOT always-visible chrome: the media bar renders only
   // while a track is active AND media is not already occupying a template
@@ -85,11 +147,11 @@ export default function App() {
     media &&
     (media.title !== "" || media.videoId !== null || media.url !== null)
   );
-  const mediaInLayout = adaptiveAssignments.some((a) => a.surfaceId === "media");
+  const mediaInLayout = effectiveAssignments.some((a) => a.surfaceId === "media");
   // UI-WAVE: the status bar is embedded above the composer INSIDE the
   // conversation panel; the floating fallback renders only while the
   // conversation surface is not part of the composition.
-  const conversationInLayout = adaptiveAssignments.some(
+  const conversationInLayout = effectiveAssignments.some(
     (a) => a.surfaceId === "conversation",
   );
   // GATE-3.5 (A6/R34): the notifications region shows while there is
@@ -99,33 +161,6 @@ export default function App() {
     appStore,
     (s) => s.notifications.length > 0,
   );
-
-  const resolvedSpec = useMemo(
-    () => resolvedSpecFrom(adaptiveSpec, adaptiveAssignments),
-    [adaptiveSpec, adaptiveAssignments],
-  );
-
-  // GATE-1 (2026-08-09): final net under the choke guard — a geometry bug
-  // must never white-screen the app. With applyAdaptiveSpec rejecting
-  // unrenderable specs this branch is unreachable; it renders no stage
-  // instead of crashing React (the shell chrome stays up).
-  const geometry = useMemo(() => {
-    const spec = resolvedSpec ?? adaptiveSpec;
-    if (!spec) return null;
-    try {
-      return computeAdaptiveGeometry(
-        spec,
-        viewport,
-        surfaceRegistry.registeredIds(),
-      );
-    } catch (error) {
-      console.warn(
-        "[adaptive] geometry failed — stage omitted:",
-        (error as Error).message,
-      );
-      return null;
-    }
-  }, [resolvedSpec, adaptiveSpec, viewport]);
 
   const persistentSurfaces: PersistentSurface[] = adaptiveSpec
     ? [
@@ -149,7 +184,7 @@ export default function App() {
       {geometry ? (
         <AdaptiveStage
           geometry={geometry}
-          assignments={adaptiveAssignments}
+          assignments={effectiveAssignments}
         />
       ) : null}
       <PersistentRegions surfaces={persistentSurfaces} />
