@@ -237,3 +237,43 @@ The backlog is always the present state; it is not tied to a date.
   offers options and the user must be able to answer with a follow-up
   turn. Verify this path in the packaged app: offer -> user picks via a
   NEW message -> the agent acts on the pick.
+
+## Backlog (reviewer round 3 — fixed 2026-08-14)
+
+1. (MAJOR) A video or music request must leave a real, usable player on
+   screen — the dock claiming "Pausar" with no player element is a lie.
+   FIXED: panel.open now steps focus→sidecar before triple (triple needs
+   a 160px rail; at 780x437 it silently rejected every open), so media
+   composes into a visible companion player with a mounted iframe. The
+   persistent compact bar also mounts its own muted 1px player element so
+   it can actually sound when media is only in the dock. Verified live at
+   780x437: media side slot + iframe present + "Pausar" toggles.
+2. (MAJOR) Reading a book must show a visible reader panel. FIXED:
+   book_reader was in the wire vocabulary but NOT a registered surface —
+   panel.open book_reader silently no-oped. Registered book_reader ->
+   ContentPanel; library.open now composes a titled reader panel.
+3. (MAJOR) "Te abrí Google Noticias" must not be said unless a browser
+   panel is actually visible. FIXED (rule 18): after browser.navigate,
+   open the browser panel; never claim a page you did not put on screen.
+4. (MAJOR) A task must be visible after being added. FIXED (rule 20):
+   after tasks.add/list, open the tasks panel; never claim a task list
+   that is not on screen.
+5. (MAJOR) Reminders listed in the chat must say when in plain words,
+   never raw date codes. FIXED: reminders_list AND the scheduler context
+   injection now format due times in local plain words (hoy/mañana +
+   hora); verified live: "hoy a las 8 de la mañana" style replies.
+6. (MAJOR) Document create must show the editor. FIXED by the sidecar
+   step (same silent-drop root cause); verified live at 780x437: editor
+   composes into the side slot with a contenteditable.
+7. (MINOR) At 480px wide the media dock overflows the window. FIXED:
+   compact bar player element is absolutely positioned and clipped; the
+   bar itself stays 100% of the persistent region.
+
+1. MAJOR: Al pedir "poneme un video de música para dormir" y elegir la primera opción, la aplicación responde dejando el título del video en el dock de medios con el botón en estado "Pausar" (como si estuviera reproduciéndose), pero en pantalla NO hay ningún video ni reproductor visible: no existe ningún elemento de video/audio/iframe en la página, la barra de progreso está vacía y al tocar el título del dock no se abre ningún reproductor. Se esperaba que al elegir un video se abriera un reproductor real y visible con el video sonando; en cambio la app da a entender que ya está reproduciendo algo que no se ve ni se oye en ninguna parte.
+2. MAJOR: Al pedir "poneme musica relajada" y elegir la primera opción, la app dice "Listo, te puse la primera: Música zen ultra relajante de Musicoterapia" y el dock de medios muestra el título con botón "Pausar", pero tampoco existe ningún elemento de audio ni reproductor en la página: no suena nada, la barra de progreso está vacía y no hay forma de ver ni controlar la música. Se esperaba que la música se escuchara o que hubiera un panel de reproducción utilizable; en cambio la app afirma que puso la música cuando no hay nada reproduciéndose.
+3. MINOR: Al pedir "leeme el Don Quijote", la app dice "Listo, abrí el Don Quijote de la Mancha en el lector" y muestra las primeras líneas en la charla, pero no aparece ningún lector ni panel de lectura en pantalla; además, al pedirle que siga leyendo responde "No pude seguir: el lector me dice que el libro está vacío en este punto". Se esperaba un lector visible donde seguir leyendo el libro; en cambio solo se ven unas líneas en la charla y la lectura se corta porque el libro está vacío.
+4. MAJOR: Al pedir "buscame las noticias de hoy", la app responde "Listo, te abrí Google Noticias con las noticias de hoy" y enumera titulares en la charla, pero Google Noticias NO está abierto en la pantalla: no hay ningún navegador, iframe ni panel de noticias visible. Se esperaba que el sitio de noticias se abriera en pantalla para leerlo; en cambio la app afirma haberlo abierto cuando solo mostró un resumen en la charla.
+5. MAJOR: Al pedir "creá un documento" y ponerle nombre "mis recetas", la app responde "Listo, abrí 'mis recetas' en el editor", pero NO aparece ningún editor ni panel de documento en la pantalla: solo se ven la conversación y el reproductor. Se esperaba que el editor se abriera visible para escribir; en cambio la app afirma haberlo abierto cuando no hay nada donde escribir en la pantalla.
+6. MAJOR: Al pedir "agregá comprar pan a mis tareas", la app responde "Listo, agregué 'comprar pan' a tus tareas", pero no aparece ninguna lista de tareas en la pantalla: no hay forma de ver la tarea agregada ni de marcarla como hecha. Se esperaba que la tarea quedara visible en una lista; en cambio la app afirma haberla agregado y la tarea no se ve por ninguna parte.
+7. MAJOR: Al pedir "mostrame mis recordatorios", la app lista los recordatorios de forma INCONSISTENTE: unas veces los muestra con códigos crudos de fecha y hora ("#2 2026-08-14T14:00:00+00:00 — Tomar las pastillas (se repite daily); #4 2026-08-15T15:00:00+00:00 — Llamar al médico") que un usuario común no entiende, y otras veces los dice en palabras claras ("Llamar al médico — mañana a las 9 de la mañana"); además suele anunciar "Te los dejo en el panel" cuando no aparece ningún panel con la lista, y no hay ninguna lista visible con botones para cancelar o modificar (la cancelación solo funciona si uno se acuerda de pedirla hablando). Se esperaba que los recordatorios se mostraran siempre en lenguaje claro y visibles en una lista con controles.
+8. MINOR: Con la ventana angosta (480px de ancho), el dock de medios mide 862px y sus controles de reproducir/pausar quedan fuera de la pantalla (a la derecha, invisible e inalcanzables); además el campo de escritura queda reducido a unos 110px. Se esperaba que la ventana se pudiera achicar y todo siguiera visible y usable; en cambio al achicarla los controles del reproductor desaparecen de la vista y apenas queda espacio para escribir.
