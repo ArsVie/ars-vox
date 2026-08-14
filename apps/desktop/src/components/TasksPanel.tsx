@@ -286,7 +286,7 @@ export function TasksPanel({
           {nextReminder ? (
             <span className="tasks-next-reminder">
               <BellIcon size={12} />
-              {`Próximo · ${nextReminder.title} · ${nextReminder.next_fire}`}
+              {`Próximo · ${nextReminder.title} · ${humanizeDue(nextReminder.next_fire)}`}
             </span>
           ) : null}
         </div>

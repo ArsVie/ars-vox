@@ -283,6 +283,12 @@ Decision table (task → template → roles):
     panel_type="book_reader") so a titled panel is visible. Read the
     text aloud in the chat; if the book has no more text, say so
     plainly instead of claiming a full reader.
+22. Do not re-ask what the user already gave. If the user says the
+    reminder time in the SAME request ("poneme un recordatorio para
+    mañana a las 9"), create it immediately and confirm — never reply
+    "¿A qué hora querés que te lo recuerde?". Re-ask only when the
+    request really lacks the time, and then ask ONCE, using their
+    wording back.
 
 ## Example
 

@@ -30,6 +30,7 @@ real DOM execution happened.
 
 from datetime import datetime, timezone
 from typing import Literal
+from urllib import request as urlrequest
 
 from arsvox_contracts import PolicyKind
 from arsvox_contracts.events import BrowserDomActionEvent, BrowserNavigateEvent
@@ -286,8 +287,53 @@ async def browser_navigate(tctx: ToolContext, url: str) -> str:
                     loading=False,
                 )
             )
-        return _landing_detail(state, url)
+        return _landing_detail(state, url) + _embeddable_note(state.url)
 
+    # Engine disabled: fall back to the Electron-main round-trip.
+    return await _legacy_navigate(tctx, url)
+
+
+def _embeddable_note(url: str) -> str:
+    """R7 (2026-08-14, reviewer round 7 finding 2): some sites send
+    X-Frame-Options / CSP frame-ancestors that forbid being displayed
+    inside an iframe. The ELECTRON app layers a main-owned
+    WebContentsView over the placeholder (unaffected), but the WEB
+    harness renders a real iframe — the page silently fails there while
+    the agent still says "Listo, te la abrí". Probe the landing page's
+    headers and return an honest note the agent must relay, or "" when
+    the page is embeddable (or unknown)."""
+    try:
+        req = urlrequest.Request(url, method="GET", headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+            "Accept": "text/html,*/*",
+        })
+        with urlrequest.urlopen(req, timeout=6) as resp:
+            xfo = resp.headers.get("X-Frame-Options", "").lower()
+            csp = resp.headers.get("Content-Security-Policy", "").lower()
+    except Exception:
+        # Network hiccup / probe refused: we cannot know — stay silent
+        # rather than invent a claim.
+        return ""
+    blocked = False
+    if xfo in ("deny", "sameorigin"):
+        blocked = True
+    elif "frame-ancestors" in csp and "frame-ancestors 'none'" in csp:
+        blocked = True
+    elif "frame-ancestors" in csp and "localhost:5173" not in csp:
+        # CSP frame-ancestors present but not allowing our origin.
+        blocked = True
+    if not blocked:
+        return ""
+    return (
+        " AVISO: este sitio no permite mostrarse dentro del panel de la "
+        "app web (lo bloquea para verse embebido); en la app de escritorio "
+        "sí se ve. No digas 'listo, ya lo abrí' como si estuviera en "
+        "pantalla: di la verdad, por ejemplo 'te abrí la página pero este "
+        "sitio no deja verse dentro del panel; ¿querés que pruebe con otro?'"
+    )
+
+
+async def _legacy_navigate(tctx: ToolContext, url: str) -> str:
     # Legacy fallback (engine disabled): snapshot the view's current
     # state, emit the REQUEST, then await the post-navigation state
     # Electron main pushes back.
