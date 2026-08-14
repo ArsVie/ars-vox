@@ -277,3 +277,37 @@ The backlog is always the present state; it is not tied to a date.
 6. MAJOR: Al pedir "agregá comprar pan a mis tareas", la app responde "Listo, agregué 'comprar pan' a tus tareas", pero no aparece ninguna lista de tareas en la pantalla: no hay forma de ver la tarea agregada ni de marcarla como hecha. Se esperaba que la tarea quedara visible en una lista; en cambio la app afirma haberla agregado y la tarea no se ve por ninguna parte.
 7. MAJOR: Al pedir "mostrame mis recordatorios", la app lista los recordatorios de forma INCONSISTENTE: unas veces los muestra con códigos crudos de fecha y hora ("#2 2026-08-14T14:00:00+00:00 — Tomar las pastillas (se repite daily); #4 2026-08-15T15:00:00+00:00 — Llamar al médico") que un usuario común no entiende, y otras veces los dice en palabras claras ("Llamar al médico — mañana a las 9 de la mañana"); además suele anunciar "Te los dejo en el panel" cuando no aparece ningún panel con la lista, y no hay ninguna lista visible con botones para cancelar o modificar (la cancelación solo funciona si uno se acuerda de pedirla hablando). Se esperaba que los recordatorios se mostraran siempre en lenguaje claro y visibles en una lista con controles.
 8. MINOR: Con la ventana angosta (480px de ancho), el dock de medios mide 862px y sus controles de reproducir/pausar quedan fuera de la pantalla (a la derecha, invisible e inalcanzables); además el campo de escritura queda reducido a unos 110px. Se esperaba que la ventana se pudiera achicar y todo siguiera visible y usable; en cambio al achicarla los controles del reproductor desaparecen de la vista y apenas queda espacio para escribir.
+
+## Backlog (reviewer round 4 — fixed 2026-08-14)
+
+1. (MAJOR) A book must open a visible reader panel; continuing must not
+   say "la sección está vacía". FIXED: panel.open now DEMOTES a
+   persistent-capable occupant (media → compact dock) when the template
+   is full, instead of stepping to triple (whose rail can't fit ≤780px)
+   — so book_reader, document_editor, tasks and browser compose even
+   while music is playing. Verified live at 780×437: media first, then
+   "creá un documento" → document panel appears in the side slot AND the
+   media bar keeps playing in the persistent dock.
+2. (MAJOR) News/browser claims must show a real browser panel. FIXED by
+   the same demotion (browser composes when the layout is full) plus
+   rule 18 (navigate then open the browser panel). The reviewer's
+   "only YouTube iframe exists" state was the silent-drop signature.
+3. (MAJOR) A created document must show the editor. FIXED by the
+   demotion (verified live: document-panel reading-surface in side
+   slot).
+4. (MAJOR) Tasks must appear in a visible list. FIXED by the demotion
+   (tasks composes) + rule 20 (open the tasks panel after add).
+5. (MAJOR) The app must never disappear at ≤640px wide. FIXED: the
+   geometry fallback in App.tsx now DEGRADES to a focus composition
+   (conversation only) instead of omitting the stage — chat, input and
+   mic survive at any width; media continues in the persistent dock.
+   Verified live at 640×437: chat+input present, stage = conversation.
+6. (MINOR) The media dock must fit the window at 650–860px. FIXED:
+   .media-dock--persistent (the section flex child) had min-width:auto
+   and refused to shrink — added min-width:0/max-width:100%/overflow
+   hidden. Verified live at 650px with a playing track: dock 614px,
+   pause button on-screen.
+7. (MINOR) Music picks must not offer videos YouTube refuses to embed.
+   DEFERRED (content-selection quality; the picker offers the first
+   result which may be unembeddable — needs a filter or a retry, next
+   round candidate).
