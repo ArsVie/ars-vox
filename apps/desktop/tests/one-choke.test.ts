@@ -116,8 +116,10 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
   it("manual source: panel.open adds the surface through the choke", () => {
     const store = createAppStore(() => {});
     layoutApply(store);
-    // split{document_editor, conversation} → opening tasks lands it in the
-    // side… no: side is occupied — the template steps up to triple.
+    // split{document_editor, conversation} → opening tasks: this fixture
+    // has conversation in the SIDE slot and document_editor in main —
+    // conversation is the anchor and can't be displaced, so the open
+    // steps up to triple (rail slot) instead.
     store.getState().applyEvent({
       type: "ui_command",
       command: { action: "panel.open", panel_type: "tasks", title: "Tareas" },
@@ -126,6 +128,53 @@ describe("R19 — every layout source enters the ONE applyAdaptiveSpec choke", (
     const spec = store.getState().adaptive.spec!;
     expect(spec.template).toBe("triple");
     expect(spec.assignments.map((a) => a.surfaceId)).toContain("tasks");
+  });
+
+  it("manual source: panel.open REPLACES the newest non-anchor side occupant (R5 regression)", () => {
+    // Reviewer round 5 (2026-08-14): with music playing (media demoted to
+    // dock) and a book open in the side slot (book_reader), opening a
+    // document used to step to triple → rail too narrow at 780px → silent
+    // drop → "está visible en el editor" with no editor on screen. The
+    // anchor (conversation, main) must survive; the newest non-anchor
+    // occupant (book) is replaced by the newcomer.
+    const store = createAppStore(() => {});
+    // boot focus: conversation in main
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.open", panel_type: "media", title: "Música" },
+      created_at: ts(),
+    });
+    // media demotes to the dock; book takes the side slot
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: { action: "panel.open", panel_type: "book_reader", title: "Don Quijote" },
+      created_at: ts(),
+    });
+    store.getState().applyEvent({
+      type: "ui_command",
+      command: {
+        action: "panel.open",
+        panel_type: "document_editor",
+        title: "mis recetas",
+      },
+      created_at: ts(),
+    });
+    const spec = store.getState().adaptive.spec!;
+    const ids = spec.assignments.map((a) => a.surfaceId);
+    expect(ids).toContain("conversation");
+    expect(ids).toContain("document_editor");
+    expect(ids).not.toContain("book_reader");
+    expect(ids).not.toContain("media");
+    expect(
+      spec.assignments.find((a) => a.surfaceId === "document_editor")?.slot,
+    ).toBe("side");
+    expect(() =>
+      computeAdaptiveGeometry(
+        spec,
+        { width: 780, height: 437 },
+        surfaceRegistry.registeredIds(),
+      ),
+    ).not.toThrow();
   });
 
   it("manual source: panel.open on the boot focus steps to SIDECAR, not triple (R3: short-viewport regression)", () => {

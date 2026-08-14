@@ -87,9 +87,12 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
   const content = doc?.content ?? "";
   const chapters = doc?.chapters ?? [];
   const isBinary = (doc?.kind === "pdf" || doc?.kind === "epub") && Boolean(doc?.url);
-  const hasContent =
-    doc !== undefined &&
-    (content.length > 0 || chapters.length > 0 || (isBinary && Boolean(doc?.url)));
+  // R5 (2026-08-14, reviewer round 5 finding 2/5): hasContent used to be
+  // false when content was "" — a freshly created (empty) document
+  // rendered "No hay documento abierto" while the agent claimed the
+  // editor was visible. An OPEN document is open even when empty: the
+  // "no document" empty state must show ONLY when no document is loaded.
+  const hasContent = doc !== undefined;
 
   const fullText = useMemo(() => {
     if (content) return content;

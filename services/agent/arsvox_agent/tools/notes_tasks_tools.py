@@ -11,6 +11,28 @@ as the demoted preferences.set there (explicit preference-setting, no
 """
 
 from arsvox_agent.tools.context import ToolContext
+from arsvox_contracts.events import ReminderItem, TasksUpdateEvent, TodoItem
+
+
+async def _emit_tasks_update(tctx: ToolContext) -> None:
+    """Emit the tasks.update wire event so a composed tasks panel has
+    real content (R5 2026-08-14, reviewer round 5 finding 3: tasks.add
+    never emitted content — the panel, when it finally composed, was
+    empty and the claim "ya lo ves en el panel" was a lie)."""
+    todos = [
+        TodoItem(id=str(t["id"]), title=t["title"], done=t["status"] == "done")
+        for t in tctx.deps.tasks.list()
+    ]
+    reminders = [
+        ReminderItem(
+            id=str(r["id"]),
+            title=r.get("text") or r.get("title") or "",
+            cadence=r.get("repeat_rule", "none"),
+            next_fire=r.get("due_at") or "",
+        )
+        for r in tctx.deps.reminders.list_active()
+    ]
+    await tctx.emit(TasksUpdateEvent(todos=todos, reminders=reminders))
 
 
 async def notes_add(tctx: ToolContext, text: str, tags: list[str] | None = None) -> str:
@@ -38,6 +60,7 @@ async def notes_today(tctx: ToolContext) -> str:
 async def tasks_add(tctx: ToolContext, title: str, due_at: str | None = None) -> str:
     task_id = tctx.deps.tasks.add(title, due_at=due_at)
     tctx.deps.audit.log("tasks", "add", {"task_id": task_id, "title": title})
+    await _emit_tasks_update(tctx)
     return f"Tarea agregada: {title} (#{task_id})."
 
 

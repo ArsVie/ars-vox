@@ -24,7 +24,6 @@ import type { SurfaceRegistration } from "./contracts";
 import type { PanelId } from "../contracts";
 import { surfaceRegistry } from "../roles/registry";
 import { BrowserPanel } from "../components/BrowserPanel";
-import { ContentPanel } from "../components/ContentPanel";
 import { ConversationPanel } from "../components/ConversationPanel";
 import { DocumentPanel } from "../components/DocumentPanel";
 import { TasksPanel } from "../components/TasksPanel";
@@ -81,7 +80,13 @@ export const SURFACE_COMPONENTS: Record<string, ComponentType<any>> = {
   browser: BrowserPanel,
   conversation: ConversationPanel,
   document_editor: DocumentPanel,
-  book_reader: ContentPanel,
+  // R5 (2026-08-14, reviewer round 5 finding 1): book_reader was mapped
+  // to the generic ContentPanel, which renders only its empty hint —
+  // "No hay ningún libro abierto" — while the voice claimed the book was
+  // open. The reading surface IS DocumentPanel (it reads
+  // content.document_editor, which library.open now populates via a
+  // document.load event). Same component, wire id preserved.
+  book_reader: DocumentPanel,
   tasks: TasksPanel,
   media: MediaDock,
 };

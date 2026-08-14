@@ -6,7 +6,8 @@ import json
 
 from arsvox_contracts import PanelType
 from arsvox_contracts.commands import PanelOpen
-from arsvox_contracts.events import UiCommandEvent
+from arsvox_contracts.enums import DocumentKind
+from arsvox_contracts.events import DocumentChapter, DocumentLoadEvent, UiCommandEvent
 
 from arsvox_agent.tools.context import ToolContext
 
@@ -65,6 +66,26 @@ async def library_open(tctx: ToolContext, title: str) -> str:
                 title=book["title"],
                 content_reference=book["id"],
             )
+        )
+    )
+    # R5 (2026-08-14, reviewer round 5 finding 1): the reader panel was a
+    # hollow shell — panel.open alone carries no content, so the panel
+    # rendered its "no book open" empty state while the voice claimed the
+    # book was open. Emit a document.load with the book text so the
+    # reading surface (DocumentPanel reads content.document_editor) shows
+    # real content.
+    text = read_book_text(tctx.deps.config, book["id"])
+    sections = [s for s in text.split("\n\n") if s.strip()]
+    await tctx.emit(
+        DocumentLoadEvent(
+            title=book["title"],
+            kind=DocumentKind.MD,
+            path=book["path"],
+            content="",
+            chapters=[
+                DocumentChapter(title=f"Sección {i + 1}", content=s[:600])
+                for i, s in enumerate(sections[:8])
+            ],
         )
     )
     if position:

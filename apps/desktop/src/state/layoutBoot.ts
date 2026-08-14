@@ -81,6 +81,28 @@ export function addSurfaceToSpec(
           ],
         };
       }
+      // R5 (2026-08-14, reviewer round 5): no persistent-capable occupant —
+      // the side slot holds a non-media panel (book_reader, document_editor,
+      // tasks, browser). The old behavior stepped to triple, whose rail
+      // cannot fit short viewports → silent drop → the agent claimed
+      // "ya está abierto" with nothing on screen. Instead REPLACE the
+      // newest non-anchor occupant (conversation is the anchor and is
+      // NEVER displaced): the newcomer takes the freed slot and the
+      // displaced panel closes. Last-open-wins is the honest contract for
+      // a single side slot. (assignments are append-ordered, so the LAST
+      // non-anchor entry is the most recently opened.)
+      const replaceable = [...spec.assignments]
+        .reverse()
+        .find((a) => a.slot !== "main" && a.surfaceId !== "conversation");
+      if (replaceable) {
+        return {
+          ...spec,
+          assignments: [
+            ...spec.assignments.filter((a) => a.surfaceId !== replaceable.surfaceId),
+            { surfaceId, role: slotRole(replaceable.slot), slot: replaceable.slot },
+          ],
+        };
+      }
     }
   }
   return spec;
