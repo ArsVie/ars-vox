@@ -60,6 +60,29 @@ async def notes_today(tctx: ToolContext) -> str:
 
 
 async def tasks_add(tctx: ToolContext, title: str, due_at: str | None = None) -> str:
+    # R8 (2026-08-14, reviewer round 8 finding 3): a daily user saying
+    # "agregá comprar pan" twice must not end with a 14-item pile of
+    # "Comprar pan" rows. Dedup against OPEN (pending/in-progress) tasks
+    # with the SAME normalized title — the second ask returns the
+    # existing task instead of stacking a duplicate.
+    existing = None
+    for t in tctx.deps.tasks.list():
+        if t["status"] in ("pending", "in_progress") and t["title"].strip().lower() == title.strip().lower():
+            existing = t
+            break
+    if existing is not None:
+        tctx.deps.audit.log("tasks", "add_duplicate_skipped", {"task_id": existing["id"], "title": title})
+        await tctx.emit(
+            UiCommandEvent(
+                command=PanelOpen(
+                    panel_type=PanelType.TASKS,
+                    title="Tareas",
+                    content_reference=str(existing["id"]),
+                )
+            )
+        )
+        await _emit_tasks_update(tctx)
+        return f"'{title}' ya está en tu lista de tareas (#{existing['id']})."
     task_id = tctx.deps.tasks.add(title, due_at=due_at)
     tctx.deps.audit.log("tasks", "add", {"task_id": task_id, "title": title})
     # R6 (2026-08-14, reviewer round 6 finding 2): the tasks panel must

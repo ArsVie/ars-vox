@@ -164,6 +164,17 @@ class AgentRuntime:
             await self._handle_confirmation_utterance(decision, text)
             return
         if self._busy or (self._active_task and not self._active_task.done()):
+            # R8 (2026-08-14, reviewer round 8 finding 2): echo the user's
+            # message BEFORE the busy error. The renderer renders chat
+            # ONLY from the server echo (no optimistic append), so a
+            # swallowed text vanishes from the screen (input clears,
+            # nothing appears) and the user retypes — which then starts a
+            # SECOND turn once the first finishes ("answered twice with
+            # the same list"). With the echo, the message shows in chat
+            # and the honest "wait a moment" explains why it did not run.
+            await self.bus.publish(
+                UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
+            )
             await self.bus.publish(
                 ErrorEvent(
                     message="Todavía estoy trabajando en lo anterior. Espera un momento.",
