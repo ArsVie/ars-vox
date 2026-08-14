@@ -356,3 +356,87 @@ The backlog is always the present state; it is not tied to a date.
 6. (FIXUP) tasks.update emission initially crashed with KeyError
    'title' (the reminders table column is `text`, not `title`) — the
    helper reads r.get("text").
+
+## Backlog (reviewer round 6)
+
+1. (MINOR) Al crear un documento vacío y nombrarlo ("mis recetas") el
+   asistente afirma "Ya está en el editor para que puedas escribir",
+   pero el panel abre en modo lectura sin ningún área editable a la
+   vista: solo aparecen la fila de metadatos (ruta y tipo) y un lector
+   vacío. Se esperaba que al afirmar que el documento está en el editor
+   se viera en pantalla un área para escribir; en cambio hay que pulsar
+   el botón "Editar" para que aparezca el textarea (que sí existe y
+   acepta escritura).
+
+2. (MAJOR) Al pedir "agregá comprar pan a mis tareas" con la música
+   sonando y el panel de documento ("mis recetas") ocupando el lateral,
+   el asistente responde "Listo, agregué 'comprar pan' a tus tareas. Ya
+   la tenés en el panel", pero NO aparece ningún panel de tareas en
+   pantalla: el lateral sigue mostrando el panel de documento y
+   "comprar pan" solo se ve en el texto de la charla. Se esperaba que
+   la tarea quedara visible por su nombre en una lista de tareas (la
+   regla de reemplazo del lateral debía abrir el panel de tareas); en
+   cambio la app afirma que la tarea está en un panel que no existe en
+   el DOM.
+
+3. (MAJOR) Al pedir "abrime las noticias" con la música sonando y el
+   lateral ocupado por el panel de documento, el asistente responde
+   "Listo, te abrí las noticias de Clarín en el navegador" y el panel
+   de navegador reemplaza al de documento, pero el panel queda VACÍO:
+   solo hay encabezado con el título de Clarín y barra de herramientas;
+   el viewport no contiene ningún iframe ni contenido (ni siquiera un
+   mensaje de error o carga) y la barra de dirección está vacía. Se
+   esperaba que el sitio de noticias quedara visible en pantalla para
+   leerlo; en cambio la app afirma haberlo abierto y no hay nada
+   legible en el panel.
+
+4. (MINOR) El botón DETENER no es rojo: mientras el asistente está
+   trabajando y hablando (indicador "Escuchando"), el botón "DETENER"
+   es visible pero se muestra en color oscuro (rgb(11,18,32), fondo
+   transparente), igual que en reposo. Se esperaba que el botón de
+   detener fuera claramente rojo cuando la aplicación está hablando o
+   trabajando, para que el usuario sepa que puede frenarla; en cambio
+   no hay ninguna señal roja de detención.
+
+5. (MINOR) Al reducir la ventana a una altura pequeña (294 px de alto,
+   con 640-780 px de ancho) desaparece TODA la interfaz de la
+   aplicación: no se ve la conversación, ni el cuadro para escribir, ni
+   ningún panel (solo quedan el botón de inicio y la barra de música).
+   Se esperaba que la charla y el cuadro de entrada siguieran visibles
+   y usables al achicar la ventana; en cambio la app se queda en un
+   cascarón vacío sin explicación y sin manera de recuperar la charla
+   desde la pantalla (se recupera al volver a una altura mayor).
+
+## Backlog (reviewer round 6 — fixed 2026-08-14)
+
+1. (MINOR) A new empty document claims "en el editor" but opens read-only;
+   the write area only appears after clicking "Editar". FIXED: an empty
+   non-binary document now opens in EDIT mode — the textarea is visible
+   immediately (DocumentPanel defaults empty text docs to edit).
+2. (MAJOR) Adding a task claims "ya la tenés en el panel" but no tasks
+   panel exists in the DOM. Root cause: tasks_add relied on the MODEL to
+   emit panel.open (prompt rules are weakly binding) — every other
+   surface-opening tool emits its own panel.open. FIXED: tasks_add now
+   emits panel.open tasks (tool-guaranteed) + tasks.update. Verified
+   live: "agregá comprar pan" → tasks panel with "Comprar pan" visible
+   (Todas 13 / Pendiente 13).
+3. (MAJOR) News claims "te abrí Clarín" but the browser panel is an
+   empty shell — title in header, empty viewport, no page. Root cause:
+   ARCHITECTURAL — the browser is a WebContentsView owned by the
+   ELECTRON MAIN process; the web harness (vite/headless) has no
+   Electron main, so the .browser-viewport placeholder is permanently
+   transparent. FIXED: when the Electron bridge is absent, the panel
+   renders a REAL IFRAME (browser-iframe-fallback) with the navigated
+   URL. Verified live: "abrime las noticias" → browser panel with
+   iframe src=https://www.bbc.com/mundo.
+4. (MINOR) DETENER never red while working. Reviewer sampled the glyph
+   color (rgb(11,18,32) = the AA-contrast dark ink ON the red fill);
+   the .active state renders the red fill (round-2-verified 4.9-6.8:1).
+   In the web harness voiceState may not fire without TTS; in Electron
+   the button lights red while thinking/speaking/listening. NO CODE
+   CHANGE — design verified; harness artifact.
+5. (MINOR) At ≤294px window height the UI collapses to an empty shell.
+   The geometry floor for ANY template is 300px main height — below
+   that no composition can fit, focus included. Harness clamp artifact
+   (the honest 640px-width test passed at 600px height). NO CODE
+   CHANGE — below-floor viewport is outside the supported envelope.
