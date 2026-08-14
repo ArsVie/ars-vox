@@ -513,3 +513,58 @@ de copias idénticas.
    panel instead of stacking a copy. The 13 accumulated "Comprar pan"
    duplicates were cleaned from the live store (1 pending kept).
    Verified live: "Listo, 'Comprar pan' ya estaba en tu lista (#4)."
+
+## Backlog (reviewer round 9)
+
+1. MINOR: La sección RECORDATORIOS del panel de tareas debe mostrar la
+próxima cita en palabras claras ("mañana a las 9 de la mañana"), nunca
+con códigos de fecha/hora crudos. En cambio el panel sigue mostrando
+códigos ISO crudos: "daily · próxima 2026-08-15T14:00:00+00:00" y "none ·
+próxima 2026-08-15T15:00:00+00:00" en todas las filas de RECORDATORIOS.
+Este defecto ya fue reportado en la ronda 8 como corregido, pero sigue
+reproduciéndose en vivo: un abuelo no puede leer "2026-08-15T15:00:00+00:00".
+
+2. MAJOR: Al enviar "mostrame mis recordatorios" mientras el asistente
+todavía está activo (botón DETENER encendido), el pedido se procesó y se
+respondió una sola vez con la lista de recordatorios, pero el mensaje del
+usuario NUNCA apareció en el historial de la charla: la conversación pasa
+directamente de la confirmación del recordatorio a la respuesta con la
+lista, sin el mensaje del usuario entre ambas. Se esperaba que el mensaje
+del usuario se viera siempre en la conversación (la corrección de la
+ronda 8 prometía que el mensaje se muestra antes del aviso de espera);
+en cambio el texto vuelve a desaparecer, igual que en la ronda 8. Un
+abuelo que no ve su propio pedido en la charla no sabe si lo que le
+responden corresponde a lo que preguntó.
+
+3. MINOR: Cuando el asistente pregunta "¿Qué te recuerdo mañana a las 9 de
+la mañana? Decime el texto y lo agendo." y el usuario contesta con el
+texto ("que llame a mi nieta"), el asistente no usa esa respuesta: contesta
+que no puede hacer llamadas telefónicas y deriva a un mensaje de Telegram,
+sin crear el recordatorio. Se esperaba que la respuesta del usuario se
+tomara como el texto del recordatorio pendiente y se creara de inmediato.
+El pedido recién funciona si el usuario repite todo de nuevo en un solo
+mensaje ("poneme un recordatorio para mañana a las 9 de la mañana de
+llamar a mi nieta"). Un abuelo que responde la pregunta del asistente ve
+que no le hace caso.
+
+## Backlog (reviewer round 9 — fixed 2026-08-14)
+
+1. (MINOR) RECORDATORIOS raw ISO — the humanize fix WAS in the tree; the
+   reviewer hit a STALE vite build (the /mnt/c watcher gap). Vite
+   restarted; DOM verified: "próxima sábado 15 de ago, 8:00 a.m.",
+   rawIsoAnywhere=false.
+2. (MAJOR) "mostrame mis recordatorios" vanished from chat — ROOT CAUSE:
+   it matched a LOCAL INTENT (list_reminders) that answered directly via
+   ws.send_text and NEVER echoed the user's message (handle_user_text is
+   bypassed). FIXED: the local-intent path now publishes UserMessageEvent
+   + the reply through the bus (FIFO per connection). Verified live:
+   echo before list. Regression test in test_ws_e2e.
+3. (MINOR) Reminder-text follow-up ignored ("que llame a mi nieta" became
+   a Telegram call) — ROOT CAUSE: the missing-text question was plain
+   chat, so the model lost the thread next turn. FIXED: reminders.create
+   with empty text registers a PENDING DRAFT (due_at frozen); the next
+   user message completes it in the runtime — echo + create + plain-words
+   confirmation + tasks.update, NO model in the loop. Verified live:
+   "Listo. Te puse un recordatorio para pasado mañana, domingo 16, a las
+   7 de la noche. Suena una sola vez." Regression tests.
+4. (Ars) agent temperature 0.2 -> 1.0 (config + contract default).
