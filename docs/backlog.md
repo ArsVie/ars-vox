@@ -831,3 +831,7 @@ Fixes verificados en vivo (DOM + wire): libro con secciones, lista sin #N, panel
 ## Backlog (reviewer round 15)
 
 1. MINOR: Cuando el asistente pregunta "¿Qué te recuerdo mañana a las 9 de la mañana? Decime el texto y lo agendo." y el abuelo responde "que llame a mi nieta", el mensaje del abuelo NO aparece en la conversación: el chat pasa directamente de la pregunta del asistente a la respuesta "Ya tenés anotado: Llamar a mi nieta...", sin el "TÚ que llame a mi nieta" intermedio. Se esperaba que el mensaje del usuario quedara visible en el chat como en cualquier otro intercambio (el abuelo debe ver sus propias palabras en pantalla).
+
+## Backlog (reviewer round 16)
+
+1. MAJOR: Cuando el abuelo pregunta "qué hora es", la hora que responde el asistente es UNA HORA MÁS TARDE que la hora real del usuario: el navegador del usuario (America/Mazatlan, UTC-7) marca las 21:33, pero el asistente respondió "Son las 10:30 de la noche" (22:30, la hora del backend en WSL UTC-6). Se esperaba que el asistente diera la hora del RELOJ DEL USUARIO (21:30), igual que la corrección de zona que ya se aplicó a los recordatorios (el navegador declara su zona en client.info); el abuelo ajustaría su reloj una hora mal.

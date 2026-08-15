@@ -19,14 +19,19 @@ MONTHS_ES = [
 ]
 
 
-def now_line() -> str:
+def now_line(tz=None) -> str:
     """One-line current local time, Spanish + unambiguous ISO/UTC.
 
     Injected at the TOP of every turn's context (user message AND reminder
     injection) so the model never needs a clock tool — the time is simply
     always there (user requirement; do NOT replace with a clock tool).
+
+    R16 (2026-08-14, reviewer round 16 finding): the tz MUST be the USER's
+    anchored zone (client.info, same as reminders) — the backend's system
+    zone (WSL) can drift an hour from the browser's clock, and the old man
+    heard "las 10:30" while his own clock said 21:30.
     """
-    now = datetime.now().astimezone()
+    now = datetime.now(tz or datetime.now().astimezone().tzinfo)
     local = (
         f"{WEEKDAYS_ES[now.weekday()]} {now.day} de {MONTHS_ES[now.month - 1]} "
         f"de {now.year}, {now.strftime('%H:%M')} ({now.tzname()})"
@@ -38,7 +43,10 @@ def now_line() -> str:
 
 
 def build_context(config: AppConfig, deps: Deps) -> str:
-    lines: list[str] = [now_line()]
+    # R16: the time line uses the USER's anchored zone (client.info set it
+    # on the reminders store) so the hour the model reports matches the
+    # browser clock, not the backend's system zone.
+    lines: list[str] = [now_line(deps.reminders.tz)]
     panels = deps.panels.list()
     lines.append(
         "Paneles abiertos: "

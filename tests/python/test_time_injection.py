@@ -25,6 +25,9 @@ class _FakePending:
 
 
 class _FakeReminders:
+    def __init__(self):
+        self.tz = None  # R16: build_context reads the anchored tz
+
     def list_active(self):
         return []
 

@@ -205,6 +205,24 @@ def test_preference_store_still_works_for_its_real_purpose(tmp_path):
 # --------------------------------------------------------------------- #
 
 
+def test_now_line_uses_anchored_tz():
+    """R16 (2026-08-14, reviewer round 16 finding): the hour the model
+    reports must match the USER's clock (the tz the browser declared via
+    client.info), not the backend's system zone."""
+    from datetime import datetime
+
+    from zoneinfo import ZoneInfo
+
+    from arsvox_agent.context import now_line
+
+    mazatlan = ZoneInfo("America/Mazatlan")
+    line = now_line(mazatlan)
+    # The wall-clock hour must equal America/Mazatlan's, not the system's.
+    wall = datetime.now(mazatlan)
+    assert wall.strftime("%H:%M") in line, line
+    assert "America/Mazatlan" in line or wall.tzname() in line, line
+
+
 def test_context_memory_section_embeds_recalled_preferences(tmp_path):
     deps, _, _ = _make_deps(tmp_path)
     deps.preferences.set("fav_genre", "jazz")
