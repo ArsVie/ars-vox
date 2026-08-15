@@ -206,7 +206,13 @@ class ReminderScheduler:
             return "No tienes recordatorios activos."
         lines = [
             f"#{r['id']} {_due_plain_words(r['due_at'], self.reminders.tz)} — {r['text']}"
-            + (f" (se repite {r['repeat_rule']})" if r["repeat_rule"] != "none" else "")
+            + (
+                " (se repite a diario)"
+                if r["repeat_rule"] == "daily"
+                else " (se repite todas las semanas)"
+                if r["repeat_rule"] == "weekly"
+                else ""
+            )
             for r in active
         ]
         return "Tienes: " + "; ".join(lines)

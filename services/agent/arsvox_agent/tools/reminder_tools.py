@@ -141,7 +141,7 @@ async def reminders_create(
     tctx.deps.audit.log(
         "reminders", "create", {"reminder_id": reminder_id, "due_at": due, "repeat": repeat_rule}
     )
-    suffix = f" y se repetirá {repeat_rule}" if repeat_rule != "none" else ""
+    suffix = f" y se repetirá a diario" if repeat_rule == "daily" else f" y se repetirá todas las semanas" if repeat_rule == "weekly" else ""
     return f"Recordatorio programado para {due}: {text}{suffix}."
 
 
@@ -151,7 +151,7 @@ async def reminders_list(tctx: ToolContext) -> str:
         return "No hay recordatorios activos."
     lines = [
         f"#{r['id']} {_due_plain_words(r['due_at'], tctx.deps.reminders.tz)} — {r['text']}"
-        + (f" (se repite {r['repeat_rule']})" if r["repeat_rule"] != "none" else "")
+        + (f" (se repite a diario)" if r["repeat_rule"] == "daily" else f" (se repite todas las semanas)" if r["repeat_rule"] == "weekly" else "")
         for r in active
     ]
     return "\n".join(lines)

@@ -166,6 +166,41 @@ async def test_reminder_draft_completes_with_next_message(tmp_path):
     assert any(isinstance(e, ev.TasksUpdateEvent) for e in bus.events)
 
 
+async def test_time_only_reminder_intercepted_llm_free(tmp_path):
+    """R11 finding 5: 'poneme un recordatorio para mañana a las 9' (no
+    text) is intercepted BEFORE the model — draft registered + ask, no
+    model turn; the follow-up completes it. The model used to ask in
+    plain chat without calling the tool, derailing the answer."""
+    from arsvox_agent.tools import ToolRegistry
+
+    deps, bus = _make_deps(tmp_path)
+    runtime = AgentRuntime(
+        config=deps.config,
+        deps_base=deps,
+        registry=ToolRegistry(),
+        bus=bus,  # type: ignore[arg-type]
+    )
+    await runtime.handle_user_text("poneme un recordatorio para mañana a las 9")
+
+    drafts = [p for p in deps.pending.list_pending() if p["tool"] == "reminders.create_draft"]
+    assert len(drafts) == 1, f"expected intercepted draft, got: {drafts}"
+    # the ask is deterministic and plain-words
+    msgs = [e for e in bus.events if isinstance(e, ev.AgentMessageEvent)]
+    assert msgs, "expected an ask"
+    assert "¿Qué te recuerdo" in msgs[-1].text, msgs[-1].text
+    assert "2026" not in msgs[-1].text, f"raw date in ask: {msgs[-1].text}"
+
+    # the answer completes the draft, echo first
+    await runtime.handle_user_text("que llame a mi nieta")
+    active = deps.reminders.list_active()
+    assert any("nieta" in r["text"] for r in active), f"draft not completed: {active}"
+    msgs2 = [e for e in bus.events if isinstance(e, ev.UserMessageEvent)]
+    assert msgs2[-1].text == "que llame a mi nieta"
+    # the completion confirms in plain words
+    last_agent = [e for e in bus.events if isinstance(e, ev.AgentMessageEvent)][-1]
+    assert "nieta" in last_agent.text and "2026" not in last_agent.text
+
+
 @pytest.mark.asyncio
 async def test_reminder_draft_skipped_when_no_draft(tmp_path):
     """Without a draft, a normal message starts a normal turn (the

@@ -86,16 +86,24 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
   // document must open in EDIT mode — the assistant says "ya está en el
   // editor" and the write area must actually be visible, not hidden
   // behind an "Editar" click. Books and loaded content stay in read mode.
-  const docKey = doc ? `${doc.title}|${doc.path}|${doc.content?.length ?? 0}` : null;
+  // R11 (2026-08-14, reviewer round 11 finding 4): chapters.length is
+  // part of docKey. When the panel opens before the document.load lands
+  // (reconnect snapshot, late event), an empty bag previously LOCKED
+  // edit mode forever — the reader showed an empty editor even after
+  // the chapters arrived. Now the arrival of content/chapters re-runs
+  // the effect and returns the panel to read mode.
+  const docKey = doc
+    ? `${doc.title}|${doc.path}|${doc.content?.length ?? 0}|${doc.chapters?.length ?? 0}`
+    : null;
   useEffect(() => {
-    if (
-      doc &&
-      !isBinary &&
-      content.length === 0 &&
-      chapters.length === 0
-    ) {
+    if (!doc || isBinary) return;
+    if (content.length === 0 && chapters.length === 0) {
       setMode("edit");
       setDraft("");
+    } else if (mode === "edit" && draft === "") {
+      // Content or chapters arrived after an empty open: never leave a
+      // reader stranded in an empty editor.
+      setMode("read");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docKey]);

@@ -11,6 +11,7 @@ controls never depend on a model being responsive:
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 STOP_UTTERANCES = {
     "stop",
@@ -154,3 +155,89 @@ def match_intent(text: str) -> LocalIntent | None:
     if any(re.search(p, norm) for p in LIST_REMINDER_PATTERNS):
         return LocalIntent("list_reminders", text)
     return None
+
+
+# ---------------------------------------------------------------------- #
+# R11 (2026-08-14, reviewer round 11 finding 5): the model kept asking
+# for the reminder TEXT in plain chat ("Que te recuerdo?") without
+# calling reminders.create - so no draft was registered and the user's
+# answer derailed into a brand-new request ("no puedo hacer llamadas").
+# Deterministic interception: when the user's message is a reminder
+# request with a TIME but no TEXT ("poneme un recordatorio para mañana
+# a las 9"), the runtime registers the draft itself (LLM-free) and asks
+# for the text; the next message completes it. The model is never in the
+# loop for the ask, so it cannot derail.
+# ---------------------------------------------------------------------- #
+_REMINDER_TRIGGER_RE = re.compile(
+    r"\b(recordatorio|recordame|recordá|recorda|alarma)\b"
+)
+# Normalized (accent-stripped, lowercased) Spanish time phrase:
+#   [day] a las/a la HH[:MM] [de la mañana|tarde|noche|madrugada]
+_DAY_PHRASES = {
+    "hoy": 0,
+    "manana": 1,
+    "pasado manana": 2,
+    "el lunes": "mon", "el martes": "tue", "el miercoles": "wed",
+    "el jueves": "thu", "el viernes": "fri", "el sabado": "sat",
+    "el domingo": "sun",
+    "este lunes": "mon", "este martes": "tue", "este miercoles": "wed",
+    "este jueves": "thu", "este viernes": "fri", "este sabado": "sat",
+    "este domingo": "sun",
+}
+_TIME_PHRASE_RE = re.compile(
+    r"(?P<day>hoy|manana|pasado manana|el lunes|el martes|el miercoles|"
+    r"el jueves|el viernes|el sabado|el domingo|este lunes|este martes|"
+    r"este miercoles|este jueves|este viernes|este sabado|este domingo)?"
+    r"\s*(?:a las|a la)\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?"
+    r"\s*(?P<period>de la manana|de la tarde|de la noche|de la madrugada)?"
+)
+_WEEKDAY_INDEX = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
+
+def _apply_period(hour: int, period: str | None) -> int:
+    """12h clock -> 24h. 'de la tarde'/'de la noche' shift hours 1-11 to
+    the afternoon/evening; 'de la manana'/'de la madrugada' stay."""
+    if period in ("de la tarde", "de la noche") and 1 <= hour <= 11:
+        return hour + 12
+    return hour
+
+
+def match_time_only_reminder(text: str) -> str | None:
+    """Local naive YYYY-MM-DDTHH:MM when the message is a reminder
+    request with a parseable TIME and NO reminder text - else None.
+
+    Messages that carry their own text (e.g. a las 9 que llame a mi
+    nieta) return None: they are complete requests for the model.
+    """
+    norm = _normalize(text)
+    if not _REMINDER_TRIGGER_RE.search(norm):
+        return None
+    m = _TIME_PHRASE_RE.search(norm)
+    if m is None:
+        return None
+    # The time phrase must be the END of the request: anything after it
+    # (other than politeness filler) is the reminder TEXT.
+    tail = norm[m.end():].strip(" ,")
+    if tail and tail not in ("por favor",):
+        return None
+    try:
+        hour = _apply_period(int(m.group("hour")), m.group("period"))
+        minute = int(m.group("minute") or 0)
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            return None
+    except (TypeError, ValueError):
+        return None
+    now = datetime.now()
+    day = m.group("day")
+    if day is None:
+        return None
+    offset = _DAY_PHRASES.get(day)
+    if offset is None:
+        return None
+    if isinstance(offset, str):
+        target = _WEEKDAY_INDEX[offset]
+        offset = (target - now.weekday()) % 7 or 7  # next occurrence, >= 1 day
+    due = (now + timedelta(days=offset)).replace(
+        hour=hour, minute=minute, second=0, microsecond=0
+    )
+    return due.isoformat(timespec="minutes")

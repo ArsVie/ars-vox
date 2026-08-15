@@ -7,6 +7,7 @@ import dataclasses
 import functools
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from arsvox_contracts import (
@@ -23,8 +24,9 @@ from arsvox_contracts.commands import TtsSpeak
 from arsvox_agent.context import build_context
 from arsvox_agent.deps import Deps
 from arsvox_agent.events import EventBus
-from arsvox_agent.local_intents import match_confirmation_utterance
+from arsvox_agent.local_intents import match_confirmation_utterance, match_time_only_reminder
 from arsvox_agent.model_provider import build_model
+from arsvox_memory.repos.reminders import normalize_due_utc
 from arsvox_agent.effect_ledger import EffectLedger, inverse_for, inverted_tools
 from arsvox_agent.tools import Handler, ToolRegistry, ToolSpec, build_pydantic_tools
 
@@ -172,6 +174,18 @@ class AgentRuntime:
         if draft is not None:
             await self._complete_reminder_draft(draft, text)
             return
+        # R11 (2026-08-14, reviewer round 11 finding 5): a time-only
+        # reminder request ("poneme un recordatorio para mañana a las
+        # 9") is intercepted HERE, LLM-free: the draft is registered
+        # with the parsed due and the app asks for the text itself.
+        # The model used to ask in plain chat without calling the tool,
+        # so the user's answer derailed into a new request. With the
+        # interception, the ask is deterministic and the answer always
+        # completes the draft.
+        local_due = match_time_only_reminder(text)
+        if local_due is not None:
+            await self._intercept_time_only_reminder(text, local_due)
+            return
         if self._busy or (self._active_task and not self._active_task.done()):
             # R8 (2026-08-14, reviewer round 8 finding 2): echo the user's
             # message BEFORE the busy error. The renderer renders chat
@@ -267,8 +281,51 @@ class AgentRuntime:
         todos, reminders = _tasks_update_payload(self.deps_base)
         await self.bus.publish(TasksUpdateEvent(todos=todos, reminders=reminders))
         due_plain = _due_plain_words(due_at, self.deps_base.reminders.tz)
-        suffix = f" y se repetirá {repeat_rule}" if repeat_rule != "none" else ""
+        if repeat_rule == "daily":
+            suffix = " y se repetirá a diario"
+        elif repeat_rule == "weekly":
+            suffix = " y se repetirá todas las semanas"
+        else:
+            suffix = ""
         reply = f"Listo. Te puse el recordatorio para {due_plain}: {text}.{suffix}"
+        await self.bus.publish(AgentMessageEvent(text=reply, delta=False))
+        self.settle_to_terminal()
+
+    # ------------------------------------------------------------------ #
+    async def _intercept_time_only_reminder(self, text: str, local_due: str) -> None:
+        """R11 finding 5: a time-only reminder request is handled LLM-free.
+
+        ``local_due`` is a local naive YYYY-MM-DDTHH:MM from
+        match_time_only_reminder. Register the pending draft and ask for
+        the text deterministically — the model never gets a turn in
+        which it could ask in plain chat and lose the thread.
+        """
+        from arsvox_agent.tools.reminder_tools import _due_plain_words
+
+        utc_due = normalize_due_utc(local_due, self.deps_base.reminders.tz)
+        if utc_due is None:
+            return  # parser gave a malformed instant; let the model turn run
+        # Echo first — the question must never appear without the request.
+        await self.bus.publish(
+            UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
+        )
+        pending_id = self.deps_base.pending.create(
+            run_id=text[:60],
+            tool="reminders.create_draft",
+            args={"due_at": utc_due},
+            title="Recordatorio (falta el texto)",
+            detail=_due_plain_words(utc_due, self.deps_base.reminders.tz),
+            expires_at=(
+                datetime.now(timezone.utc) + timedelta(minutes=60)
+            ).isoformat(timespec="seconds"),
+        )
+        if self.deps_base.audit is not None:
+            self.deps_base.audit.log(
+                "reminders", "draft_intercepted",
+                {"pending_id": pending_id, "due_at": utc_due},
+            )
+        due_plain = _due_plain_words(utc_due, self.deps_base.reminders.tz)
+        reply = f"¿Qué te recuerdo {due_plain}? Decime el texto y lo agendo."
         await self.bus.publish(AgentMessageEvent(text=reply, delta=False))
         self.settle_to_terminal()
 

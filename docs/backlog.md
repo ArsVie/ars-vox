@@ -643,3 +643,115 @@ escuchar la música no puede usarlo y cree que la app está rota.
    clickable, does nothing) — disabled when state=stopped, but the
    backend R24 RESUMES a stopped-with-track. FIXED: disabled only when
    no playable content (MediaDock.tsx).
+
+## Backlog (reviewer round 11)
+
+1. MINOR: El aviso rojo "Todavía estoy trabajando en lo anterior. Espera
+un momento." debe desaparecer solo cuando el asistente termina de
+responder (corrección de la ronda 10). En cambio el aviso quedó visible
+en pantalla durante toda la prueba: ya estaba al cargar la página, siguió
+visible después de que el asistente respondió "qué hora es" ("Son las
+2:49 de la tarde, viernes 14 de agosto."), y siguió visible incluso con
+la app en reposo ("En espera") después de presionar DETENER. Un abuelo
+cree que la app está ocupada para siempre y no sabe cuándo puede hablar.
+
+2. MINOR: El botón DETENER debe verse claramente rojo (un cuadrado de
+parada rojo) cuando la app está trabajando/escuchando (estado activo),
+según la corrección de la ronda 10 ("fill rojo sólido en todos los
+estados"). En cambio, con el estado activo (indicador "Escuchando" con
+contador), el botón se ve como un botón azul brillante (degradado azul
+rgb(59,130,246) a rgb(90,167,255)) con un cuadrado rojo pequeño adentro:
+sigue siendo exactamente el botón azul de la ronda 10, no el botón rojo
+de parada esperado. El botón sí funciona al hacerle clic (pasa a "En
+espera"), pero su color no comunica "rojo = parar".
+
+3. MAJOR: La barra persistente de música (que aparece abajo con la última
+canción cargada, "MUSICA ZEN ULTRA RELAJANTE...") debe ofrecer un botón
+de reproducir utilizable cuando hay contenido para reproducir (corrección
+de la ronda 10: "disabled only when no playable content"). En cambio el
+botón de reproducir sigue DESHABILITADO (disabled) con la canción
+cargada: al hacerle clic no pasa nada y no suena música. Es exactamente
+el mismo defecto de la ronda 10: un abuelo que ve el botón de play en la
+barra y quiere volver a escuchar la música no puede usarlo y cree que la
+app está rota.
+
+4. MAJOR: Al pedir "leeme el Don Quijote", debe aparecer un panel de
+lectura visible CON EL TEXTO del libro adentro (el abuelo tiene que poder
+leer el libro en el panel, no solo ver el título). En cambio el asistente
+respondió "Te dejé el libro abierto en el panel del lector, donde lo
+habías dejado. Dice así: ..." citando un pasaje en la charla, pero el
+panel que se abrió es un editor de documento VACÍO: solo muestra el
+título "don-quijote", la ruta del archivo y los botones Cancelar/Guardar;
+la caja de escritura (textarea) no tiene ni una letra del libro. El
+pasaje citado aparece únicamente en el mensaje de la charla. Un abuelo
+que quiere leer ve un recuadro vacío y no puede leer nada.
+
+5. MAJOR: Al pedir "poneme un recordatorio para mañana a las 9 de la
+mañana", el asistente debe preguntar solo el texto (no la hora, que ya se
+dio); cuando el usuario contesta con el texto ("que llame a mi nieta"),
+el recordatorio DEBE crearse con esa respuesta (corrección de la ronda
+10, defecto que se daba por corregido). En cambio: la hora NO se
+re-preguntó (bien), pero al contestar "que llame a mi nieta" el
+asistente descarriló otra vez exactamente como en la ronda 10: "No puedo
+hacer llamadas: la aplicación no tiene esa opción. Lo único que puedo
+hacer es mandar mensajes de Telegram, y todavía no hay un contacto
+aprobado para eso...". El recordatorio NO se creó con el texto de la
+respuesta. Un abuelo que contesta la pregunta del asistente ve que no le
+hace caso.
+
+6. MINOR: Al mostrar la lista de recordatorios, las horas deben decirse
+en palabras simples y en español ("mañana a las 8 de la mañana",
+"domingo a las 7 de la noche"). En cambio el listado dice "(se repite
+daily)" con la palabra en inglés para el recordatorio repetido: "Tienes:
+#2 mañana a las 8 de la mañana — Tomar las pastillas (se repite
+daily); ...". Un abuelo que no sabe inglés no entiende qué significa
+"daily".
+
+## Backlog (reviewer round 11 — fixed 2026-08-14)
+
+1. (MINOR) El aviso rojo "Todavía estoy trabajando..." no desaparecía —
+   FIXED (ronda 10, store.ts: error se limpia en el próximo
+   agent_message). El revisor de la ronda 11 vio la build VIEJA de vite:
+   la corrección de la ronda 10 estaba commiteada pero vite nunca se
+   reinició después (el watcher de /mnt/c no levanta cambios). Vite
+   reiniciado; verificado en vivo: sin aviso colgado, sin crash.
+2. (MINOR) El botón DETENER se veía azul con un ícono rojo chico —
+   FIXED (ronda 10, styles.css: el cuadrado de stop ahora es rojo sólido
+   con glifo oscuro en todos los estados; AA en el activo). El revisor
+   vio la build vieja. Verificado en vivo: rgb(238,92,97).
+3. (MINOR) El botón de play de la barra de música persistente quedaba
+   deshabilitado para siempre — FIXED (ronda 10, MediaDock.tsx: el play
+   se habilita cuando hay contenido; el backend ya resumía pistas
+   detenidas — el botón muerto era una mentira). Verificado en vivo:
+   disabled=false, label "Reproducir" tras parar la música.
+4. (MAJOR) "leeme el Don Quijote" — el asistente decía que el libro
+   estaba abierto pero el panel mostraba un editor vacío. Causa raíz:
+   la llave del efecto que decide modo lector/editor NO incluía la
+   cantidad de capítulos; si el panel se abría antes de que llegara el
+   document.load (snapshot de reconexión, evento tardío), el panel
+   quedaba LOCKED en modo edición vacío para siempre. FIXED:
+   DocumentPanel.tsx incluye chapters.length en docKey y vuelve a modo
+   lectura cuando llegan capítulos/contenido. También se corrigió un
+   crash TDZ introducido por la misma corrección (chapters referenciado
+   antes de su declaración) — detectado en vivo, vite reiniciado.
+   Verificado en vivo: "Sección 1: En un lugar de la Mancha..." visible
+   y estable 60+ segundos.
+5. (MAJOR) Responder la pregunta del recordatorio ("que llame a mi
+   nieta") seguía ignorado: el modelo preguntaba el texto EN CHAT sin
+   llamar a reminders.create, así que no existía borrador. FIXED
+   deterministicamente: "poneme un recordatorio para mañana a las 9" se
+   intercepta ANTES del modelo (match_time_only_reminder en
+   local_intents.py parsea la hora en español) — se registra el borrador
+   y se pregunta "¿Qué te recuerdo mañana a las 9? Decime el texto y lo
+   agendo." sin LLM en el loop. Verificado en vivo: interceptado,
+   completado con "que llame a mi nieta", confirmación en palabras
+   simples, sin fechas crudas.
+6. (MINOR) "se repite daily" en inglés crudo en la lista de
+   recordatorios — FIXED: scheduler.py y reminder_tools.py ahora dicen
+   "se repite a diario" / "se repite todas las semanas". Verificado en
+   vivo: "(se repite a diario)", sin "daily"/"weekly".
+
+Veredicto del abuelo en la ronda 11: NO para uso diario — "me amarga que
+cuando le contesto lo que me preguntó me ignore otra vez". Todas las
+causas raíz identificadas y corregidas con verificación en vivo; queda
+la ronda 12 para confirmar.
