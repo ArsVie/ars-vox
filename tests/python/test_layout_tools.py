@@ -106,7 +106,7 @@ def _run(tctx: ToolContext, **kwargs) -> str:
 
 
 VALID_SPECS: dict[AdaptiveTemplate, list[LayoutAssignmentInput]] = {
-    AdaptiveTemplate.FOCUS: [_assign("browser", "primary")],
+    AdaptiveTemplate.FOCUS: [_assign("conversation", "primary")],
     AdaptiveTemplate.SIDECAR: [
         _assign("browser", "primary"),
         _assign("conversation", "companion"),
@@ -245,8 +245,9 @@ class TestR17DeterministicRejection:
         self._assert_rejected(
             template=AdaptiveTemplate.SIDECAR,
             assignments=[
-                _assign("browser", "primary"),
+                _assign("conversation", "primary"),
                 _assign("browser", "companion"),
+                _assign("browser", "support"),
             ],
             match="at most once",
         )
@@ -255,7 +256,7 @@ class TestR17DeterministicRejection:
         self._assert_rejected(
             template=AdaptiveTemplate.SIDECAR,
             assignments=[
-                _assign("browser", "primary"),
+                _assign("conversation", "primary"),
                 _assign("ghost", "companion"),
             ],
             match="unregistered",
@@ -292,16 +293,44 @@ class TestR17DeterministicRejection:
         )
 
     def test_empty_assignments_rejected(self):
-        self._assert_rejected(
-            template=AdaptiveTemplate.FOCUS, assignments=[], match="at least"
+        # R12 anchor rule: empty input is still valid — the conversation
+        # anchor is injected, so a focus layout with only conversation
+        # applies instead of being rejected.
+        tctx, bus = _make_context()
+        result = _run(tctx, template=AdaptiveTemplate.FOCUS, assignments=[])
+        assert result.startswith("Disposición ")
+        assert "aplicada" in result
+        cmd = [e.command for e in bus.events if isinstance(e, UiCommandEvent)][0]
+        assert isinstance(cmd, LayoutCompose)
+        surfaces = [a.surface_id for a in cmd.assignments]
+        assert surfaces == ["conversation"]
+        assert cmd.template is AdaptiveTemplate.FOCUS
+
+    def test_missing_conversation_injected_as_anchor(self):
+        # R12 (reviewer round 12 finding 1): the model composed a layout
+        # with ONLY document_editor and the old man lost his chat. The
+        # conversation anchor is ALWAYS injected; a model primary tiles
+        # the side under split (focus cannot host two primaries).
+        tctx, bus = _make_context()
+        result = _run(
+            tctx,
+            template=AdaptiveTemplate.FOCUS,
+            assignments=[_assign("document_editor", "primary")],
         )
+        assert result == "Disposición split aplicada."
+        cmd = [e.command for e in bus.events if isinstance(e, UiCommandEvent)][0]
+        assert isinstance(cmd, LayoutCompose)
+        slots = {a.surface_id: a.slot for a in cmd.assignments}
+        assert slots == {"conversation": "main", "document_editor": "side"}
+        assert cmd.template is AdaptiveTemplate.SPLIT
 
     def test_rejection_is_deterministic(self):
         kwargs = dict(
             template=AdaptiveTemplate.SIDECAR,
             assignments=[
-                _assign("browser", "primary"),
+                _assign("conversation", "primary"),
                 _assign("browser", "companion"),
+                _assign("browser", "support"),
             ],
         )
         results = {self._assert_rejected(**kwargs) for _ in range(3)}

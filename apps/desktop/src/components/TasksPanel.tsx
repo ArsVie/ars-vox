@@ -57,6 +57,15 @@ const STATUS_LABEL: Record<TodoStatus, string> = {
   error: "Error",
 };
 
+/** R12 (2026-08-14, reviewer round 12 finding 2): cadence was rendered raw
+ *  ("daily"/"none"). The backend sends the enum; the panel must speak
+ *  Spanish. Unknown values fall back to the raw string. */
+const CADENCE_LABELS: Record<string, string> = {
+  none: "una sola vez",
+  daily: "a diario",
+  weekly: "todas las semanas",
+};
+
 /** True when the (optional) progress field carries a usable value. */
 function hasProgress(value: unknown): boolean {
   if (typeof value === "number") return Number.isFinite(value) && value >= 0;
@@ -323,7 +332,7 @@ export function TasksPanel({
                   <li key={rem.id} className="reminder-row">
                     <span className="reminder-title">{rem.title}</span>
                     <span className="reminder-cadence">
-                      {`${rem.cadence} · próxima ${humanizeDue(rem.next_fire)}`}
+                      {`${CADENCE_LABELS[rem.cadence] ?? rem.cadence} · próxima ${humanizeDue(rem.next_fire)}`}
                     </span>
                   </li>
                 ))}

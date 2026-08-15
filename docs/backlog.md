@@ -755,3 +755,34 @@ Veredicto del abuelo en la ronda 11: NO para uso diario — "me amarga que
 cuando le contesto lo que me preguntó me ignore otra vez". Todas las
 causas raíz identificadas y corregidas con verificación en vivo; queda
 la ronda 12 para confirmar.
+
+## Backlog (reviewer round 12)
+
+1. MAJOR: Al crear un documento ("creá un documento y llamalo mis recetas"), la composición queda SOLO con el panel del documento: la conversación (chat + caja de escritura) desaparece por completo del DOM. Se esperaba que la conversación permanezca en TODA composición (regla del backlog "Conversation is always present") y que el chat quede alcanzable siempre. En cambio el usuario pierde la entrada de texto y no puede pedir nada más hasta salir del documento manualmente; el asistente no avisó que la conversación se iba a ocultar.
+
+## Backlog (reviewer round 12 — fixed 2026-08-14)
+
+1. MAJOR: Al crear un documento, la conversación desaparecía de la pantalla
+   (solo quedaba el editor) — el abuelo perdía el chat hasta tocar el botón
+   de inicio. CAUSA RAIZ: el modelo compuso un layout con SOLO
+   document_editor via layout.compose (evidencia de auditoría: 01:02:37
+   layout.compose focus [document_editor]); layout_compose aceptaba
+   cualquier composición sin proteger el ancla. FIX: layout_compose ahora
+   inyecta SIEMPRE la conversación como ancla (primary en main; el
+   ocupante previo pasa a side; focus -> sidecar cuando hace falta).
+   Verificado en vivo: al crear un documento, chat + entrada + editor
+   presentes juntos en el DOM.
+2. MAJOR: La sección RECORDATORIOS del panel de tareas mostraba el
+   cadence crudo en inglés ("daily", "none") — el abuelo no entiende esas
+   palabras. CAUSA RAIZ: TasksPanel.tsx renderizaba rem.cadence sin
+   traducir. FIX: CADENCE_LABELS (none -> "una sola vez", daily -> "a
+   diario", weekly -> "todas las semanas") con fallback al valor crudo.
+   Verificado en vivo: "a diario · próxima sábado 15 de ago, 7:00 a.m." y
+   "una sola vez", sin "daily"/"none"/"weekly" en el DOM. Además se
+   limpiaron recordatorios basura de rondas anteriores (textos inventados
+   "Recordatorio para mañana a las 9").
+
+Veredicto del abuelo en la ronda 12: "el libro se abrió donde lo dejé y mi
+tarea quedó anotada, pero crear el archivo de recetas me dejó sin nadie
+con quien hablar y los recordatorios todavía tenían palabras en inglés".
+Ambas causas raíz corregidas y verificadas en vivo; la ronda 13 confirma.

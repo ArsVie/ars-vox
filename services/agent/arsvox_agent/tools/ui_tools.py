@@ -163,6 +163,28 @@ async def layout_compose(
     and never reach the UI.
     """
     try:
+        # R12 (2026-08-14, reviewer round 12 finding 1): the conversation
+        # is the anchor and MUST always be on screen — the old man lost
+        # his chat entirely when the model composed a layout with only
+        # document_editor. The conversation is injected into every
+        # compose (primary in main; any prior main occupant moves to the
+        # side companion). Unconditional, regardless of the model's input.
+        if not any(a.surface == "conversation" for a in assignments):
+            assignments = [
+                LayoutAssignmentInput(surface="conversation", role="primary"),
+                *assignments,
+            ]
+            # The injected anchor occupies main; a model primary would
+            # tile the side — a template with only main cannot host both.
+            # split (main|side, exactly two primaries) is the smallest
+            # valid host when the model's own surface is primary. Empty
+            # input stays focus: a conversation-only layout needs just
+            # main.
+            if template == AdaptiveTemplate.FOCUS and any(
+                a.surface != "conversation" and a.role == "primary"
+                for a in assignments
+            ):
+                template = AdaptiveTemplate.SPLIT
         primary_index = 0
         derived: list[LayoutAssignment] = []
         for a in assignments:
