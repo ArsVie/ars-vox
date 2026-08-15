@@ -8,6 +8,10 @@ as LOCAL wall time (the store's configured/system zone), never UTC.
 
 from datetime import datetime, timedelta, timezone
 
+from arsvox_contracts import PanelType
+from arsvox_contracts.commands import PanelOpen
+from arsvox_contracts.events import UiCommandEvent
+
 from arsvox_agent.tools.context import ToolContext
 from arsvox_memory.repos.reminders import normalize_due_utc
 
@@ -149,8 +153,16 @@ async def reminders_list(tctx: ToolContext) -> str:
     active = tctx.deps.reminders.list_active()
     if not active:
         return "No hay recordatorios activos."
+    # R13 (2026-08-14, reviewer round 13 finding 3): "mostrame mis
+    # recordatorios" answered in chat but never opened the tasks panel,
+    # so the RECORDATORIOS section stayed invisible. Open the tasks
+    # panel so the list is visible there too.
+    tctx.deps.panels.upsert(PanelType.TASKS.value, None, None)
+    await tctx.emit(
+        UiCommandEvent(command=PanelOpen(panel_type=PanelType.TASKS, title=None, content_reference=None))
+    )
     lines = [
-        f"#{r['id']} {_due_plain_words(r['due_at'], tctx.deps.reminders.tz)} — {r['text']}"
+        f"{_due_plain_words(r['due_at'], tctx.deps.reminders.tz)} — {r['text']}"
         + (f" (se repite a diario)" if r["repeat_rule"] == "daily" else f" (se repite todas las semanas)" if r["repeat_rule"] == "weekly" else "")
         for r in active
     ]

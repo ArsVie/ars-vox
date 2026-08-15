@@ -196,3 +196,53 @@ def test_resolve_library_file_guards_the_library_boundary(tmp_path):
     assert resolve_library_file(lib, str(lib / "no-such.mp3")) is None
     # Unset library dir refuses everything.
     assert resolve_library_file(None, str(inside)) is None
+
+
+def test_read_book_text_retries_transient_empty_read(tmp_path, monkeypatch):
+    """R13 finding 1: a transient empty read (drvfs EIO) must not leave
+    the book open with empty chapters — read_book_text retries and
+    returns the text once the file is readable again."""
+    from arsvox_agent.tools.library_tools import read_book_text
+
+    class FakeConfig:
+        class _Paths:
+            library_dir = tmp_path
+
+        resolved_paths = _Paths()
+
+    book = tmp_path / "quijote.txt"
+    book.write_text("En un lugar de la Mancha...", encoding="utf-8")
+
+    real_read = type(book).read_text
+    calls = {"n": 0}
+
+    def flaky(self, *a, **kw):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            return ""  # transient empty read
+        return real_read(self, *a, **kw)
+
+    monkeypatch.setattr(type(book), "read_text", flaky)
+    text = read_book_text(FakeConfig(), "quijote")
+    assert text == "En un lugar de la Mancha..."
+    assert calls["n"] >= 3
+
+
+def test_read_book_text_returns_empty_after_all_retries_fail(tmp_path, monkeypatch):
+    """R13 finding 1: if the file stays unreadable the tool returns ""
+    (the frontend no longer flips a book into edit mode, so the panel
+    shows the honest empty-book state instead of a fake editor)."""
+    from arsvox_agent.tools.library_tools import read_book_text
+
+    class FakeConfig:
+        class _Paths:
+            library_dir = tmp_path
+
+        resolved_paths = _Paths()
+
+    book = tmp_path / "quijote.txt"
+    book.write_text("En un lugar de la Mancha...", encoding="utf-8")
+
+    monkeypatch.setattr(type(book), "read_text", lambda *a, **kw: "")
+    text = read_book_text(FakeConfig(), "quijote")
+    assert text == ""

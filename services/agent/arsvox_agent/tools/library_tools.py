@@ -3,6 +3,7 @@ track and restore reading positions. EPUB support lands in Phase 2;
 iteration 1 reads plain-text books (.txt) directly."""
 
 import json
+import time
 
 from arsvox_contracts import PanelType
 from arsvox_contracts.commands import PanelOpen
@@ -30,7 +31,21 @@ def read_book_text(config, book_id: str) -> str:
     for ext in _TEXT_EXTS:
         path = library_dir / f"{book_id}{ext}"
         if path.is_file():
-            return path.read_text(encoding="utf-8", errors="replace")
+            # R13 (2026-08-14, reviewer round 13 finding 1): the book
+            # reader showed an empty editor because a transient drvfs
+            # read failure (/mnt/c EIO) returned "" and library.open
+            # emitted a document.load with title/path but empty
+            # chapters. Retry a few times — the failure is transient
+            # (read_selection succeeded seconds later).
+            for attempt in range(4):
+                try:
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                    if text:
+                        return text
+                except OSError:
+                    pass
+                time.sleep(0.15 * (attempt + 1))
+            return ""
     return ""
 
 

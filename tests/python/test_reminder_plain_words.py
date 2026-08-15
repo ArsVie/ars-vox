@@ -40,3 +40,51 @@ def test_due_plain_words_never_leaks_iso():
         assert "-" not in out, f"raw ISO leaked: {out}"
         assert out.startswith(("hoy", "mañana", "lunes", "martes", "miércoles",
                                "jueves", "viernes", "sábado", "domingo")), out
+
+
+def test_reminders_list_has_no_ids_and_opens_tasks_panel():
+    """R13 findings 2+3: the reminders list never shows raw '#N' ids and
+    the list tool opens the tasks panel (RECORDATORIOS visible)."""
+    import asyncio
+
+    import arsvox_agent.tools.reminder_tools as rt
+
+    class FakeReminders:
+        tz = TZ
+
+        def list_active(self):
+            return [
+                {"id": 2, "text": "Tomar las pastillas", "due_at": _utc_iso_at(8, 1), "repeat_rule": "daily"},
+                {"id": 7, "text": "Llamar a mi nieta", "due_at": _utc_iso_at(9, 0), "repeat_rule": "none"},
+            ]
+
+    class FakePanels:
+        def __init__(self):
+            self.opened = []
+
+        def upsert(self, *args):
+            self.opened.append(args)
+
+    class FakeAudit:
+        @staticmethod
+        def log(*args):
+            pass
+
+    class FakeDeps:
+        reminders = FakeReminders()
+        panels = FakePanels()
+        audit = FakeAudit()
+
+    emitted = []
+
+    class FakeTctx:
+        deps = FakeDeps()
+
+        async def emit(self, event):
+            emitted.append(event)
+
+    out = asyncio.run(rt.reminders_list(FakeTctx()))
+    assert "#" not in out, f"raw id leaked: {out}"
+    assert "Tomar las pastillas" in out and "Llamar a mi nieta" in out
+    assert "se repite a diario" in out
+    assert any(getattr(e, "type", "") == "ui_command" for e in emitted), "tasks panel was not opened"

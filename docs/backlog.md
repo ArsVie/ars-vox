@@ -786,3 +786,25 @@ Veredicto del abuelo en la ronda 12: "el libro se abrió donde lo dejé y mi
 tarea quedó anotada, pero crear el archivo de recetas me dejó sin nadie
 con quien hablar y los recordatorios todavía tenían palabras en inglés".
 Ambas causas raíz corregidas y verificadas en vivo; la ronda 13 confirma.
+
+## Backlog (reviewer round 13)
+
+1. MAJOR: Al pedir "leeme el Don Quijote" con el panel de medios compuesto, el asistente respondió "Listo, te abrí el Quijote donde lo dejaste" y citó texto en el chat, pero el panel de documento (class "reading-surface reading-surface--companion") muestra un EDITOR VACÍO: textarea sin contenido (0 caracteres), sin "Sección 1: En un lugar de la Mancha..." y sin superficie de lectura, estable por más de 38 segundos. Se esperaba que el panel mostrara el texto del libro (regresión de la ronda 11, hallazgo 4, supuestamente FIXED con DocumentPanel.tsx docKey + chapters.length). La mentira es doble: el asistente afirma haber abierto el libro y el panel no muestra nada legible.
+
+2. MAJOR: Al pedir "mostrame mis recordatorios", la respuesta del asistente muestra IDs técnicos crudos ("#2 mañana a las 8 de la mañana — Tomar las pastillas (se repite a diario); #4 ...; #9 ...") y el mismo recordatorio repetido con textos casi idénticos ("Llamar a mi nieta" #12 y "que llame a mi nieta" #20 a las 9, más "que llame a mi nieta" #16 a las 10): recordatorios basura de rondas anteriores que la limpieza de la ronda 12 no eliminó. Se esperaba una lista en palabras simples, sin IDs, sin duplicados confusos para el abuelo.
+
+3. MINOR: Al pedir "mostrame mis recordatorios" el panel de tareas NO se abrió (no existe la sección RECORDATORIOS en el DOM, que la ronda 12 verificó mostrando "una sola vez"/"a diario"); el asistente respondió solo en el chat con la lista. Se esperaba que la sección RECORDATORIOS del panel de tareas quedara visible con las cadencias en español. (Verificado aparte con "abrime mis tareas": la sección RECORDATORIOS SÍ muestra "una sola vez"/"a diario" correctamente.)
+
+4. MINOR: El botón DETENER tiene el cuadrado rojo correcto (rgb(238,92,97)) pero alrededor conserva un resplandor AZUL (box-shadow rgba(59,130,246,0.38)) heredado de la regla genérica ".composer button" — el glifo rojo con halo azul desentona; se esperaba que todo el botón de stop se viera rojo, sin halo azul.
+
+
+
+
+## Backlog (fixes round 13)
+
+1. (MAJOR) Libro vacío — FIXED: book_reader NUNCA entra en modo edición (el lector de libros es para leer, no editar; el efecto R6 que abría el editor vacío aplica solo a document_editor) + read_book_text reintenta 4 veces ante fallos transitorios de lectura (drvfs EIO en /mnt/c) para que library.open nunca emita chapters vacíos por un glitch. Verificado en vivo: el panel muestra la superficie de lectura con las secciones; un load vacío ya no produce un editor con Cancelar/Guardar.
+2. (MAJOR) Lista de recordatorios con IDs crudos — FIXED: reminders_list ya no antepone "#N"; los duplicados basura ("que llame a mi nieta" x2) se eliminaron de la base. La lista muestra solo palabras simples.
+3. (MINOR) "mostrame mis recordatorios" no abría el panel de tareas — FIXED: reminders_list emite panel.open tasks (RECORDATORIOS queda visible).
+4. (MINOR) Halo azul en DETENER — FIXED: .stop-button box-shadow: none (el resplandor azul venía de la regla genérica .composer button).
+
+Fixes verificados en vivo (DOM + wire): libro con secciones, lista sin #N, panel de tareas abierto con RECORDATORIOS, stop sin halo. Backend 502 + frontend 828 verdes (ronda 13).

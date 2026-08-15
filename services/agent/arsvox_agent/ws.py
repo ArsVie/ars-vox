@@ -18,12 +18,15 @@ from arsvox_contracts import (
     ActionResultEvent,
     AgentMessageEvent,
     ConfigUpdateEvent,
+    PanelType,
     PongEvent,
     StateUpdateEvent,
+    UiCommandEvent,
     UserMessageEvent,
     VoiceState,
     parse_client_message,
 )
+from arsvox_contracts.commands import PanelOpen
 
 from arsvox_agent.actions import handle_ui_command
 from arsvox_agent.events import EventBus
@@ -179,6 +182,15 @@ async def _handle_local_intent(
         # the question).
         await runtime.deps_base.bus.publish(
             UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
+        )
+        # R13 (2026-08-14, reviewer round 13 finding 3): listing
+        # reminders must also open the tasks panel so RECORDATORIOS is
+        # visible — chat-only answers hid it.
+        runtime.deps_base.panels.upsert(PanelType.TASKS.value, None, None)
+        await runtime.deps_base.bus.publish(
+            UiCommandEvent(
+                command=PanelOpen(panel_type=PanelType.TASKS, title=None, content_reference=None)
+            )
         )
         await runtime.deps_base.bus.publish(
             AgentMessageEvent(text=scheduler.list_active_text(), delta=False)

@@ -97,7 +97,14 @@ export function DocumentPanel({ meta, panelId }: { meta?: PanelMeta; panelId: Pa
     : null;
   useEffect(() => {
     if (!doc || isBinary) return;
-    if (content.length === 0 && chapters.length === 0) {
+    // R13 (2026-08-14, reviewer round 13 finding 1): a BOOK READER must
+    // never auto-switch to the editor. When the book text read fails
+    // transiently (drvfs EIO on /mnt/c) the document.load arrives with
+    // title/path but empty chapters — the old effect flipped the reader
+    // into an empty editor and nothing recovered it. Books are read,
+    // not edited: only the document_editor surface auto-opens in edit
+    // mode (R6), and only for a freshly created empty document.
+    if (panelId !== "book_reader" && content.length === 0 && chapters.length === 0) {
       setMode("edit");
       setDraft("");
     } else if (mode === "edit" && draft === "") {

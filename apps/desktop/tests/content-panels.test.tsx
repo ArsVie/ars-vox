@@ -297,6 +297,32 @@ describe("DocumentPanel", () => {
     expect(html).toContain("No hay documento abierto. Pídeme que abra uno.");
     expect(html).not.toContain("document-mode-btn");
   });
+
+  it("R13: book_reader with an empty load never flips into the editor", () => {
+    // R13 (reviewer round 13 finding 1): a transient book-read failure
+    // emits document.load with title/path but empty chapters — the old
+    // R6 effect turned the BOOK READER into an empty editor. Books are
+    // read, never edited.
+    appStore.getState().applyEvent({
+      type: "document.load",
+      title: "don-quijote",
+      kind: "md",
+      path: "/library/don-quijote.txt",
+      content: "",
+      chapters: [],
+      created_at: ts(),
+    });
+
+    const html = renderPrimary(
+      <DocumentPanel panelId="book_reader" />,
+      "book_reader",
+      STANDARD_ROLES,
+    );
+    expect(html).toContain("document-mode-btn"); // Editar: read mode is fine
+    expect(html).not.toContain("Cancelar");
+    expect(html).not.toContain("Guardar");
+    expect(html).not.toContain("content-panel-empty-text");
+  });
 });
 
 describe("MediaDock", () => {

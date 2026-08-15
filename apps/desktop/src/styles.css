@@ -1106,6 +1106,10 @@ select:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* R13 (2026-08-14, reviewer round 13 finding 4): the generic
+     .composer button box-shadow (blue glow) leaked onto the stop
+     button — the red stop square wore a blue halo. Kill the shadow. */
+  box-shadow: none;
   /* Advisor P0: the stop control must be >= 48px and globally visible. It
      sits in the shell chrome, always rendered, in every template.
      Size via UI-104 catalog token (--control-height-lg = 48px). */
