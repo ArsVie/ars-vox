@@ -52,7 +52,16 @@ class FakeWebSocket {
   }
 
   send(message: unknown): void {
-    this.sentMessages.push(String(message));
+    const text = String(message);
+    // R14: the client declares its IANA timezone on open (client.info).
+    // Protocol frames are not application traffic — tests asserting
+    // exact message arrays must not see them.
+    try {
+      if (JSON.parse(text)?.type === "client.info") return;
+    } catch {
+      // not JSON — treat as application message
+    }
+    this.sentMessages.push(text);
   }
 
   close(): void {

@@ -138,6 +138,12 @@ class ReminderStore:
         self.tz_name = tz_name
         self.tz = resolve_tz(tz_name)
 
+    def set_tz(self, tz_name: str) -> None:
+        """R14 (2026-08-14): re-anchor to the client-declared zone.
+        Invalid names fall back to the system zone (resolve_tz)."""
+        self.tz_name = tz_name
+        self.tz = resolve_tz(tz_name)
+
     # ------------------------------------------------------------------ #
     def create(
         self,

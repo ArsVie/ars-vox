@@ -118,6 +118,13 @@ async def _handle_client_message(
     if message.type == "ping":
         await ws.send_text(PongEvent().model_dump_json())
         return
+    if message.type == "client.info":
+        # R14 (2026-08-14, reviewer round 14 finding 4): anchor reminder
+        # parsing/display to the USER's zone (browser) instead of the
+        # backend's system zone (WSL can drift an hour from Windows).
+        if message.timezone:
+            runtime.deps_base.reminders.set_tz(message.timezone)
+        return
     if message.type == "stop":
         await runtime.cancel()
         return

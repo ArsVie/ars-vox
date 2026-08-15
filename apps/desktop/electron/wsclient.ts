@@ -168,6 +168,19 @@ export class WsClient {
         this.backoff.reset();
         this.flushOutbox();
         this.onOpen?.();
+        // R14: declare the browser's IANA zone so the backend anchors
+        // reminder parsing/display to the USER's clock (Windows), not
+        // WSL's (they can differ by an hour).
+        try {
+          this.send(
+            JSON.stringify({
+              type: "client.info",
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
+            }),
+          );
+        } catch {
+          // non-fatal: backend falls back to its system zone
+        }
       }
       this.parseFrames();
     });

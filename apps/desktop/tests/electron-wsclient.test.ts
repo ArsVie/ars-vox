@@ -195,7 +195,16 @@ class MockWsServer {
 
   private onClientFrame(socket: net.Socket, fin: boolean, opcode: number, payload: Buffer): void {
     if (opcode === OP_TEXT) {
-      this.receivedMessages.push(payload.toString("utf8"));
+      const text = payload.toString("utf8");
+      // R14: the client declares its IANA timezone on open (client.info).
+      // That protocol frame is not application traffic — tests asserting
+      // exact message arrays must not see it.
+      try {
+        if (JSON.parse(text)?.type === "client.info") return;
+      } catch {
+        // not JSON — treat as application message
+      }
+      this.receivedMessages.push(text);
     } else if (opcode === OP_PONG) {
       this.receivedPongs += 1;
     } else if (opcode === OP_CLOSE) {

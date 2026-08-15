@@ -1106,10 +1106,6 @@ select:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* R13 (2026-08-14, reviewer round 13 finding 4): the generic
-     .composer button box-shadow (blue glow) leaked onto the stop
-     button — the red stop square wore a blue halo. Kill the shadow. */
-  box-shadow: none;
   /* Advisor P0: the stop control must be >= 48px and globally visible. It
      sits in the shell chrome, always rendered, in every template.
      Size via UI-104 catalog token (--control-height-lg = 48px). */
@@ -1123,6 +1119,15 @@ select:focus-visible,
   cursor: pointer;
   flex: none;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* R13/R14 (2026-08-14): the generic .composer button glow (0-1-1) beat
+   .stop-button (0-1-0) — the red stop square wore a blue halo. These
+   scoped rules (0-2-1+) win over base, hover and active. */
+.composer .stop-button,
+.composer .stop-button:hover:not(:disabled),
+.composer .stop-button:active:not(:disabled) {
+  box-shadow: none;
 }
 
 /* UI-WAVE: push STOP to the right edge of the composer status row. */

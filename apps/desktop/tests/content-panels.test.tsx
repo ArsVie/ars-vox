@@ -361,10 +361,12 @@ describe("MediaDock", () => {
     expect(html).not.toContain("media-player");
   });
 
-  it("stopped track + new search results -> search surface again (GATE-5 reoffer)", () => {
-    // The server's stopped event RETAINS the track metadata, so the
-    // dock must return to the cards on the NEXT offer — not pin the
-    // dead player for the rest of the session.
+  it("stopped track + new search results -> player STAYS, offers below (R14 finding 2)", () => {
+    // R14 (2026-08-14, reviewer round 14 finding 2): the server's stopped
+    // event RETAINS the track metadata; the dock must KEEP the player so
+    // "Reproducir" resumes the same track after "pará la música", with
+    // the fresh offer cards rendered BELOW — not pin the dead player
+    // forever, and not hide the resume affordance either.
     appStore.getState().applyEvent({
       type: "media.state",
       state: "stopped",
@@ -402,8 +404,9 @@ describe("MediaDock", () => {
     }));
 
     const html = renderPrimary(<MediaDock panelId="media" />, "media", MEDIA_ROLES);
+    expect(html).toContain("media-player");
+    expect(html).toContain("media-dock-reoffers");
     expect(html).toContain("youtube-card");
     expect(html).toContain("Clases de guitarra");
-    expect(html).not.toContain("media-player");
   });
 });

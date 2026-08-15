@@ -808,3 +808,22 @@ Ambas causas raíz corregidas y verificadas en vivo; la ronda 13 confirma.
 4. (MINOR) Halo azul en DETENER — FIXED: .stop-button box-shadow: none (el resplandor azul venía de la regla genérica .composer button).
 
 Fixes verificados en vivo (DOM + wire): libro con secciones, lista sin #N, panel de tareas abierto con RECORDATORIOS, stop sin halo. Backend 502 + frontend 828 verdes (ronda 13).
+
+## Backlog (reviewer round 14)
+
+1. MAJOR: Mientras la música está sonando, el botón DETENER debe verse todo rojo sin ningún halo. En vivo, el botón (clase "stop-button") tiene el cuadrado rojo (rgb(238,92,97)) pero su box-shadow COMPUTADO es azul (rgba(59,130,246,0.38) 0px 4px 16px), heredado de la regla genérica ".composer button" (especificidad 0-1-1) que VENCE a ".stop-button { box-shadow: none }" (0-1-0) — el fix declarado en la ronda 13 no tiene efecto. El usuario ve un halo azul alrededor del stop rojo.
+
+2. MINOR: Después de decir "pará la música" (detención total), no queda ningún control de reproducción visible para reanudar: el panel de medios vuelve a la vista de búsqueda y el botón DETENER del compositor permanece en pantalla con el glifo de cuadrado rojo, pero hacer clic en él no reanuda la música (solo quita su clase "active"). Se esperaba que el usuario pudiera reanudar la música con un toque desde la barra persistente (o que el botón cambiara a ▶), no que tuviera que volver a elegir el video. (El botón ▶ del reproductor en estado pausado SÍ funciona: reanuda.)
+
+3. MINOR: Al pedir dos veces "agregá comprar pan a mis tareas", la tarea no se duplica (bien) pero la respuesta del asistente en el chat contiene el ID técnico crudo: "«Comprar pan» ya está en tu lista de tareas (#4)". Se esperaba una respuesta en palabras simples, sin "#4" ni ningún id en pantalla (el abuelo no entiende ids).
+
+4. MAJOR: La sección RECORDATORIOS del panel de tareas muestra la HORA INCORRECTA para todos los recordatorios: una hora antes de la real. El recordatorio "que llame a mi nieta" creado para mañana a las 9 de la mañana aparece en el panel como "próxima sábado 15 de ago, 8:00 a.m."; "Tomar las pastillas (a diario)" de las 8 aparece a las 7:00 a.m.; "que le dé de comer al gato" de las 10 aparece a las 9:00 a.m. La respuesta del chat y la base de datos (due_at 15:00 UTC = 9:00 local) coinciden en 9; el panel descuenta una hora de más. Se esperaba que el panel mostrara la misma hora que el chat ("mañana a las 9 de la mañana", no 8:00).
+
+5. MAJOR: Al crear "que llame a mi nieta" para mañana a las 9, la lista queda con DOS recordatorios que dicen lo mismo a la misma hora: "Llamar a mi nieta" (sábado 15, 9:00) y "que llame a mi nieta" (sábado 15, 9:00) — el registro "Llamar a mi nieta" de rondas anteriores no se tuvo en cuenta al agendar (la diferencia de redacción evita la deduplicación). El abuelo ve dos avisos idénticos y no sabe cuál borrar; es el mismo problema de duplicados de la ronda 13 (hallazgo 2). Se esperaba que la lista no tuviera duplicados.
+
+## Backlog (fixes round 14, 2026-08-14)
+1. (MAJOR, finding 1) El botón DETENER debe verse rojo SIN resplandor azul: la regla genérica .composer button (0-1-1) vencía a .stop-button (0-1-0). Ahora .composer .stop-button (0-2-1+) anula el brillo en base, hover y active.
+2. (MINOR, finding 2) Después de "pará la música" el usuario debe poder reanudar: el reproductor permanece montado con Reproducir habilitado y las ofertas quedan DEBAJO (media-dock-reoffers), no en lugar del reproductor.
+3. (MINOR, finding 3) Las respuestas de tareas no deben mostrar ids crudos "(#4)": "Tarea agregada: {title}." sin id.
+4. (MAJOR, finding 4) El panel debe mostrar la hora REAL del usuario: el navegador declara su zona IANA (client.info) y el backend ancla recordatorios a ella (set_tz); antes WSL (Chihuahua UTC-6) y Windows (Pacífico UTC-7) diferían 1 h. Los registros existentes se re-anclaron +1 h.
+5. (MAJOR, finding 5) No duplicar recordatorios: al completar un borrador se rechaza si ya existe uno activo con texto similar en la misma hora ("Llamar a mi nieta" vs "que llame a mi nieta" -> "Ya tenés anotado...").

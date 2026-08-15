@@ -202,6 +202,71 @@ async def test_time_only_reminder_intercepted_llm_free(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_reminder_draft_dedupes_similar_text_same_hour(tmp_path):
+    """R14 (2026-08-14, reviewer round 14 finding 5): completing a draft
+    whose text is a near-duplicate of an active reminder at the same hour
+    must NOT create a second reminder — the old man saw "Llamar a mi
+    nieta" + "que llame a mi nieta" as one note twice."""
+    from arsvox_agent.tools import ToolRegistry
+
+    deps, bus = _make_deps(tmp_path)
+    # seed an active reminder at TOMORROW 9:00 local — the same instant
+    # the interception will draft ("mañana a las 9")
+    from datetime import datetime, timedelta
+
+    from arsvox_memory.repos.reminders import normalize_due_utc
+
+    tomorrow9 = (datetime.now() + timedelta(days=1)).replace(
+        hour=9, minute=0, second=0, microsecond=0
+    ).strftime("%Y-%m-%dT%H:%M")
+    utc_due = normalize_due_utc(tomorrow9, deps.reminders.tz)
+    deps.reminders.create("Llamar a mi nieta", utc_due, "none")
+
+    runtime = AgentRuntime(
+        config=deps.config,
+        deps_base=deps,
+        registry=ToolRegistry(),
+        bus=bus,  # type: ignore[arg-type]
+    )
+    await runtime.handle_user_text("poneme un recordatorio para mañana a las 9")
+    pending = [p for p in deps.pending.list_pending() if p["tool"] == "reminders.create_draft"]
+    assert pending, "interception must register a draft"
+    await runtime.handle_user_text("que llame a mi nieta")
+    active = deps.reminders.list_active()
+    nieta = [r for r in active if "nieta" in r["text"]]
+    assert len(nieta) == 1, f"duplicate created: {nieta}"
+    last_agent = [e for e in bus.events if isinstance(e, ev.AgentMessageEvent)][-1]
+    assert "Ya tenés" in last_agent.text
+
+
+@pytest.mark.asyncio
+async def test_reminder_draft_allows_different_text_same_hour(tmp_path):
+    """Same hour + clearly different text must still create (the dedupe
+    is text similarity, not hour alone)."""
+    from arsvox_agent.tools import ToolRegistry
+
+    deps, bus = _make_deps(tmp_path)
+    from datetime import datetime
+
+    from arsvox_memory.repos.reminders import normalize_due_utc
+
+    local_due = datetime.now().replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M")
+    utc_due = normalize_due_utc(local_due, deps.reminders.tz)
+    deps.reminders.create("Llamar al médico", utc_due, "none")
+
+    runtime = AgentRuntime(
+        config=deps.config,
+        deps_base=deps,
+        registry=ToolRegistry(),
+        bus=bus,  # type: ignore[arg-type]
+    )
+    await runtime.handle_user_text("poneme un recordatorio para mañana a las 9")
+    await runtime.handle_user_text("comprar el pan")
+    active = deps.reminders.list_active()
+    assert len([r for r in active if "pan" in r["text"]]) == 1
+
+
+@pytest.mark.asyncio
 async def test_reminder_draft_skipped_when_no_draft(tmp_path):
     """Without a draft, a normal message starts a normal turn (the
     confirmation funnel must not swallow arbitrary text)."""

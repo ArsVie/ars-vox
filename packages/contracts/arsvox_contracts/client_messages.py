@@ -82,6 +82,18 @@ class PingMessage(BaseModel):
     type: Literal["ping"]
 
 
+class ClientInfoMessage(BaseModel):
+    """R14 (2026-08-14, reviewer round 14 finding 4): the browser lives in
+    the USER's timezone (Windows) while the backend resolves the system
+    zone (WSL) — the two can differ by an hour (Chihuahua vs Pacific), so
+    "9 de la mañana" parsed by the backend and displayed by the panel
+    disagreed. The client declares its IANA timezone; the backend anchors
+    reminder parsing/display to it."""
+
+    type: Literal["client.info"]
+    timezone: str | None = None
+
+
 # --------------------------------------------------------------------- #
 # C1 (GATE-3.5): client-initiated actions — NARROWED union.
 #
@@ -138,6 +150,7 @@ ClientMessage = Annotated[
         TtsFinished,
         TtsCancelled,
         PingMessage,
+        ClientInfoMessage,
         UiCommandMessage,
     ],
     Field(discriminator="type"),

@@ -294,18 +294,21 @@ describe("GATE-5 W1-MEDIA-LOCAL: one unified player", () => {
   });
 });
 
-describe("GATE-5 reoffer: a stopped track + a new offer returns the selectable-card surface", () => {
-  it("stopped track (metadata retained) + search results -> cards render again", () => {
+describe("GATE-5 reoffer: a stopped track keeps the player with the offers below", () => {
+  it("stopped track (metadata retained) + search results -> player STAYS + cards below", () => {
     seedYoutubeTrack();
     stopCurrentTrack(); // stopped event RETAINS title/videoId/url
     seedOffer(); // fresh media.search_results
 
     const html = renderPrimary();
+    // R14 (2026-08-14, reviewer round 14 finding 2): after "pará la
+    // música" the old man must still see the player (resume affordance);
+    // the fresh offers render BELOW it, not instead of it.
+    expect(html).toContain("media-player");
+    expect(html).toContain("media-dock-reoffers");
     expect(html).toContain("youtube-panel");
     expect(html).toContain("youtube-card");
     expect(html).toContain("Clases de guitarra");
-    expect(html).not.toContain("media-player");
-    expect(html).not.toContain("youtube.com/embed");
   });
 
   it("playing track keeps the player even when results are in the bag", () => {
@@ -322,7 +325,7 @@ describe("GATE-5 reoffer: a stopped track + a new offer returns the selectable-c
     seedYoutubeTrack();
     stopCurrentTrack();
     seedOffer();
-    expect(renderPrimary()).toContain("youtube-card"); // cards NOW
+    expect(renderPrimary()).toContain("media-dock-reoffers"); // offers below the player NOW
 
     // The pick's outcome on the ONE controller: media.state playing.
     appStore.getState().applyEvent({

@@ -318,8 +318,16 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
   // keeps the player: playing is the vision-line playback state, paused
   // is a deliberate resume point.
   const youtubeContent = useStore(appStore, (s) => s.content.youtube);
-  const showSearchSurface =
-    !hasTrack || (m.state === "stopped" && (youtubeContent?.results.length ?? 0) > 0);
+  // GATE-5 (reoffer) + R14 finding 2: a STOPPED track must NOT hide the
+  // player — the old man expects the persistent play button to RESUME
+  // the same track after "pará la música". The search cards stay
+  // available as a reoffer strip BELOW the player (see JSX), so every
+  // offer remains clickable without killing the resume affordance.
+  const showSearchSurface = !hasTrack;
+  const showReofferStrip =
+    hasTrack &&
+    m.state === "stopped" &&
+    (youtubeContent?.results.length ?? 0) > 0;
   const isVideo = m.kind === "video";
   const isPlaying = m.state === "playing";
   const progress = m.durationS > 0 ? Math.min(100, (m.positionS / m.durationS) * 100) : 0;
@@ -555,6 +563,16 @@ export function MediaDock({ meta, panelId }: { meta?: PanelMeta; panelId: PanelI
           </div>
         </div>
       )}
+      {/* R14 (2026-08-14, reviewer round 14 finding 2): after a full stop
+          the search offers stay reachable — the player remains mounted
+          (resume via the play button) and the offer cards render BELOW
+          it, so the old man can either resume the same track or pick a
+          new one without losing the player. */}
+      {showReofferStrip ? (
+        <div className="media-dock-reoffers">
+          <YoutubePanel meta={meta} embedded />
+        </div>
+      ) : null}
     </section>
   );
 }

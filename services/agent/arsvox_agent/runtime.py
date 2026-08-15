@@ -6,6 +6,8 @@ import asyncio
 import dataclasses
 import functools
 import logging
+import re
+import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -54,6 +56,45 @@ def _friendly_error(exc: Exception) -> str:
     if isinstance(exc, asyncio.TimeoutError):
         return "Tardé demasiado en responder. Inténtalo de nuevo."
     return "Ocurrió un problema. Inténtalo de nuevo."
+
+
+def _normalize_reminder_text(text: str) -> str:
+    """Lowercase, strip accents, collapse whitespace, drop filler
+    lead-ins ("que ", "quiero que ", "necesito que ") so "Llamar a mi
+    nieta" and "que llame a mi nieta" compare equal enough to dedupe."""
+    folded = "".join(
+        c for c in unicodedata.normalize("NFD", text.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+    folded = re.sub(r"^(quiero|necesito|tené?|poné?|agendá?|que|por favor)[\s,]+", "", folded)
+    return re.sub(r"\s+", " ", folded).strip()
+
+
+def _find_similar_active(reminders, text: str, due_at: str) -> dict | None:
+    """R14 (2026-08-14, reviewer round 14 finding 5): an active reminder
+    whose normalized text matches the new one within the SAME wall hour
+    counts as a duplicate — the old man saw "Llamar a mi nieta" and "que
+    llame a mi nieta" as the same note twice."""
+    from difflib import SequenceMatcher
+
+    target = _normalize_reminder_text(text)
+    try:
+        target_hour = datetime.fromisoformat(due_at).replace(minute=0, second=0, microsecond=0)
+    except ValueError:
+        return None
+    for r in reminders.list_active():
+        try:
+            hour = datetime.fromisoformat(r["due_at"]).replace(minute=0, second=0, microsecond=0)
+        except (ValueError, KeyError):
+            continue
+        if hour != target_hour:
+            continue
+        cand = _normalize_reminder_text(r["text"])
+        if cand == target:
+            return r
+        if SequenceMatcher(None, target, cand).ratio() >= 0.75:
+            return r
+    return None
 
 
 class AgentRuntime:
@@ -261,6 +302,25 @@ class AgentRuntime:
         args = draft.get("args") or {}
         due_at = args.get("due_at") or ""
         repeat_rule = args.get("repeat_rule") or "none"
+        from arsvox_agent.tools.reminder_tools import _due_plain_words
+
+        # R14 (2026-08-14, reviewer round 14 finding 5): dedupe — the old
+        # man saw "Llamar a mi nieta" + "que llame a mi nieta" as the same
+        # thing twice. Refuse when an active reminder matches at the same
+        # hour with similar text (normalized, accent-insensitive).
+        existing = _find_similar_active(self.deps_base.reminders, text, due_at)
+        if existing:
+            self.deps_base.pending.resolve(draft["id"], "executed")
+            due_plain = _due_plain_words(due_at, self.deps_base.reminders.tz)
+            return await self.bus.publish(
+                AgentMessageEvent(
+                    id=f"a{uuid.uuid4().hex[:8]}",
+                    text=(
+                        f"Ya tenés anotado: {existing['text']} — "
+                        f"{due_plain}. No lo repito."
+                    ),
+                )
+            )
         # Echo first — the reply must never appear without the question.
         await self.bus.publish(
             UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
@@ -275,7 +335,6 @@ class AgentRuntime:
             )
         # Refresh the tasks panel content (same payload the tools emit).
         from arsvox_agent.tools.notes_tasks_tools import _tasks_update_payload
-        from arsvox_agent.tools.reminder_tools import _due_plain_words
         from arsvox_contracts.events import TasksUpdateEvent
 
         todos, reminders = _tasks_update_payload(self.deps_base)

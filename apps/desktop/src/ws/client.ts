@@ -150,6 +150,20 @@ export class WsClient {
       this.backoff.reset();
       this.flushOutbox();
       this.onStatus?.(true);
+      // R14 (2026-08-14, reviewer round 14 finding 4): declare the
+      // browser's IANA zone so the backend anchors reminder parsing and
+      // display to the USER's clock (Windows), not WSL's (they can
+      // differ by an hour — Chihuahua vs Pacific).
+      try {
+        this.ws?.send(
+          JSON.stringify({
+            type: "client.info",
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
+          }),
+        );
+      } catch {
+        // non-fatal: backend falls back to its system zone
+      }
     };
     ws.onmessage = (raw) => {
       let event: unknown;

@@ -109,7 +109,9 @@ async def tasks_add(tctx: ToolContext, title: str, due_at: str | None = None) ->
         )
     )
     await _emit_tasks_update(tctx)
-    return f"Tarea agregada: {title} (#{task_id})."
+    # R14 (2026-08-14, reviewer round 14 finding 3): the reply leaked
+    # the raw task id "(#4)" — the old man doesn't deal in ids.
+    return f"Tarea agregada: {title}."
 
 
 async def tasks_list(tctx: ToolContext, status: str | None = None) -> str:
