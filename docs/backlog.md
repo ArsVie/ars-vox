@@ -835,3 +835,8 @@ Fixes verificados en vivo (DOM + wire): libro con secciones, lista sin #N, panel
 ## Backlog (reviewer round 16)
 
 1. MAJOR: Cuando el abuelo pregunta "qué hora es", la hora que responde el asistente es UNA HORA MÁS TARDE que la hora real del usuario: el navegador del usuario (America/Mazatlan, UTC-7) marca las 21:33, pero el asistente respondió "Son las 10:30 de la noche" (22:30, la hora del backend en WSL UTC-6). Se esperaba que el asistente diera la hora del RELOJ DEL USUARIO (21:30), igual que la corrección de zona que ya se aplicó a los recordatorios (el navegador declara su zona en client.info); el abuelo ajustaría su reloj una hora mal.
+
+## Backlog (reviewer round 17)
+
+1. **MINOR:** El panel de tareas (sección RECORDATORIOS) debe mostrar los recordatorios en palabras simples en español ("mañana a las 9 de la mañana", "a diario"), sin palabras en inglés ni formato de fecha; en cambio muestra la cadencia en inglés "a.m." y formato de fecha ("próxima sábado 15 de ago, 9:00 a.m.") para cada recordatorio. La respuesta del chat sí usa el formato correcto ("mañana a las 9 de la mañana"), pero el panel no.
+2. **MINOR:** La lista de recordatorios debe contener solo textos reales de recordatorio; en cambio todavía incluye una entrada basura cuyo texto es el propio comando del usuario ("poneme un recordatorio para mañana a las 9") guardada en una ronda anterior, y "mostrame mis recordatorios" la repite tal cual en la respuesta. Se esperaba que la lista y la respuesta solo muestren recordatorios con texto real.

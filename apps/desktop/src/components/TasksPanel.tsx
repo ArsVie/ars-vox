@@ -134,14 +134,20 @@ export function humanizeDue(value: string | null | undefined): string | null {
   if (!trimmed) return null;
   const date = new Date(trimmed);
   if (Number.isNaN(date.getTime())) return trimmed;
+  // R17 (2026-08-14, reviewer round 17 finding): es-MX Intl renders
+  // "9:00 a.m." — the old man wants "9 de la mañana", like the chat.
   try {
-    return new Intl.DateTimeFormat("es-MX", {
+    const h = date.getHours();
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    const m = date.getMinutes();
+    const time = m === 0 ? `${h12}` : `${h12} y ${String(m).padStart(2, "0")}`;
+    const period = h < 12 ? "de la mañana" : h < 19 ? "de la tarde" : "de la noche";
+    const day = new Intl.DateTimeFormat("es-MX", {
       weekday: "long",
       day: "numeric",
       month: "short",
-      hour: "numeric",
-      minute: "2-digit",
     }).format(date);
+    return `${day}, ${time} ${period}`;
   } catch {
     return trimmed;
   }
@@ -332,7 +338,7 @@ export function TasksPanel({
                   <li key={rem.id} className="reminder-row">
                     <span className="reminder-title">{rem.title}</span>
                     <span className="reminder-cadence">
-                      {`${CADENCE_LABELS[rem.cadence] ?? rem.cadence} · próxima ${humanizeDue(rem.next_fire)}`}
+                      {`${CADENCE_LABELS[rem.cadence] ?? rem.cadence} · ${humanizeDue(rem.next_fire)}`}
                     </span>
                   </li>
                 ))}
