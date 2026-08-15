@@ -304,6 +304,14 @@ class AgentRuntime:
         repeat_rule = args.get("repeat_rule") or "none"
         from arsvox_agent.tools.reminder_tools import _due_plain_words
 
+        # Echo FIRST — the old man's words must always appear in the
+        # conversation, whether the reminder is created or deduped
+        # (R15 finding: when the reply hit the dedupe branch, his
+        # message never rendered and he thought the app hadn't heard him).
+        await self.bus.publish(
+            UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
+        )
+
         # R14 (2026-08-14, reviewer round 14 finding 5): dedupe — the old
         # man saw "Llamar a mi nieta" + "que llame a mi nieta" as the same
         # thing twice. Refuse when an active reminder matches at the same
@@ -321,10 +329,6 @@ class AgentRuntime:
                     ),
                 )
             )
-        # Echo first — the reply must never appear without the question.
-        await self.bus.publish(
-            UserMessageEvent(id=f"u{uuid.uuid4().hex[:8]}", text=text)
-        )
         reminder_id = self.deps_base.reminders.create(text, due_at, repeat_rule)
         self.deps_base.pending.resolve(draft["id"], "executed")
         if self.deps_base.audit is not None:

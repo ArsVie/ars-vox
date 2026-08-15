@@ -237,6 +237,11 @@ async def test_reminder_draft_dedupes_similar_text_same_hour(tmp_path):
     assert len(nieta) == 1, f"duplicate created: {nieta}"
     last_agent = [e for e in bus.events if isinstance(e, ev.AgentMessageEvent)][-1]
     assert "Ya tenés" in last_agent.text
+    # R15 (2026-08-14): the user's follow-up words must STILL appear in
+    # the conversation even when the reminder is deduped — the old man
+    # thought the app hadn't heard him when his message never rendered.
+    user_echoes = [e for e in bus.events if isinstance(e, ev.UserMessageEvent)]
+    assert user_echoes[-1].text == "que llame a mi nieta", user_echoes[-1].text
 
 
 @pytest.mark.asyncio

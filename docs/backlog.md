@@ -827,3 +827,7 @@ Fixes verificados en vivo (DOM + wire): libro con secciones, lista sin #N, panel
 3. (MINOR, finding 3) Las respuestas de tareas no deben mostrar ids crudos "(#4)": "Tarea agregada: {title}." sin id.
 4. (MAJOR, finding 4) El panel debe mostrar la hora REAL del usuario: el navegador declara su zona IANA (client.info) y el backend ancla recordatorios a ella (set_tz); antes WSL (Chihuahua UTC-6) y Windows (Pacífico UTC-7) diferían 1 h. Los registros existentes se re-anclaron +1 h.
 5. (MAJOR, finding 5) No duplicar recordatorios: al completar un borrador se rechaza si ya existe uno activo con texto similar en la misma hora ("Llamar a mi nieta" vs "que llame a mi nieta" -> "Ya tenés anotado...").
+
+## Backlog (reviewer round 15)
+
+1. MINOR: Cuando el asistente pregunta "¿Qué te recuerdo mañana a las 9 de la mañana? Decime el texto y lo agendo." y el abuelo responde "que llame a mi nieta", el mensaje del abuelo NO aparece en la conversación: el chat pasa directamente de la pregunta del asistente a la respuesta "Ya tenés anotado: Llamar a mi nieta...", sin el "TÚ que llame a mi nieta" intermedio. Se esperaba que el mensaje del usuario quedara visible en el chat como en cualquier otro intercambio (el abuelo debe ver sus propias palabras en pantalla).
