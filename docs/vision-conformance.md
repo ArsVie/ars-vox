@@ -2,7 +2,7 @@
 
 > Acceptance authority: `docs/panel-vision.md` (FROZEN — Ars's words are the
 > spec; this file quotes them, it never edits them).
-> Program contract: `docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md`.
+> Program contract: `docs/internal/plans/gate-5-vision-conformance-orchestration-2026-08-09.md`.
 > Owner: W1-CONFORMANCE. This checklist is the artifact GATE-1 is judged on.
 > Statuses: **PASS** = closed by evidence; **PENDING** = another lane owns the
 > line, the gate closes it (this lane never closes another lane's line);

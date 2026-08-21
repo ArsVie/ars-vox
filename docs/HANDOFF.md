@@ -15,7 +15,7 @@ Frozen product direction: docs/panel-vision.md (Ars's spec, never edit).
 GATE-3.5 consolidation is CLOSED (2026-08-09): 10 wave-1 branches merged,
 308 pytest / 601 vitest / typecheck / build green, 19/19 acceptance items
 checked. Contract: docs/consolidation-contract-2026-08-08.md.
-Program: docs/plans/consolidation-program-2026-08-08.md.
+Program: docs/internal/plans/consolidation-program-2026-08-08.md.
 
 Next phase: WAVE 2 (MVP backlog, below). Wave 2 work runs IN PARALLEL with
 any remaining plumbing — visible product value comes first.

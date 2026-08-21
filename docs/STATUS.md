@@ -36,7 +36,7 @@ follow-up: Chromium provisioning for the packaged build (backlog).
 
 ## GATE-5 Wave 0 (MERGED + PACKAGED-VERIFIED 2026-08-09; wire and store.ts FROZEN)
 
-Program: docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
+Program: docs/internal/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
 Wave 0 landed the spine: the full wire surface and the store
 decomposition, in one owner each, then froze both. All three lanes merged
 with ancestry verified; post-merge suites green; packaged GATE-0 smoke
@@ -78,7 +78,7 @@ confirmation — screenshots 29–33).
 
 ## GATE-5 Wave 1 (MERGED 2026-08-09; all six lanes landed, post-merge suites green)
 
-Program: docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
+Program: docs/internal/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
 Wave 1 populated the panels against the frozen wire + store: each lane owns
 its slice content, no lane touched the wire or store except the ONE
 orchestrator-approved routing case (document.changed). Two lanes went
@@ -156,7 +156,7 @@ typecheck + build clean.
 
 ## GATE-5 W3-VOICE (wiring wave — merged 2026-08-10)
 
-Program: Wave 3 of docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
+Program: Wave 3 of docs/internal/plans/gate-5-vision-conformance-orchestration-2026-08-09.md.
 "Wire `WakeWordDetector` and `Vad` behind config; barge-in during TTS;
 then the smoke test that has never been run: a physical microphone, in
 the packaged build, in Spanish, with STOP interrupting mid-speech."
@@ -202,7 +202,7 @@ plan's named partial blocker, recorded, not a defect.
 
 ## GATE-5 GATE-2 (INTEGRATED BROWSER — CLOSED 2026-08-10)
 
-Program: Wave 2 of docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md
+Program: Wave 2 of docs/internal/plans/gate-5-vision-conformance-orchestration-2026-08-09.md
 (W2-VIEW → W2-DRIVE → W2-NAVIGATE, SERIAL). ADR 0007
 (docs/decisions/0007-browser-webcontentsview.md) formally reverses the
 8d1fb3f "browser story = renderer iframe" decision: the integrated
@@ -331,7 +331,7 @@ gate re-ran.
 
 ## GATE-4 remediation (CLOSED 2026-08-09)
 
-Program: docs/plans/gate-4-remediation-orchestration-2026-08-09.md.
+Program: docs/internal/plans/gate-4-remediation-orchestration-2026-08-09.md.
 GATE-3.5 closed on green suites alone and four production defects were
 later found living in the seams between individually-correct branches.
 GATE-4 reopened the system: four waves of lane-parallel work, packaged
@@ -392,7 +392,7 @@ split.
 
 ## GATE-3.5 consolidation (CLOSED 2026-08-09)
 
-Program: docs/plans/consolidation-program-2026-08-08.md (two-stage:
+Program: docs/internal/plans/consolidation-program-2026-08-08.md (two-stage:
 consolidation → MVP backlog). Frozen contract:
 docs/consolidation-contract-2026-08-08.md — 8 invariants
 (VOICE/STOP/LAYOUT/MEDIA/CONFIRMATION/SERVICE/RECONNECT/CLIENT-ACTIONS),
@@ -470,7 +470,7 @@ skill reference gate35-merge-lessons-2026-08.md.
 - Contract (UI-000): SurfaceRole / AdaptiveTemplate / Proportion /
   LayoutSpec, registration interface, token catalog, placeholder fixtures,
   deterministic validation. Docs: docs/adaptive-ui-contract.md,
-  docs/plans/adaptive-ui-redesign-execution-2026-08-07.md.
+  docs/internal/plans/adaptive-ui-redesign-execution-2026-08-07.md.
 - Shell + geometry + roles + tokens + harness (UI-101..105), product
   surfaces (UI-201..207: browser, conversation, reading, tasks, media,
   motion, spatial inertia), planner + overrides + a11y (UI-301..303):
@@ -584,7 +584,7 @@ skill reference gate35-merge-lessons-2026-08.md.
 ## Known gaps (next work — WAVE 2 of the consolidation program, prioritized)
 
 0. GATE-3.5 is CLOSED (see above). Wave 2 = MVP backlog (program doc
-   `docs/plans/consolidation-program-2026-08-08.md`):
+   `docs/internal/plans/consolidation-program-2026-08-08.md`):
    A real wake word / VAD physical voice loop (phrase UNDECIDED — "Ars" is
    the family prefix, NOT the wake word; "Lily" is a candidate; no
    training/benchmarking until Ars selects it),

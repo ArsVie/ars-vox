@@ -22,7 +22,7 @@ INTEGRATED browser the agent can drive — search bar, scroll, click,
 read — with the user manipulating the SAME view. An iframe cannot
 provide that: the cross-origin sandbox gives the app no DOM access to
 arbitrary sites, no real back/forward, and no scroll/click bridge. The
-GATE-5 plan (docs/plans/gate-5-vision-conformance-orchestration-2026-08-09.md,
+GATE-5 plan (docs/internal/plans/gate-5-vision-conformance-orchestration-2026-08-09.md,
 Wave 2) states this explicitly:
 
 > The largest and riskiest lane, and the one that requires reversing a

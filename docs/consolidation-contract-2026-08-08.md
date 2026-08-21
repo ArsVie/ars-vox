@@ -1,7 +1,7 @@
 ---
 type: contract
 title: Consolidation contract — one authority per runtime concern (S0)
-description: "S0 freeze before the GATE-3.5 consolidation wave: 8 runtime invariants, semantic deltas vs current implementation (C1-C8), and the P0/P1 regression scenario freeze (R01-R47). Proposed — Ars approval at the S0 gate freezes it. Program DAG: docs/plans/consolidation-program-2026-08-08.md."
+description: "S0 freeze before the GATE-3.5 consolidation wave: 8 runtime invariants, semantic deltas vs current implementation (C1-C8), and the P0/P1 regression scenario freeze (R01-R47). Proposed — Ars approval at the S0 gate freezes it. Program DAG: docs/internal/plans/consolidation-program-2026-08-08.md."
 date: 2026-08-08
 status: proposed
 ---
