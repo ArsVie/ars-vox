@@ -1,235 +1,104 @@
 # Ars-Vox
 
-A local voice assistant that helps an older user operate a computer:
-talk to an assistant, watch YouTube, read books and documents, read the
-news, keep notes and tasks, and send a Telegram message to one approved
-person.
+A local-first voice agent that lets a non-technical elderly user operate a
+computer entirely by speech — conversation, YouTube, books and documents,
+news, notes, tasks, reminders, and messaging to one approved contact.
 
-Current state: **a verified agent-service foundation with a working
-desktop vertical slice and a fully wired real voice path**. TTS
-synthesis (edge provider), STT (faster-whisper), and microphone capture
-(energy VAD + blob-per-utterance) work end to end — verified in real
-Edge with a fake audio device. The only remaining demo gap is a
-real-microphone smoke test on the physical Windows machine.
+![Ars-Vox voice home](docs/screenshots/hero.png)
 
-## Current scope
+*Voice-first home: the user taps the mic and speaks; the assistant answers
+aloud. The red DETENER (stop) control is always visible and never routes
+through the LLM.*
 
-Working end to end (verified live):
+## Why safety is the architecture, not a feature
 
-- Agent service (FastAPI + WebSocket on port 8765) with a PydanticAI
-  runtime, typed tool calls, a policy engine, two-phase confirmations
-  with SQLite argument snapshots, a reminder scheduler, and an audit
-  trail.
-- Electron vertical slice: one window, one React renderer, one WebSocket
-  client, one Zustand store, a persistent status bar, an always-visible
-  stop button, a conversation panel, a document panel, a confirmation
-  panel, an error panel, and layout templates (focus/split/reading/
-  dashboard; adaptive contract: focus/sidecar/stack/split/triple).
-- Deterministic layout engine: the model selects template + panels, the
-  engine computes position, size, z-order, animation, and reduced-motion
-  behavior. Pure TypeScript, covered by Vitest.
-- Live model path: `scripts/demo_live.py` proves an opencode-go model
-  (`deepseek-v4-flash`) produces typed tool calls and `ui_command`
-  events end to end.
-- Local stop path: the protocol `stop` message cancels the running turn
-  without ever involving the LLM.
+The target user **cannot recover from an agent's mistake** — no undo, no
+re-install, no reading error messages. So the design inverts the usual
+priorities: capability is added only when it can be made safe.
 
-- Voice path: `POST /tts` (JSON `{"text": ...}`) synthesizes Spanish
-  speech (edge-tts) and `POST /api/stt` transcribes uploaded audio
-  (faster-whisper, es); `auto_speak` emits a real `tts.speak` and the
-  renderer plays it (Electron disables the autoplay policy; plain
-  browsers get a muted-then-unmute fallback). The composer MIC button
-  records with getUserMedia + MediaRecorder, a pure energy VAD ends the
-  utterance on ~900ms silence (or 30s cap), and the blob is POSTed to
-  `/api/stt` — the transcript flows in as a normal `user_text` message.
-  Verified live: real CDP click on Send produced `POST /tts` with 200 and
-  playback started; the full mic→VAD→STT→agent→TTS loop was verified in
-  real Edge with a fake audio device (see `docs/HANDOFF.md`).
+| Mechanism | What it guarantees |
+|---|---|
+| Six-tier tool policy | Every tool classified (read-only → privileged); unknown tools are denied by default |
+| Two-phase confirmation with SQLite snapshots | The approved action executes the *exact stored arguments* — the model cannot edit them after approval |
+| EffectLedger rollback | Opt-in tools record their inverse during a turn; cancellation rolls them back LIFO |
+| Point-of-no-return tracking | Cancellation is refused past irreversible boundaries instead of failing silently |
+| Local stop path | Stop cancels the turn without ever consulting the model, network, or tool completion |
+| Navigation policy | In-process Chromium engine rejects IPv4/IPv6 private and reserved destinations (SSRF guard, not just an allowlist) |
 
-Not yet done: notes + settings panels, the Electron WebContentsView
-browser (the iframe is web-demo-only), a real-microphone smoke test on
-the target Windows machine, Electron version pinning for the target
-Windows 11 desktop, and the product documentation listed under
-`docs/`.
+Confirmation prompts are written in plain Spanish ("Papá: llegamos tarde"
+→ Aprobar / Rechazar), sized for low computer literacy.
 
-## Repository structure
+## Architecture
 
 ```
-apps/desktop/            Electron + React renderer (TypeScript, Vite)
-  electron/main.ts       main process: one window
-  src/layout/engine.ts   deterministic layout engine (pure TS)
-  src/store.ts           Zustand store (vanilla, node-testable)
-  src/ws/client.ts       WebSocket client with reconnect
-  src/components/        panels, status bar, stop button, overlays
-  tests/                 Vitest coverage (engine + store)
-packages/contracts/      single source of truth for wire contracts
-  arsvox_contracts/      Python event/command/message models
-  schemas/               exported JSON schemas
-  scripts/export_schemas.py
-services/agent/          FastAPI service: runtime, policy, tools, ws
-  arsvox_agent/tools/    tool registry + handlers
-  arsvox_agent/prompts/  system prompt
-services/memory/         SQLite + FTS5: repos, migrations, search
-services/voice/          voice pipeline state machine (mock providers)
-services/tts/            TTS providers + queue (mock providers)
-configs/app.yaml         configuration (single file, validated)
-scripts/smoke_mock.py    boot mock service + one turn, assert events
-scripts/demo_live.py     boot LIVE service + assert typed ui_command
-tests/python/            pytest suite (python + cross-language)
-docs/                    architecture, threat model, ADRs
+apps/desktop/        Electron + React + Zustand + Vite
+  src/layout/        deterministic pure-TS layout engine: the model selects
+                     template + panels; geometry is computed, never generated
+packages/contracts/  single source of truth for wire contracts (pydantic),
+                     exported to JSON Schema for the TS side
+services/agent/      FastAPI + WebSocket agent on PydanticAI: typed tools,
+                     policy engine, confirmations, scheduler, audit trail
+services/memory/     SQLite + FTS5: sessions, documents, reminders, audit
+services/voice/      pipeline state machine: wake word / VAD / STT providers
+services/tts/        pluggable TTS providers + priority queue
 ```
 
-## Setup
+Key decisions:
 
-Python service:
+- **The model never sends coordinates or pixels.** It returns typed
+  `ui_command`s; the UI validates them again before applying anything.
+- **Contracts first**: every message crossing the wire is defined once in
+  `packages/contracts` and mirrored by schema conformance tests.
+- **Deterministic layout**: pure functions of (LayoutSpec, Viewport), covered
+  by Vitest — no LLM output in the math.
+- **Verified end to end with real models**: scripted-mock CI path plus live
+  runs against `deepseek-v4-flash` producing typed tool calls and layout
+  commands; the full mic→VAD→STT→agent→TTS loop verified in a real browser.
+
+## Evidence
+
+- Python + cross-language pytest suite green (counts in [docs/STATUS.md](docs/STATUS.md));
+  Vitest suite green, typecheck clean.
+- Live-model proof: `scripts/demo_live.py` boots the service, sends a spoken-style
+  request, asserts `tool_call → ui_command → tool_result → agent_message`.
+- Written threat model ([docs/threat-model/](docs/threat-model/)) and ADRs under
+  [docs/decisions/](docs/decisions/).
+
+More screenshots: [docs/screenshots/](docs/screenshots/) — split layouts,
+PDF/EPUB reading, browser panel, blocked-navigation refusal, confirmation flow,
+restart persistence.
+
+<details>
+<summary>Running it</summary>
 
 ```bash
-cd /mnt/c/dev/ars-vox
+# Python service (mock mode needs no keys)
 python -m venv .venv
 .venv/bin/pip install -e packages/contracts -e services/memory \
   -e services/tts -e services/voice -e services/agent
+.venv/bin/python scripts/smoke_mock.py          # one-shot event assertions
+
+# Desktop
+cd apps/desktop && npm install && npm run dev
+
+# Live model
+export OPENCODE_GO_API_KEY=...
+.venv/bin/python -m arsvox_agent                # configs/app.yaml, mock: false
 ```
 
-Desktop:
+Configuration is a single validated YAML (`configs/app.yaml`); unknown keys are
+rejected at startup. Tests: `.venv/bin/python -m pytest tests/python -q`,
+`cd apps/desktop && npm test`.
 
-```bash
-cd apps/desktop
-npm install
-```
+</details>
 
-## Run — mock (no network, deterministic)
+<details>
+<summary>Known limitations</summary>
 
-```bash
-# one-shot smoke: boots a mock service, drives one turn, asserts events
-.venv/bin/python scripts/smoke_mock.py
+- Real-microphone smoke test pending on the physical Windows machine (verified
+  end-to-end with a fake audio device via CDP so far).
+- TS types in the renderer are hand-mirrored from the Python contracts.
+- Notes/settings panels and the WebContentsView browser still open.
+- Local alarms cannot fire while the computer is off.
 
-# long-running mock service (scripted model repeats tool -> text every turn)
-.venv/bin/python -m arsvox_agent --mock
-
-# desktop UI against the mock service (second terminal):
-cd apps/desktop && npm run dev        # or: npm run build && npm start
-```
-
-Mock demo scenario: type anything — the scripted model emits
-`demo_populate` (browser/tasks/document/media panels populate), then a
-greeting. Template shots via the 'Plantilla de demostración' selector.
-
-## Run — live model
-
-```bash
-export OPENCODE_GO_API_KEY=...        # see Required environment variables
-.venv/bin/python -m arsvox_agent      # configs/app.yaml, mock: false
-
-# live proof: boots the service, sends "Open YouTube.", asserts
-# tool_call -> ui_command -> tool_result -> agent_message
-.venv/bin/python scripts/demo_live.py
-```
-
-## Test
-
-```bash
-.venv/bin/python -m pytest tests/python -q      # python suite (count in docs/STATUS.md)
-cd apps/desktop && npm test                     # Vitest suite (count in docs/STATUS.md)
-cd apps/desktop && npm run typecheck && npm run build
-```
-
-## Configuration
-
-Single YAML file: `configs/app.yaml` (template: `configs/app.example.yaml`).
-The service validates it with a strict pydantic model — unknown keys are
-rejected. The UI receives a copy through `GET /config` and can persist
-changes through `PATCH /config`.
-
-Key sections: `agent` (model provider, timeout, max steps),
-`voice` (enabled, VAD/STT providers, silence timeout), `tts` (provider,
-auto-speak), `ui` (templates, reduced motion, large text),
-`telegram` (mock, token env, one approved chat id), `memory` (db path,
-library/documents dirs), `reminders` (scheduler interval, snooze,
-confirmation timeout), `browser` (allowlist, home url).
-
-Relative paths in the config resolve against the config file's directory.
-
-## Required environment variables
-
-- `OPENCODE_GO_API_KEY` — API key for the model provider (required for
-  live model runs; the mock path does not need it).
-- `TELEGRAM_BOT_TOKEN` — Telegram bot token (only when
-  `telegram.mock: false`; mock mode simulates the send locally).
-
-## WebSocket protocol (summary)
-
-`ws://127.0.0.1:8765/ws`
-
-Client → server: `user_text`, `ui_command`, `confirm`, `cancel`,
-`stop`, `ping`.
-
-Server → client (typed events): `state_update`, `user_message`,
-`agent_message` (with `delta` flag), `tool_call`, `ui_command`,
-`confirmation_requested`, `confirmation_resolved`, `notification`,
-`error`, `config_update`, `pong`, plus the GATE-2.5 additions:
-`action_result` (H1), `state_snapshot` (H5) and the content events
-(`youtube.search`, `browser.navigate`, `document.load`, `tasks.update`,
-`media.state`).
-
-`ui_command` is a discriminated union on `action`: `layout.apply`,
-`panel.open`, `panel.close`, `panel.set_primary`, `panel.fullscreen`,
-`layout.restore`, `notification.show`, `media.state`, `tts.speak`,
-`audio.play`, plus the H1/H5 additions: `browser.navigate/back/forward/
-refresh`, `document.save`, `tasks.toggle`, `media.play_pause/seek`,
-`youtube.search/play`. The model never sends coordinates; it selects
-template and panels, and the UI computes geometry.
-
-## Known limitations
-
-- The real-microphone smoke test has not run on the physical Windows
-  machine (verified end to end only with a fake audio device via CDP);
-  transcription accuracy on a real mic may require `voice.stt.model`
-  tiny -> base/small.
-- TS types in the renderer are hand-mirrored from the Python contracts;
-  the JSON schemas in `packages/contracts/schemas/` exist for future
-  code generation.
-- Electron 33 is the working build; compatibility with the target
-  Windows 11 desktop is the remaining spike before pinning the final
-  version (the 2014 MacBook Air / Big Sur was an early eval only — ADR
-  0001 status note).
-- Local alarms cannot alert while the computer is off.
-- The `--mock` service flag writes a temporary config file (it never
-  modifies `configs/app.yaml`).
-
-## Security boundaries
-
-- Every tool has a policy classification (read-only, reversible,
-  user-visible, external, destructive, privileged). Unknown tools are
-  DENIED.
-- External and destructive actions require two-phase confirmation; the
-  approved action executes the exact SQLite-stored argument snapshot —
-  the model cannot modify arguments after approval.
-- Confirmations expire, apply to one pending action, and are invalidated
-  by new conflicting requests or message edits.
-- The local stop path never depends on the LLM, network, or tool
-  completion.
-- Embedded web content is untrusted: the system prompt forbids following
-  page instructions, and the browser allowlist restricts navigation.
-- No credentials are stored in the repository; API keys come from
-  environment variables.
-
-## Implementation status
-
-- Python suite: green (count in docs/STATUS.md).
-- Desktop: Vitest green (see docs/STATUS.md), typecheck clean, renderer
-  + Electron build.
-- Live model: verified (`demo_live.py` LIVE_OK with two typed tool calls
-  in one turn).
-- End-to-end UI: verified in a real Chromium against the mock service —
-  user text → tool call → policy → `ui_command` → split layout →
-  document panel → agent response; stop button returns the app to
-  sleeping and the service stays responsive.
-- TTS playback: verified in a real Chromium against the mock service
-  with edge TTS — a real CDP click on Send issued `POST /tts` (200) and
-  playback started (unmuted, resolved). Autoplay-safe: Electron ships
-  with `autoplay-policy=no-user-gesture-required`; plain browsers fall
-  back to muted-then-unmute when no user activation exists yet.
-- This project is NOT a complete demo yet; it is a verified agent-service
-  foundation with a working desktop vertical slice and a fully wired
-  voice path (TTS/STT/mic verified with a fake device); the real-mic
-  smoke test on the Windows machine remains.
+</details>
