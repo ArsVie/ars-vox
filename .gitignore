@@ -6,3 +6,4 @@ results/
 *.m4a
 *.mp3
 .DS_Store
+data/baseline/

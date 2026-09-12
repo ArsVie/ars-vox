@@ -28,18 +28,29 @@ if str(REPO_ROOT) not in sys.path:
 from services.arsvox.voice import DEFAULT_LANGUAGE, Transcript, FasterWhisperSTT  # noqa: E402
 
 PUNCT = re.compile(r"[^\w\sáéíóúüñ]", re.UNICODE)
+DIGIT_WORDS = {
+    "0": "cero", "1": "uno", "2": "dos", "3": "tres", "4": "cuatro", "5": "cinco",
+    "6": "seis", "7": "siete", "8": "ocho", "9": "nueve", "10": "diez",
+    "11": "once", "12": "doce", "13": "trece", "14": "catorce", "15": "quince",
+}
 GATE_SUCCESS = 24
 GATE_UTTERANCES = 30
 
 
 def normalize(text: str, strip_accents: bool = False) -> list[str]:
-    """Lowercase, drop punctuation, collapse whitespace. Words as a list."""
+    """Lowercase, drop punctuation, collapse whitespace. Words as a list.
+
+    Digits become words and "una" becomes "uno", so that a transcript writing
+    "las 3" is not counted as an error against "las tres". Recognition errors
+    are what we want to measure, not number formatting.
+    """
     text = PUNCT.sub(" ", text.lower())
     if strip_accents:
         text = "".join(
             c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn"
         )
-    return text.split()
+    words = [DIGIT_WORDS.get(w, w) for w in text.split()]
+    return ["uno" if w == "una" else w for w in words]
 
 
 def _align(reference: list[str], hypothesis: list[str]) -> tuple[int, int, int]:

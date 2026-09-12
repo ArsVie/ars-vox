@@ -67,3 +67,11 @@ def test_fake_tts_records_what_would_be_spoken(tmp_path: Path):
 @pytest.mark.parametrize("text,expected", [("", 0), ("una palabra", 2)])
 def test_normalize_word_counts(text, expected):
     assert len(normalize(text)) == expected
+
+
+def test_normalize_makes_numbers_comparable():
+    assert normalize("entre las 1 y las 3") == normalize("entre las una y las tres")
+
+
+def test_normalize_keeps_different_numbers_different():
+    assert normalize("a las 2") != normalize("a las 3")

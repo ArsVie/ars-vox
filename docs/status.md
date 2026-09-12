@@ -5,42 +5,69 @@ One page. One product number per phase. No narrative.
 ## W0 — voice in / voice out
 
 Gate: 30 real utterances from the target speaker, >= 24 correct, median turn < 3 s.
+Not measured yet: needs the real speaker on the real machine with a real microphone.
 
-| measurement | value | label |
-|---|---|---|
-| W0 gate | not measured | needs the real speaker on the real machine |
-| baseline clip (WhatsApp voice note, 23 s) | not run | download pending approval |
+## Real audio baseline — 12 Argentine WhatsApp voice notes
 
-## Engine comparison — synthetic Spanish audio, CPU int8
+Source: YouTube channel "Reíte pue mi gente", the "Audio de WhatsApp" series
+(downloaded with the owner's approval). Total 270 s of compressed mono speech,
+casual Rioplatense Spanish, the same domain the assistant will meet in practice.
+Reference: the channel's own auto-caption, which is a SECOND speech engine and
+not ground truth. So these numbers measure agreement, and they include the
+reference's own mistakes.
 
-Clip: 7.7 s, 20 words, Windows SAPI voice, reference transcript known.
-Clean = broadcast wav. 8k = telephone band. Noisy = 8k plus pink noise.
+| model | mean WER | median | worst | mean RTF (CPU int8) |
+|---|---|---|---|---|
+| tiny | 0.633 | 0.538 | 1.55 | 0.069 |
+| small | 0.424 | 0.336 | 1.55 | 0.187 |
+| large-v3-turbo | 0.295 | 0.233 | 0.75 | 0.416 |
 
-| model | clean | 8k | 8k + noise | RTF clean | RTF noisy | load + warm |
-|---|---|---|---|---|---|---|
-| tiny | 0.25 | - | - | 0.08 | - | 3.5 s |
-| base | 0.40 | - | - | 0.13 | - | - |
-| small | 0.20 | 0.20 | 0.40 | 0.52 | 0.55 | 2.2 s |
-| medium | 0.20 | - | - | 0.68 | - | 9.1 s |
-| large-v3-turbo | 0.10 | 0.05 | 0.10 | 0.62 | 0.82 | 9-15 s |
+Per-clip, turbo: best 0.089, worst 0.75. Small beat turbo on one clip.
 
-WER = word error rate against the reference. Lower is better.
+### The transcripts are the real evidence, and they read as correct Spanish
 
-## Findings
+Turbo, on a 49 s clip (captions say "o la vecina cómo estás que el calor..."):
 
-1. The harness works end to end: real engine, real audio files, WER, latency,
-   JSON per run, eleven unit tests green. Product total so far: 683 lines.
-2. large-v3-turbo wins on accuracy and holds up under telephone-band noise
-   (0.10 against small's 0.40). Turbo is the candidate engine.
-3. Turbo on CPU int8 runs at RTF 0.6-1.2. A 4 s utterance costs 2.4-4.8 s, which
-   breaks the under 3 s turn budget on CPU alone. The target machine has an RTX
-   GPU: measure CUDA before choosing. If CUDA fails, use small and accept the
-   accuracy loss, or accept a longer turn.
-4. Engine self-confidence does not track errors. Every model reported zero weak
-   segments while making 3-6 word errors. Confidence gating is not a safety
-   mechanism; the spoken read-back is.
-5. Bigger is not monotonically better: base (0.40) is worse than tiny (0.25).
-6. Load plus warm-up is 2-15 s per model. This is a once-per-boot cost for a
-   resident service, not a per-turn cost. Warm up at startup.
-7. Punctuation and capitalisation are unstable across models ("why despues",
-   "Record Ame"). Normalise before matching intents; never match on raw text.
+> Hola vecina, ¿cómo estás? ¡Qué calor que hace! ¡Por favor! Por eso te mando
+> un mensaje. Te quería contar que cambié el aire acondicionado a mi pieza.
+> Ahora puse uno de 5.000 frigorías... Lo pongo en 20, parece Siberia mi pieza.
+> Hay que dormir tapaditos. Así que bueno, a lo mejor si estás sufriendo mucho
+> el calor y tenés ganas, te vendo el aire acondicionado viejo, ¿vale?
+
+Independent check: the video titles match what the model heard, and the caption
+files do not. Clip #57 is titled "Sujetate la jeta" and turbo heard "¡Sujétate
+la jeta, loca!". Clip #58 is "Mamá pidiendo regalos" and turbo heard the gift
+list. Clip #36 is titled about a Welsh village; turbo heard "Villa Trebelin"
+(the real town is Villa Trevelin, Chubut). On those clips turbo is more accurate
+than the reference, so mean WER understates its real quality.
+
+### Where it fails
+
+1. Intentionally distorted joke audio. Clip #64 ("Trenpeley Tranpenley") is a
+   made-up word repeated; both models mangle it. WER is meaningless there.
+2. Very short clips with noise. The 9 s "#65 Café con leche" came out as
+   "Él tomó café con leche, manca yo muy mal."
+3. Word-final details: "dale" became "¿vale?".
+4. Formatting is never stable (punctuation, capitalisation, digits vs words).
+   Normalise before matching intents; never match raw text.
+
+## Decision this data supports
+
+Use large-v3-turbo. It is the only model whose median error rate is low enough
+to be safe for a user who cannot read an error message.
+
+Blocker: turbo on CPU runs at RTF ~0.42, so a 30 s utterance costs 12 s of
+engine time and breaks the under 3 s turn budget. tiny's RTF is 0.069 but its
+error rate is 0.63, which is unusable. The target machine has an RTX GPU:
+measure CUDA first (Windows side; WSL has no usable libcublas). If CUDA works,
+turbo should land near RTF 0.03, about one second per utterance.
+
+## Harness state
+
+| item | value |
+|---|---|
+| product lines | 614 |
+| test lines | 96, thirteen tests green |
+| external dependencies | faster-whisper, numpy, sounddevice, edge-tts, yt-dlp (tooling) |
+| fakes | two: the model, the microphone |
+| evidence artifacts | one JSON per run, one run log, both under results/ (git-ignored) |
