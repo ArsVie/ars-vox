@@ -248,6 +248,38 @@ Five abilities from the sheet. Status after this wave:
 about 15, so this is the number to watch: the next ability has to justify itself
 or consolidate.
 
+### El micrófono por la ventana (voice-in)
+
+`POST /listen` records until 1.2 s of silence (cap 15 s), normalises the gain, skips
+a clip with no speech, transcribes with the product engine, and runs the turn.
+The window has a HABLAR button; it disables itself and says why when the machine has
+no ears (`/health` reports `ears` and `voice`).
+
+Verified on Windows with the service running on CUDA:
+
+- `/listen` with a real recording from the user's own session: heard "Recuérdame
+  tomar la pastilla a las 8 de la noche." — 0.84 s for 6.0 s of audio, then a real
+  turn: `reminders_set` saved reminder 7 for 20:00 and the assistant answered. The
+  reminder was cancelled afterwards (1 → 0 active, `\ArsVox\` task list empty)
+  because at 20:00 it would have spoken out loud in an empty room.
+- The microphone itself opens and records on Windows (`tools/mic_smoke.py`:
+  captured 2.05 s, peak 0.0278, no speech — nothing was said). Pressing HABLAR is
+  what exercises the live microphone → turn path.
+- The transcription path was verified with a file instead of the microphone so the
+  test could not act on anybody's conversation and could not leave a speaking alarm
+  behind.
+
+Two things this step cost:
+
+- **The key needs a home.** A shipped app cannot read the developer's shell.
+  `%USERPROFILE%\.arsvox\env` (KEY=VALUE, same variable names) is now first in the
+  search order, after real environment variables and before `~/.hermes/.env`.
+- **SQLite does not cross the two operating systems.** While the Windows service has
+  `data/arsvox.db` open, a WSL process opening the same file dies with
+  `disk I/O error` (WAL plus drvfs does not lock across OSes). The product runs
+  entirely on Windows, so this only affects the development rig: drive the service
+  over HTTP, or use the Windows python.
+
 ## Packaging — what the executable should be
 
 Measured on this machine: **Electron is the wrong tool here.**
@@ -321,11 +353,11 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 3169 in 12 files |
+| runtime lines (services + cli) | 3240 in 12 files |
 | measurement tooling lines | 1,003 |
-| test lines | 972, seventy-one tests green |
+| test lines | 1,127, seventy-seven tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |
 | voice | edge-tts neural; SAPI banned by ear |
-| window | ~216 lines of plain JS in apps/desktop, no framework, no build step |
+| window | 416 lines of plain JS in apps/desktop (HABLAR + DETENER + bubbles), no framework, no build step |

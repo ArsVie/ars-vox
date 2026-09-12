@@ -11,7 +11,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASE_URL = "https://api.commandcode.ai/provider/v1"
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 API_KEY_VARS = ("ARSVOX_API_KEY", "LILY_TOKEN", "COMMANDCODE_API_KEY", "OPENCODE_GO_API_KEY")
-ENV_FILES = (Path.home() / ".hermes" / ".env", REPO_ROOT / ".env")
+# Where this product keeps its own key on the machine that runs it. Never in the tree.
+ENV_FILES = (Path.home() / ".arsvox" / "env", Path.home() / ".hermes" / ".env", REPO_ROOT / ".env")
 
 
 class ConfigError(RuntimeError):

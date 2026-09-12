@@ -15,6 +15,7 @@ const thinking = document.getElementById("thinking");
 const input = document.getElementById("text");
 const sendButton = document.getElementById("send");
 const stopButton = document.getElementById("stop");
+const talkButton = document.getElementById("talk");
 const bubbleTemplate = document.getElementById("bubble-template");
 
 function setStatus(nextBusy, label) {
@@ -23,7 +24,15 @@ function setStatus(nextBusy, label) {
   statusText.textContent = label || (busy ? "trabajando" : "listo");
   thinking.hidden = !busy;
   sendButton.disabled = busy;
+  talkButton.disabled = busy || !talkButton.dataset.ready;
   stopButton.disabled = !busy;
+}
+
+function setEars(available) {
+  talkButton.dataset.ready = available ? "1" : "";
+  talkButton.disabled = !available;
+  talkButton.title = available ? "Hablá y te escucho" : "acá no hay micrófono";
+  if (!available) talkButton.classList.remove("recording");
 }
 
 function bubble(role, text, ts, withListen) {
@@ -104,10 +113,32 @@ async function health() {
   try {
     const data = await (await fetch("/health")).json();
     who.textContent = data.model + " · " + data.session;
+    setEars(Boolean(data.ears));
     setStatus(data.busy, data.busy ? "trabajando" : "listo");
   } catch (error) {
     who.textContent = "servicio apagado";
+    setEars(false);
   }
+}
+
+async function talk() {
+  if (busy || !talkButton.dataset.ready) return;
+  talkButton.classList.add("recording");
+  setStatus(true, "escuchando…");
+  try {
+    const response = await fetch("/listen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await response.json();
+    if (!data.ok) bubble("note", data.reason || "no escuché nada", new Date().toISOString(), false);
+  } catch (error) {
+    bubble("note", "no pude escuchar: se cortó la conexión", new Date().toISOString(), false);
+  }
+  talkButton.classList.remove("recording");
+  setStatus(false, "listo");
+  pull();
 }
 
 async function submit() {
@@ -132,6 +163,7 @@ sendButton.addEventListener("click", submit);
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter") submit();
 });
+talkButton.addEventListener("click", talk);
 stopButton.addEventListener("click", async () => {
   await fetch("/stop", { method: "POST" });
   pull();

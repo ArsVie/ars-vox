@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -39,9 +41,20 @@ def build_tts(engine: str):
 
 
 def build_stt(args: argparse.Namespace) -> FasterWhisperSTT:
-    """The configured engine, with a visible fallback when there is no GPU."""
-    engine = FasterWhisperSTT(model_size=args.model, device=args.device, compute_type=args.compute_type)
-    if args.device != "cpu":
+    """The configured engine, with a visible fallback when there is no GPU.
+
+    Any command may ask for ears, so the flags are read defensively: serve has no
+    --model of its own and must still get the product engine.
+    """
+    size = getattr(args, "model", None) or "large-v3-turbo"
+    device = getattr(args, "device", None) or "cuda"
+    compute = getattr(args, "compute_type", None) or "float16"
+    if os.environ.get("ARSVOX_DEVICE"):
+        device = os.environ["ARSVOX_DEVICE"]
+    if os.environ.get("ARSVOX_COMPUTE"):
+        compute = os.environ["ARSVOX_COMPUTE"]
+    engine = FasterWhisperSTT(model_size=size, device=device, compute_type=compute)
+    if device != "cpu":
         try:
             engine.warmup()
         except Exception as exc:  # noqa: BLE001
@@ -50,7 +63,7 @@ def build_stt(args: argparse.Namespace) -> FasterWhisperSTT:
                 "sigo en CPU int8",
                 file=sys.stderr,
             )
-            engine = FasterWhisperSTT(model_size=args.model, device="cpu", compute_type="int8")
+            engine = FasterWhisperSTT(model_size=size, device="cpu", compute_type="int8")
     return engine
 
 
@@ -194,19 +207,25 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     runtime, settings, store = build_runtime(args)
     tts = None if args.no_tts else build_tts(args.engine)
+    stt = None if args.no_ears else build_stt(args)
     agent = AgentService(
         runtime,
         store,
         tts=tts,
+        stt=stt,
         session=args.session,
         static_dir=REPO_ROOT / "apps" / "desktop",
+        listen_seconds=args.seconds,
     )
     httpd = serve(agent, args.host, args.port)
     print(
         f"Ars Vox en http://{args.host}:{args.port}  (sesión {args.session}, modelo {settings.model}, "
-        f"voz {'sí' if tts else 'no'})",
+        f"voz {'sí' if tts else 'no'}, oídos {'sí' if stt else 'no'})",
         flush=True,
     )
+    if stt is not None:
+        # loading the model costs seconds; pay it now, not on the first request
+        threading.Thread(target=stt.warmup, daemon=True).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -465,6 +484,11 @@ def main(argv: list[str] | None = None) -> int:
     server.add_argument("--session", default="cli")
     server.add_argument("--engine", default="edge", choices=["edge", "fake"])
     server.add_argument("--no-tts", action="store_true", help="serve without the voice")
+    server.add_argument("--no-ears", action="store_true", help="serve without the microphone")
+    server.add_argument("--seconds", type=float, default=15.0, help="longest single request")
+    server.add_argument("--model", default="large-v3-turbo", help="speech model for the ears")
+    server.add_argument("--device", default="cuda", help="cuda or cpu")
+    server.add_argument("--compute-type", default="float16", help="float16, int8_float16, int8")
     server.set_defaults(func=cmd_serve, db=None)
 
     args = parser.parse_args(argv)

@@ -27,17 +27,28 @@ from urllib.parse import parse_qs, urlparse
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8790
-SILENT_KINDS = {"runtime_snapshot", "model_usage", "model_error"}
+SILENT_KINDS = {"runtime_snapshot", "model_usage", "model_error", "heard"}
 
 
 class AgentService:
-    """Owns the runtime, one turn at a time, and the audio it has rendered."""
+    """Owns the runtime, one turn at a time, the microphone and the audio it renders."""
 
-    def __init__(self, runtime, store, tts=None, session: str = "cli", static_dir: Path | None = None):
+    def __init__(
+        self,
+        runtime,
+        store,
+        tts=None,
+        stt=None,
+        session: str = "cli",
+        static_dir: Path | None = None,
+        listen_seconds: float = 15.0,
+    ):
         self.runtime = runtime
         self.store = store
         self.tts = tts
+        self.stt = stt
         self.session = session
+        self.listen_seconds = listen_seconds
         self.static_dir = Path(static_dir) if static_dir else None
         self.audio_dir = (self.static_dir or Path(".")) / "audio"
         self._lock = threading.Lock()
@@ -60,6 +71,8 @@ class AgentService:
             "session": self.session,
             "busy": self.busy,
             "state": counts,
+            "ears": getattr(self.stt, "name", "") if self.stt else "",
+            "voice": getattr(self.tts, "name", "") if self.tts else "",
             "last_error": self.last_error,
             "time": self.runtime.store.events(self.session)[-1].ts if counts["events"] else "",
         }
@@ -126,6 +139,37 @@ class AgentService:
         return True
 
     # ---- voice -----------------------------------------------------------
+    def listen(self, wav: str | None = None) -> dict:
+        """Hear one request, then run it. `wav` is for the development rig: a real
+        recording on disk instead of the microphone."""
+        if self.stt is None:
+            return {"ok": False, "reason": "acá no tengo micrófono"}
+        if self.busy:
+            return {"ok": False, "reason": "ya estoy con otra cosa"}
+        meta: dict = {}
+        if wav:
+            result = self.stt.transcribe(wav)
+            meta = {"source": "archivo", "audio_s": round(result.duration_s, 2)}
+        else:
+            from services.arsvox.mic import normalize_gain, record_until_silence
+
+            capture = record_until_silence(max_seconds=self.listen_seconds)
+            if not capture.has_speech:
+                self.store.append(self.session, "heard", {"source": "micrófono", "speech_s": 0.0})
+                return {"ok": False, "reason": "no escuché nada", "seconds": round(capture.seconds, 2)}
+            result = self.stt.transcribe(normalize_gain(capture.samples))
+            meta = {"source": "micrófono", "speech_s": round(capture.speech_seconds, 2)}
+        text = result.text.strip()
+        self.store.append(
+            self.session,
+            "heard",
+            {**meta, "engine_s": round(result.elapsed_s, 2), "text": text},
+        )
+        if not text:
+            return {"ok": False, "reason": "no entendí", **meta}
+        accepted, reason = self.start_turn(text)
+        return {"ok": accepted, "heard": text, "reason": reason, "engine_s": round(result.elapsed_s, 2), **meta}
+
     def speak(self, text: str) -> str:
         if self.tts is None or not (text or "").strip():
             return ""
@@ -215,6 +259,8 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
                 self._json(200 if accepted else 409, {"accepted": accepted, "reason": reason})
             elif parsed.path == "/stop":
                 self._json(200, {"stopped": service.stop()})
+            elif parsed.path == "/listen":
+                self._json(200, service.listen(body.get("wav") or None))
             elif parsed.path == "/speak":
                 url = service.speak(body.get("text", ""))
                 self._json(200 if url else 503, {"url": url})
