@@ -12,8 +12,10 @@ and a restart rebuilds the conversation by replaying it.
 
 from __future__ import annotations
 
+import functools
 import json
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -115,12 +117,29 @@ def project(event: Event) -> dict | None:
     return None
 
 
+def locked(method):
+    """Serialize access to the connection.
+
+    The interface layer answers requests in threads of its own, and a sqlite3
+    connection is not safe for two threads at once: the health endpoint died with
+    "InterfaceError: bad parameter or other API misuse" while a turn was writing.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class Store:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
         self._migrate()
@@ -134,6 +153,7 @@ class Store:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {declaration}")
 
     # ---- the log ---------------------------------------------------------
+    @locked
     def append(self, session: str, kind: str, payload: dict) -> int:
         cursor = self.conn.execute(
             "INSERT INTO events (ts, session, kind, payload) VALUES (?, ?, ?, ?)",
@@ -142,6 +162,7 @@ class Store:
         self.conn.commit()
         return int(cursor.lastrowid)
 
+    @locked
     def events(self, session: str, limit: int | None = None) -> list[Event]:
         rows = self.conn.execute(
             "SELECT id, ts, session, kind, payload FROM events WHERE session = ? ORDER BY id",
@@ -152,16 +173,19 @@ class Store:
         ]
         return events[-limit:] if limit else events
 
+    @locked
     def messages(self, session: str, limit: int = 60) -> list[dict]:
         projected = [project(e) for e in self.events(session)]
         return [m for m in projected if m is not None][-limit:]
 
+    @locked
     def last_snapshot(self, session: str) -> str | None:
         for event in reversed(self.events(session)):
             if event.kind == "runtime_snapshot":
                 return event.payload["text"]
         return None
 
+    @locked
     def sessions(self) -> list[dict]:
         rows = self.conn.execute(
             "SELECT session, COUNT(*) AS events, MAX(ts) AS last_ts FROM events "
@@ -170,6 +194,7 @@ class Store:
         return [dict(r) for r in rows]
 
     # ---- state written by tools -----------------------------------------
+    @locked
     def add_reminder(
         self, session: str, text: str, when_local: str | None, repeat: str = "once"
     ) -> int:
@@ -180,6 +205,7 @@ class Store:
         self.conn.commit()
         return int(cursor.lastrowid)
 
+    @locked
     def get_reminder(self, session: str, reminder_id: int) -> dict | None:
         row = self.conn.execute(
             "SELECT id, text, when_local, repeat, active, fired_ts, last_fired_ts "
@@ -188,6 +214,7 @@ class Store:
         ).fetchone()
         return dict(row) if row else None
 
+    @locked
     def list_reminders(self, session: str, active_only: bool = True) -> list[dict]:
         query = (
             "SELECT id, text, when_local, repeat, active, fired_ts, last_fired_ts "
@@ -198,6 +225,7 @@ class Store:
         query += " ORDER BY COALESCE(when_local, '9999')"
         return [dict(r) for r in self.conn.execute(query, (session,)).fetchall()]
 
+    @locked
     def mark_fired(self, session: str, reminder_id: int) -> bool:
         """One-shot reminders stop after firing; repeats keep their slot."""
         row = self.get_reminder(session, reminder_id)
@@ -217,6 +245,7 @@ class Store:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    @locked
     def cancel_reminder(self, session: str, reminder_id: int) -> bool:
         cursor = self.conn.execute(
             "UPDATE reminders SET active = 0 WHERE session = ? AND id = ? AND active = 1",
@@ -225,6 +254,7 @@ class Store:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    @locked
     def add_task(self, session: str, text: str) -> int:
         cursor = self.conn.execute(
             "INSERT INTO tasks (session, text, created_ts) VALUES (?, ?, ?)",
@@ -233,6 +263,7 @@ class Store:
         self.conn.commit()
         return int(cursor.lastrowid)
 
+    @locked
     def list_tasks(self, session: str) -> list[dict]:
         return [
             dict(r)
@@ -242,6 +273,7 @@ class Store:
             ).fetchall()
         ]
 
+    @locked
     def complete_task(self, session: str, task_id: int) -> bool:
         cursor = self.conn.execute(
             "UPDATE tasks SET done_ts = ? WHERE session = ? AND id = ? AND done_ts IS NULL",
@@ -250,6 +282,7 @@ class Store:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    @locked
     def set_preference(self, session: str, key: str, value: str) -> None:
         self.conn.execute(
             "INSERT INTO preferences (session, key, value, updated_ts) VALUES (?, ?, ?, ?) "
@@ -259,6 +292,7 @@ class Store:
         )
         self.conn.commit()
 
+    @locked
     def preferences(self, session: str) -> dict[str, str]:
         return {
             r["key"]: r["value"]
@@ -267,6 +301,7 @@ class Store:
             ).fetchall()
         }
 
+    @locked
     def state_counts(self, session: str) -> dict[str, int]:
         return {
             "reminders": len(self.list_reminders(session)),
@@ -275,6 +310,7 @@ class Store:
             "events": len(self.events(session)),
         }
 
+    @locked
     def close(self) -> None:
         self.conn.close()
 

@@ -41,6 +41,7 @@ class TurnResult:
     usage: Usage = field(default_factory=Usage)
     elapsed_s: float = 0.0
     snapshot_appended: bool = False
+    stopped: bool = False
     error: str | None = None
 
 
@@ -80,7 +81,8 @@ class Runtime:
         return [{"role": "system", "content": self.system_prompt(now)}] + self.store.messages(session)
 
     # ---- the turn --------------------------------------------------------
-    def turn(self, session: str, user_text: str) -> TurnResult:
+    def turn(self, session: str, user_text: str, should_stop=None) -> TurnResult:
+        """One turn. `should_stop` is the always-visible stop control, checked each step."""
         started = time.perf_counter()
         self.store.append(session, "user_text", {"text": user_text})
         budget = StepBudget(self.max_steps)
@@ -89,6 +91,12 @@ class Runtime:
 
         step = 0
         while True:
+            if should_stop and should_stop():
+                result.stopped = True
+                result.error = "detenido por el usuario"
+                result.text = "Listo, me detengo."
+                self.store.append(session, "assistant_text", {"text": result.text})
+                break
             step += 1
             allowed, reason = budget.check(step)
             if not allowed:

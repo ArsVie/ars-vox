@@ -1,0 +1,13 @@
+{
+  "name": "ars-vox-shell",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Ventana de escritorio para Ars Vox: la interfaz es fina, el estado vive en el log.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "42.8.1"
+  }
+}

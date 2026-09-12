@@ -10,3 +10,5 @@ data/baseline/
 data/*.db*
 
 .venv-win/
+apps/desktop/audio/
+node_modules/

@@ -170,6 +170,41 @@ Re-register everything after a rebuild or on a fresh machine:
 python apps/cli/arsvox_cli.py reminders --session cli --sync --query
 ```
 
+## W3 — the window
+
+Gate: the window dies mid-turn, comes back, and the conversation continues from
+the log. Measured, all four conditions true (`results/w3-cut.json`):
+
+| step | evidence |
+|---|---|
+| a turn starts | raw socket `POST /turn`, then RST (`SO_LINGER 0`) at 17:16:19 |
+| the client is gone | `busy` was observed with no client alive; the service finished the turn alone in 3.8 s |
+| the answer arrives anyway | `user_text` 94, `tool_call` 97 (`reminders_set`), `tool_result` 98, `assistant_text` 101 — all after the cut |
+| the window comes back | Edge loaded `/`, rebuilt 10 bubbles and 4 tool chips from the log, carrying no state |
+| nothing replays twice | asking for events after the last id returns an empty list |
+
+The window is a page the service serves itself (`apps/desktop`: `index.html`,
+`app.js`, `style.css`) plus an Electron main that starts the service and points a
+window at it. It holds no state: on load it asks for everything after id 0, and
+that is also how it recovers. `DETENER` posts `/stop`, which the loop checks each
+step, so stopping costs at most one model call.
+
+### Two real defects this wave found, both fixed
+
+1. **The store was not thread-safe.** The interface layer answers in threads of
+   its own, and the health endpoint died with
+   `sqlite3.InterfaceError: bad parameter or other API misuse` while a turn was
+   writing. `Store` now serializes every method with an `RLock`; four threads
+   appending at once is a regression test.
+2. **Shutting down mid-turn closed the store under the writer**, raising
+   `sqlite3.ProgrammingError: Cannot operate on a closed database` inside the turn
+   thread where nobody could see it. The service keeps its worker and joins it
+   (`AgentService.shutdown`) before anything closes the store.
+
+Not done: Electron packaging was not installed for the new app directory, so the
+gate ran in real Chromium (Edge, headless) rendering the same page. `main.js` is
+committed and starts the service itself, but that path has not been run.
+
 ## Engine, 12 real clips, 270 s (mains power)
 
 | path | model | mean WER | median | worst | mean RTF |
@@ -226,10 +261,11 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 2282 in 9 files |
+| runtime lines (services + cli) | 2596 in 9 files |
 | measurement tooling lines | 1,003 |
-| test lines | 561, forty-four tests green |
+| test lines | 781, fifty-five tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |
 | voice | edge-tts neural; SAPI banned by ear |
+| window | ~216 lines of plain JS in apps/desktop, no framework, no build step |

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Ars Vox</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Ars Vox</h1>
+    <div class="status">
+      <span id="indicator" class="square idle" title="estado"></span>
+      <span id="status-text">listo</span>
+      <span class="sep">|</span>
+      <span id="who">…</span>
+    </div>
+  </header>
+
+  <main id="conversation" aria-live="polite"></main>
+
+  <div id="thinking" hidden>pensando…</div>
+
+  <footer>
+    <button id="stop" class="stop">DETENER</button>
+    <input id="text" type="text" autocomplete="off"
+           placeholder="Escribí o dictá lo que necesitás" />
+    <button id="send" class="send">Enviar</button>
+  </footer>
+
+  <template id="bubble-template">
+    <article class="bubble">
+      <p class="text"></p>
+      <div class="meta">
+        <button class="listen" type="button">escuchar</button>
+        <span class="time"></span>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

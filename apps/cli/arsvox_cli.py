@@ -186,6 +186,38 @@ def cmd_talk(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---- the window ------------------------------------------------------------
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """The agent service plus the shell it serves. Also used by the Electron main."""
+    from services.arsvox.api import AgentService, serve
+
+    runtime, settings, store = build_runtime(args)
+    tts = None if args.no_tts else build_tts(args.engine)
+    agent = AgentService(
+        runtime,
+        store,
+        tts=tts,
+        session=args.session,
+        static_dir=REPO_ROOT / "apps" / "desktop",
+    )
+    httpd = serve(agent, args.host, args.port)
+    print(
+        f"Ars Vox en http://{args.host}:{args.port}  (sesión {args.session}, modelo {settings.model}, "
+        f"voz {'sí' if tts else 'no'})",
+        flush=True,
+    )
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        agent.shutdown()   # a turn in flight must reach the log before the store closes
+        httpd.server_close()
+        store.close()
+    return 0
+
+
 # ---- reminders -------------------------------------------------------------
 
 def cmd_fire(args: argparse.Namespace) -> int:
@@ -426,6 +458,14 @@ def main(argv: list[str] | None = None) -> int:
     sessions = sub.add_parser("sessions", help="list sessions in the log")
     sessions.add_argument("--db", type=Path, default=REPO_ROOT / "data" / "arsvox.db")
     sessions.set_defaults(func=cmd_sessions)
+
+    server = sub.add_parser("serve", help="run the agent service and the shell")
+    server.add_argument("--host", default="127.0.0.1")
+    server.add_argument("--port", type=int, default=8790)
+    server.add_argument("--session", default="cli")
+    server.add_argument("--engine", default="edge", choices=["edge", "fake"])
+    server.add_argument("--no-tts", action="store_true", help="serve without the voice")
+    server.set_defaults(func=cmd_serve, db=None)
 
     args = parser.parse_args(argv)
     return args.func(args)
