@@ -119,10 +119,12 @@ class FasterWhisperSTT:
 
 
     def transcribe(self, audio_path: str | Path, language: str | None = None) -> Transcript:
+        """Transcribe a file path, or raw float samples (mono, 16 kHz)."""
         model = self._load()
+        source = str(audio_path) if isinstance(audio_path, (str, Path)) else audio_path
         started = time.perf_counter()
         segments, info = model.transcribe(
-            str(audio_path),
+            source,
             language=language or DEFAULT_LANGUAGE,
             beam_size=self.beam_size,
             vad_filter=self.use_vad,
