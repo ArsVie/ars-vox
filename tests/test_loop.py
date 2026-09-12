@@ -1,4 +1,4 @@
-"""The loop: projection, tool execution, policy, middleware, resume, prefix stability."""
+"""The loop: projection, tool execution, validation, caps, resume, prefix stability."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 from services.arsvox.config import Settings, load_settings  # noqa: E402
 from services.arsvox.context import PromptBuilder, interpolate, snapshot_text  # noqa: E402
 from services.arsvox.model import FakeModel, ModelReply, ToolCall, Usage  # noqa: E402
-from services.arsvox.policy import PolicyEngine, signature  # noqa: E402
+from services.arsvox.limits import signature  # noqa: E402
 from services.arsvox.runtime import Runtime  # noqa: E402
 from services.arsvox.store import Store, project  # noqa: E402
 
@@ -101,15 +101,15 @@ def test_tool_call_reaches_the_store_and_the_answer_is_recorded(tmp_path: Path):
     assert store.events("cli")[-1].kind == "assistant_text"
 
 
-def test_denied_tool_is_reported_back_to_the_model(tmp_path: Path):
-    loop, model, store = runtime(
+def test_a_refusal_reaches_the_model_as_a_tool_result(tmp_path: Path):
+    loop, model, _ = runtime(
         tmp_path,
-        [tool_call("shell", {"cmd": "rm -rf /"}), ModelReply(text="No puedo hacer eso.")],
+        [tool_call("reminders_cancel", {"reminder_id": "abc"}), ModelReply(text="¿Cuál borro?")],
     )
-    result = loop.turn("cli", "borrá todo")
-    assert result.tools[0].allowed is False
-    assert "prohibido" in result.tools[0].result
-    assert "No puedo hacer eso" in model.requests[1][-1]["content"]
+    result = loop.turn("cli", "borrá el recordatorio")
+    assert result.tools[0].ran is False
+    assert "entero" in result.tools[0].result
+    assert "entero" in model.requests[1][-1]["content"]
 
 
 def test_bad_arguments_are_refused_with_a_readable_reason(tmp_path: Path):
@@ -118,7 +118,7 @@ def test_bad_arguments_are_refused_with_a_readable_reason(tmp_path: Path):
         [tool_call("reminders_set", {"when_local": "mañana"}), ModelReply(text="Decime qué recuerdo.")],
     )
     result = loop.turn("cli", "recordame algo")
-    assert result.tools[0].allowed is False
+    assert result.tools[0].ran is False
     assert "faltan datos: text" in result.tools[0].result
 
 
@@ -131,7 +131,7 @@ def test_unparseable_date_is_refused_before_anything_is_stored(tmp_path: Path):
         ],
     )
     result = loop.turn("cli", "recordame pagar la luz mañana")
-    assert result.tools[0].allowed is True
+    assert result.tools[0].ran is True
     assert "no entendí la fecha" in result.tools[0].result
     # nothing half-stored: the model gets one chance to send a real time instead
     assert store.list_reminders("cli") == []
@@ -165,7 +165,7 @@ def test_snapshot_is_only_appended_when_it_changes(tmp_path: Path):
     assert len(second) - len(first) <= 1
 
 
-# ---- context and policy units -------------------------------------------
+# ---- context units and argument validation -------------------------------
 
 def test_prompt_sections_drop_empty_and_keep_order():
     builder = PromptBuilder()
@@ -190,11 +190,11 @@ def test_snapshot_carries_time_and_counts():
     assert "jazz" in text
 
 
-def test_policy_floor_and_unknown_tools():
-    engine = PolicyEngine()
-    assert engine.decide("shell", {"cmd": "ls"}).allowed is False
-    assert engine.decide("inventada", {}).allowed is False
-    assert engine.decide("tasks_list", {}).allowed is True
+def test_unknown_tool_is_reported_without_a_policy_layer(tmp_path: Path):
+    loop, _, _ = runtime(tmp_path, [tool_call("ls", {"p": "/"}), ModelReply(text="Esa no la tengo.")])
+    result = loop.turn("cli", "listá el disco")
+    assert result.tools[0].ran is False
+    assert "No existe la herramienta" in result.tools[0].result
 
 
 def test_tool_signature_is_stable_across_key_order():

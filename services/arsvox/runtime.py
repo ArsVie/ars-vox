@@ -1,8 +1,8 @@
-"""The turn loop. One linear loop, a small middleware chain, and the log.
+"""The turn loop. One linear loop, two cheap caps, and the log.
 
 A turn is: record the request, then alternate model calls with tool calls until
-the model answers in words or a middleware stops it. Everything that happens is
-appended to the event log, so history is never maintained by hand.
+the model answers in words or a cap stops it. Everything that happens is appended
+to the event log, so history is never maintained by hand.
 """
 
 from __future__ import annotations
@@ -13,17 +13,23 @@ from datetime import datetime
 
 from services.arsvox.config import Settings
 from services.arsvox.context import default_builder, snapshot_text
+from services.arsvox.limits import DoomLoopCap, StepBudget
 from services.arsvox.model import Model, ModelReply, Usage
-from services.arsvox.policy import DoomLoopCap, PolicyEngine, StepBudget
 from services.arsvox.store import Store
-from services.arsvox.tools import ToolContext, build_registry, tool_guidance, tool_schemas
+from services.arsvox.tools import (
+    ToolContext,
+    build_registry,
+    check_arguments,
+    tool_guidance,
+    tool_schemas,
+)
 
 
 @dataclass(slots=True)
 class ToolTrace:
     name: str
     arguments: dict
-    allowed: bool
+    ran: bool
     result: str
 
 
@@ -50,7 +56,6 @@ class Runtime:
         self.store = store
         self.model = model
         self.registry = build_registry()
-        self.policy = PolicyEngine()
         self.schemas = tool_schemas(self.registry)
         self.builder = default_builder(tool_guidance(self.registry))
         self.max_steps = max_steps or settings.max_steps
@@ -125,31 +130,33 @@ class Runtime:
                     result.elapsed_s = time.perf_counter() - started
                     return result
 
-                decision = self.policy.decide(call.name, call.arguments)
                 self.store.append(
                     session,
                     "tool_call",
                     {"call_id": call.id, "name": call.name, "arguments": call.arguments},
                 )
-                if not decision.allowed:
-                    text = f"No puedo hacer eso: {decision.reason}"
-                    self.store.append(session, "tool_result", {"call_id": call.id, "text": text})
-                    result.tools.append(ToolTrace(call.name, call.arguments, False, text))
-                    continue
-
-                tool = self.registry[call.name]
-                try:
-                    text = tool.handler(
-                        ToolContext(self.store, session, self.settings, datetime.now().astimezone()),
-                        decision.arguments,
-                    )
-                except Exception as exc:  # noqa: BLE001 - a broken tool must not kill the turn
-                    text = f"La herramienta {call.name} falló: {type(exc).__name__}"
-                if reason:
-                    text = f"{reason}. {text}"
+                note = f"{reason}. " if reason else ""
+                text, arguments, ran = self._run_tool(session, call, note)
                 self.store.append(session, "tool_result", {"call_id": call.id, "text": text})
-                result.tools.append(ToolTrace(call.name, decision.arguments, True, text))
+                result.tools.append(ToolTrace(call.name, arguments, ran, text))
 
         result.steps = step
         result.elapsed_s = time.perf_counter() - started
         return result
+
+    def _run_tool(self, session, call, note: str) -> tuple[str, dict, bool]:
+        """Run one tool call. A refusal is a tool result too: the model reads why."""
+        tool = self.registry.get(call.name)
+        if tool is None:
+            return f"{note}No existe la herramienta '{call.name}'.", call.arguments, False
+        arguments, error = check_arguments(tool, call.arguments)
+        if error:
+            return f"{note}{error}", call.arguments, False
+        try:
+            text = tool.handler(
+                ToolContext(self.store, session, self.settings, datetime.now().astimezone()),
+                arguments,
+            )
+        except Exception as exc:  # noqa: BLE001 - a broken tool must not kill the turn
+            return f"{note}La herramienta {call.name} falló: {type(exc).__name__}", arguments, False
+        return f"{note}{text}", arguments, True

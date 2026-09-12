@@ -77,7 +77,7 @@ def build_runtime(args: argparse.Namespace):
 
 def report_turn(result, args: argparse.Namespace) -> None:
     for trace in result.tools:
-        marker = "ok" if trace.allowed else "NO"
+        marker = "ok" if trace.ran else "NO"
         print(f"   [{marker}] {trace.name}({json.dumps(trace.arguments, ensure_ascii=False)}) -> {trace.result}")
     if args.trace:
         usage = result.usage.as_dict()

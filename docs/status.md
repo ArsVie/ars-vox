@@ -100,13 +100,35 @@ that fallback instead of hiding it.
 | file | lines | what it is |
 |---|---|---|
 | `services/arsvox/config.py` | 80 | settings, key resolution, one place |
-| `services/arsvox/store.py` | 222 | the event log plus one projection rule, reminders, tasks, preferences |
-| `services/arsvox/model.py` | 196 | raw httpx chat completions, usage and cache accounting |
-| `services/arsvox/context.py` | 118 | ordered prompt sections, strict interpolation, volatile snapshot |
-| `services/arsvox/policy.py` | 168 | rules as data, frozen deny floor, step budget, repetition cap |
-| `services/arsvox/tools.py` | 214 | eight tools, each writing real state |
-| `services/arsvox/runtime.py` | 148 | the turn loop |
+| `services/arsvox/store.py` | 238 | the event log plus one projection rule, reminders, tasks, preferences |
+| `services/arsvox/model.py` | 199 | raw httpx chat completions, usage and cache accounting |
+| `services/arsvox/context.py` | 119 | ordered prompt sections, strict interpolation, volatile snapshot |
+| `services/arsvox/limits.py` | 54 | step budget and repetition cap (Recommendation 18) |
+| `services/arsvox/tools.py` | 257 | eight tools, each writing real state, validated against its own schema |
+| `services/arsvox/runtime.py` | 162 | the turn loop |
 | `apps/cli/arsvox_cli.py` | 361 | `ask`, `chat`, `talk`, `speak`, `listen`, `log`, `sessions` |
+
+### What was removed, and why
+
+A permission engine was written and then deleted, 168 lines, before anything ran
+on it. The paper's grounds, quoted:
+
+- Section 10 opens: "Safety mechanisms become important in direct proportion to
+  the autonomy the agent is given." One user, one machine, eight tools writing to
+  a local database is the bottom of that scale.
+- Recommendation 10 scopes OS sandboxing, policy-as-code and audit trails to
+  "enterprise / shared / automated contexts".
+- The 16.4 scaffold "deliberately omits features for which our corpus shows
+  divergence: sandbox (Recommendations 9-10 are deployment-specific)".
+- It was also dead code: the tool registry is hardcoded, so an unknown tool could
+  never be dispatched, and the deny-list named file and shell tools that were
+  never in the registry at all.
+
+What survives, both named by the paper: the tool's own JSON schema is the rules
+as data (Recommendation 11), and the step budget plus repetition cap are the
+"cheap caps" of Recommendation 18. The schema check also does product work the
+deny-list never did: it turns `"reminder_id": "abc"` into a sentence the model can
+act on.
 
 ## Voice out
 
@@ -172,7 +194,7 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 1,929 in 8 files |
+| runtime lines (services + cli) | 1,883 in 8 files |
 | measurement tooling lines | 1,003 |
 | test lines | 292, thirty tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |

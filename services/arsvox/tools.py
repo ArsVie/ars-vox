@@ -214,5 +214,44 @@ def tool_schemas(registry: dict[str, Tool]) -> list[dict]:
     ]
 
 
+JSON_TYPES: dict[str, object] = {
+    "string": str,
+    "integer": int,
+    "number": (int, float),
+    "boolean": bool,
+}
+MAX_ARGUMENT_CHARS = 500
+
+
+def check_arguments(tool: Tool, arguments: dict) -> tuple[dict, str]:
+    """Validate against the tool's own schema: one source of truth, no second copy.
+
+    Returns (clean_arguments, error). On error the caller hands the message back to
+    the model, which is the only recovery path the loop needs.
+    """
+    schema = tool.parameters or {}
+    properties = schema.get("properties") or {}
+    clean: dict = {}
+    for key, value in (arguments or {}).items():
+        if key not in properties:
+            continue
+        expected = JSON_TYPES.get((properties[key] or {}).get("type", "string"))
+        if expected is int and isinstance(value, str):
+            try:
+                value = int(value.strip())  # models send "2" for an id often enough
+            except ValueError:
+                return {}, f"'{key}' debe ser un número entero"
+        if expected is not None and not isinstance(value, expected):
+            if not (expected is (int, float) and isinstance(value, int)):
+                return {}, f"'{key}' tiene el tipo equivocado"
+        if isinstance(value, str):
+            value = value.strip()[:MAX_ARGUMENT_CHARS]
+        clean[key] = value
+    missing = [key for key in schema.get("required", []) if clean.get(key) in (None, "")]
+    if missing:
+        return {}, f"faltan datos: {', '.join(missing)}"
+    return clean, ""
+
+
 def tool_guidance(registry: dict[str, Tool]) -> list[tuple[str, str]]:
     return [(name, registry[name].description) for name in sorted(registry)]
