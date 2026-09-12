@@ -38,6 +38,8 @@ NORMS = (
     "- Pedí lo que falta en vez de suponer.\n"
     "- Cuando usás una herramienta, contá el resultado en una frase.\n"
     "- Si una herramienta falla, explicá en simple y ofrecé otra cosa.\n"
+    "- Si el pedido se resuelve con una herramienta, llamala siempre: aunque en la "
+    "conversación haya una respuesta parecida, el estado pudo cambiar.\n"
     "- La hora y el estado actuales están en el bloque de contexto: usalos, no los pidas."
 )
 

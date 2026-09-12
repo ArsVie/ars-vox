@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Protocol
 
+from services.arsvox import documents, media, web
 from services.arsvox.config import Settings
 from services.arsvox.scheduler import REPEATS
 from services.arsvox.store import Store
@@ -140,6 +141,91 @@ def preferences_list(context: ToolContext, arguments: dict) -> str:
     return "Me acuerdo de: " + "; ".join(f"{k}: {v}" for k, v in preferences.items())
 
 
+def documents_open(context: ToolContext, arguments: dict) -> str:
+    """Open by name, without a viewer: the document is something we read aloud."""
+    query = arguments["query"]
+    hits, cut = documents.find(query, limit=4)
+    if not hits:
+        extra = " Busqué rápido, así que probá con otra palabra." if cut else ""
+        return f"No encontré ningún archivo que se llame '{query}' en tus carpetas.{extra}"
+    best = hits[0]
+    if len(hits) > 1 and hits[1].score >= best.score:
+        titles = "; ".join(f"{hit.title} ({hit.path.suffix.lstrip('.')})" for hit in hits[:3])
+        return f"Encontré varios: {titles}. ¿Cuál querés que abra?"
+    try:
+        text = documents.extract_text(best.path)
+    except ModuleNotFoundError:
+        return f"Encontré '{best.title}' pero no tengo con qué leer ese tipo de archivo."
+    except Exception as exc:  # noqa: BLE001 - a file we cannot read is a sentence
+        return f"Encontré '{best.title}' pero no pude leerlo ({type(exc).__name__})."
+    if not text.strip():
+        return f"'{best.title}' no tiene texto que pueda leer. ¿Será una foto o algo escaneado?"
+    context.store.set_document(context.session, str(best.path), best.title)
+    return f"Abrí '{best.title}'. Tiene {len(text)} letras. Decime 'leelo' y arranco."
+
+
+def documents_read(context: ToolContext, arguments: dict) -> str:
+    row = context.store.get_document(context.session)
+    if not row:
+        return "No tengo ningún documento abierto. Decime cuál querés que abra."
+    try:
+        text = documents.extract_text(row["path"])
+    except Exception as exc:  # noqa: BLE001
+        return f"No pude volver a leer '{row['title']}' ({type(exc).__name__})."
+    cursor = int(row["cursor"])
+    if cursor >= len(text):
+        return f"Ya te leí todo '{row['title']}'."
+    chunk = text[cursor : cursor + documents.CHUNK_CHARS]
+    new_cursor = context.store.advance_document(context.session, len(chunk))
+    remaining = max(len(text) - new_cursor, 0)
+    tail = "[Meta: es todo el documento.]" if remaining == 0 else f"[Meta: quedan {remaining} letras.]"
+    return f"{chunk}\n\n{tail}"
+
+
+def media_play(context: ToolContext, arguments: dict) -> str:
+    query = arguments["query"]
+    found = media.resolve(query, limit=3)
+    if not found:
+        return f"No encontré nada para '{query}'."
+    best = found[0]
+    if not media.open_in_browser(best["url"]):
+        return f"Encontré '{best['title']}' pero no pude abrirlo."
+    length = f", {best['seconds'] // 60} minutos" if best["seconds"] else ""
+    channel = f" de {best['channel']}" if best["channel"] else ""
+    return (
+        f"Puse '{best['title']}'{channel}{length}. Se abrió en el navegador. "
+        "Decime si querés que lo pare."
+    )
+
+
+def media_pause(context: ToolContext, arguments: dict) -> str:
+    if media.toggle_playback():
+        return "Listo, pausé lo que estaba sonando."
+    return "No pude mandar la orden de pausa."
+
+
+def web_search(context: ToolContext, arguments: dict) -> str:
+    query = arguments["query"]
+    results = web.search(query, limit=4)
+    if not results:
+        return f"No pude buscar '{query}'. Puede ser que no haya internet."
+    return "Esto es lo que encontré: " + web.readable(results, limit=3)
+
+
+def web_read(context: ToolContext, arguments: dict) -> str:
+    url = arguments["url"]
+    text = web.read(url, limit=1800)
+    if not text:
+        return f"No pude leer {url}."
+    return f"De {url}: {text}"
+
+
+def web_open(context: ToolContext, arguments: dict) -> str:
+    if media.open_in_browser(arguments["url"]):
+        return "Te abrí la página en el navegador."
+    return "No pude abrir esa página."
+
+
 def build_registry() -> dict[str, Tool]:
     return {
         tool.name: tool
@@ -225,6 +311,75 @@ def build_registry() -> dict[str, Tool]:
                 "Leer lo que ya sabés de las preferencias del usuario.",
                 {"type": "object", "properties": {}},
                 preferences_list,
+            ),
+            Tool(
+                "documents_open",
+                "Abrir un documento del usuario por su nombre, para leerlo en voz alta. "
+                "Buscá en sus carpetas: diario, carta, receta, manual.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "cómo lo llama el usuario"}
+                    },
+                    "required": ["query"],
+                },
+                documents_open,
+            ),
+            Tool(
+                "documents_read",
+                "Leer el próximo pedazo del documento abierto. Usala cuando diga 'leelo' o 'seguí'. "
+                "Lo que va entre corchetes es para vos, no se lee en voz alta.",
+                {"type": "object", "properties": {}},
+                documents_read,
+            ),
+            Tool(
+                "media_play",
+                "Poner música o un video. Busca y lo abre en el navegador.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "qué quiere escuchar o ver"}
+                    },
+                    "required": ["query"],
+                },
+                media_play,
+            ),
+            Tool(
+                "media_pause",
+                "Pausar o reanudar lo que está sonando.",
+                {"type": "object", "properties": {}},
+                media_pause,
+            ),
+            Tool(
+                "web_search",
+                "Buscar en internet: clima, noticias, precios, cualquier dato actual.",
+                {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+                web_search,
+            ),
+            Tool(
+                "web_read",
+                "Leer el texto de una página que ya encontraste. Usala cuando el resumen no "
+                "alcanza: el clima, el precio del dólar, una noticia.",
+                {
+                    "type": "object",
+                    "properties": {"url": {"type": "string", "description": "dirección completa"}},
+                    "required": ["url"],
+                },
+                web_read,
+            ),
+            Tool(
+                "web_open",
+                "Abrir una página en el navegador para que el usuario la vea.",
+                {
+                    "type": "object",
+                    "properties": {"url": {"type": "string", "description": "dirección completa"}},
+                    "required": ["url"],
+                },
+                web_open,
             ),
         )
     }

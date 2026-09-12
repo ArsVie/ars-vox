@@ -215,6 +215,56 @@ this app's own `node_modules` fails in this network (`node node_modules\electron
 dies inside `@electron/get`). The Windows binary therefore remains uninstalled;
 `npm install` in `apps/desktop` will finish it wherever that fetch works.
 
+## W4 — the abilities
+
+Five abilities from the sheet. Status after this wave:
+
+| ability | tools | how it was verified |
+|---|---|---|
+| documents | `documents_open`, `documents_read` | opened the user's real 1,875,482-character construction spec PDF out of Downloads and read the first chunk of it |
+| web | `web_search`, `web_read`, `web_open` | live: "ahora hay unos 31 grados, máxima de 36 y mínima de 26, soleado" for Mexicali. The dollar came back as pages, and the assistant said it had no number instead of inventing one |
+| media | `media_play`, `media_pause` | resolution verified live (three real results for "The Beatles Let It Be"); playback deliberately not exercised — it would play music at the user unprompted. Pause sends the media key |
+| reminders | `reminders_*` | fires with the app closed (W2) |
+| messaging | — | not built yet: needs a bot token and the spoken read-back |
+
+### Three defects this wave found
+
+1. **The document search silently missed files.** `rglob` over Documents + Desktop
+   + Downloads costs 25 seconds for 145,506 files, and the 4,000-file cap cut the
+   walk before reaching the file the user meant — a search that says "not found"
+   for a file that is right there. Now the walk is pruned (`node_modules`, `.git`,
+   `.venv`, `site-packages`, `dist`, dotfolders), depth-limited to 4, deadline of
+   3 seconds, and it reports when it was cut. 1,813 files in 0.64 s, and the spec
+   PDF is found with the right score.
+2. **The model answered a repeated request from memory.** Asked again to open a
+   document it had already failed to find, it reported the old failure without
+   calling the tool. The state may have changed, so the norms now say: if a tool
+   answers the request, call it.
+3. **`documents_read` mixed the text with its own bookkeeping**, and the model
+   read "Quedan 1874082 letras" aloud. The note is now bracketed as `[Meta: ...]`
+   with the tool description saying brackets are not for reading out loud.
+
+15 tools are visible to the model. The paper puts deferred tool loading above
+about 15, so this is the number to watch: the next ability has to justify itself
+or consolidate.
+
+## Packaging — what the executable should be
+
+Measured on this machine: **Electron is the wrong tool here.**
+
+| option | size / cost | verdict |
+|---|---|---|
+| Electron | ~200 MB Chromium per app, node + npm, and its binary download fails on this network | no |
+| WebView2 via pywebview | runtime already installed (152.0.4191.66), one pip dependency, no node | the page stays as it is |
+| tkinter | stdlib, nothing to install | only if the UI stops being a page |
+| Edge in `--app=` mode | nothing to install | fine for a shortcut today |
+
+The window is a page; it does not need its own browser. The executable is the
+Python side: PyInstaller `--onedir` (never onefile: unpacking a 2 GB bundle into
+temp on every launch would cost a minute), with `nvidia-cublas-cu12` and
+`nvidia-cudnn-cu12` collected as data, and the whisper models left outside the
+bundle in `C:\dev\models\whisper`.
+
 ## Engine, 12 real clips, 270 s (mains power)
 
 | path | model | mean WER | median | worst | mean RTF |
@@ -271,9 +321,9 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 2596 in 9 files |
+| runtime lines (services + cli) | 3169 in 12 files |
 | measurement tooling lines | 1,003 |
-| test lines | 781, fifty-five tests green |
+| test lines | 972, seventy-one tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |

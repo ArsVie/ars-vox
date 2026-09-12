@@ -58,6 +58,14 @@ CREATE TABLE IF NOT EXISTS preferences (
     updated_ts TEXT NOT NULL,
     PRIMARY KEY (session, key)
 );
+
+CREATE TABLE IF NOT EXISTS documents (
+    session TEXT PRIMARY KEY,
+    path TEXT NOT NULL,
+    title TEXT NOT NULL,
+    cursor INTEGER NOT NULL DEFAULT 0,
+    opened_ts TEXT NOT NULL
+);
 """
 
 
@@ -309,6 +317,33 @@ class Store:
             "preferences": len(self.preferences(session)),
             "events": len(self.events(session)),
         }
+
+    # ---- the document being read aloud ----------------------------------
+    @locked
+    def set_document(self, session: str, path: str, title: str) -> None:
+        self.conn.execute(
+            "INSERT INTO documents (session, path, title, cursor, opened_ts) VALUES (?, ?, ?, 0, ?) "
+            "ON CONFLICT(session) DO UPDATE SET path = excluded.path, title = excluded.title, "
+            "cursor = 0, opened_ts = excluded.opened_ts",
+            (session, path, title, now_local()),
+        )
+        self.conn.commit()
+
+    @locked
+    def get_document(self, session: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT path, title, cursor, opened_ts FROM documents WHERE session = ?", (session,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    @locked
+    def advance_document(self, session: str, characters: int) -> int:
+        self.conn.execute(
+            "UPDATE documents SET cursor = cursor + ? WHERE session = ?", (characters, session)
+        )
+        self.conn.commit()
+        row = self.get_document(session)
+        return int(row["cursor"]) if row else 0
 
     @locked
     def close(self) -> None:
