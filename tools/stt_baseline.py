@@ -116,15 +116,26 @@ def load_reference(value: str | None) -> str | None:
     return value
 
 
-def run(audio: Path, model: str, language: str, reference: str | None, beam: int) -> dict:
+def run(
+    audio: Path,
+    model: str,
+    language: str,
+    reference: str | None,
+    beam: int,
+    device: str = "cpu",
+    compute_type: str = "int8",
+) -> dict:
     import time
 
-    engine = FasterWhisperSTT(model_size=model, beam_size=beam, language=language)
+    engine = FasterWhisperSTT(
+        model_size=model, beam_size=beam, language=language, device=device, compute_type=compute_type
+    )
     load_started = time.perf_counter()
     engine.warmup()
     load_s = time.perf_counter() - load_started
     result: Transcript = engine.transcribe(audio, language=language)
-    row = {"audio": audio.name, "model": model, **result.as_dict()}
+    row = {"audio": audio.name, "model": model, "device": device, "compute_type": compute_type}
+    row.update(result.as_dict())
     row["load_and_warmup_s"] = round(load_s, 2)
     if reference:
         row["reference"] = reference
@@ -137,7 +148,7 @@ def print_row(row: dict) -> None:
     print(f"  language   {row['language']} ({row['language_probability']})")
     print(f"  audio      {row['duration_s']}s    engine time {row['elapsed_s']}s    RTF {row['real_time_factor']}")
     print(f"  confidence mean logprob {row['mean_logprob']}    weak segments {row['weak_segments']}")
-    print(f"  load+warm  {row.get('load_and_warmup_s', 'n/a')}s")
+    print(f"  load+warm  {row.get('load_and_warmup_s', 'n/a')}s   device {row.get('device')} {row.get('compute_type')}")
     print(f"  text       {row['text']}")
     if "error" in row:
         err = row["error"]
@@ -154,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--language", default=DEFAULT_LANGUAGE)
     parser.add_argument("--reference", help="reference transcript: file path or literal text")
     parser.add_argument("--beam", type=int, default=5)
+    parser.add_argument("--device", default="cpu", help="cpu | cuda")
+    parser.add_argument("--compute-type", default="int8", help="int8 | float16 | int8_float16")
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "results")
     args = parser.parse_args(argv)
 
@@ -167,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     for audio in args.audio:
         for model in args.models:
             print(f"\n[{audio.name}] model={model}")
-            row = run(audio, model, args.language, reference, args.beam)
+            row = run(audio, model, args.language, reference, args.beam, args.device, args.compute_type)
             print_row(row)
             rows.append(row)
 

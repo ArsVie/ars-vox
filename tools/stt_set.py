@@ -54,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("folder", type=Path)
     parser.add_argument("--models", nargs="+", default=["small"])
     parser.add_argument("--language", default="es")
+    parser.add_argument("--device", default="cpu", help="cpu | cuda")
+    parser.add_argument("--compute-type", default="int8", help="int8 | float16 | int8_float16")
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "results")
     args = parser.parse_args(argv)
 
@@ -63,7 +65,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     engines = {
-        model: FasterWhisperSTT(model_size=model, language=args.language) for model in args.models
+        model: FasterWhisperSTT(
+            model_size=model,
+            language=args.language,
+            device=args.device,
+            compute_type=args.compute_type,
+        )
+        for model in args.models
     }
     for engine in engines.values():
         engine.warmup()
@@ -97,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         for model in args.models
     }
     print("\nsummary across clips")
+    print(f"  device {args.device} {args.compute_type}")
     summary = {}
     for model, values in scored.items():
         if not values:
@@ -119,7 +128,15 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out / "sets"
     out.mkdir(parents=True, exist_ok=True)
     (out / "stt_set.json").write_text(
-        json.dumps({"clips": rows, "summary": summary}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {
+                "settings": {"device": args.device, "compute_type": args.compute_type},
+                "clips": rows,
+                "summary": summary,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     print(f"\nwrote {out / 'stt_set.json'}")
