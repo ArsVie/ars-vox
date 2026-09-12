@@ -1,11 +1,16 @@
 """Headless driver for Ars-Vox. This is the primary development surface.
 
-Everything about the voice loop is tested here, without Electron.
+Everything about the product loop is driven from here, without Electron: the
+ears, the loop, the tools, the log, and the mouth.
 
     python apps/cli/arsvox_cli.py transcribe clip.m4a --model small
-    python apps/cli/arsvox_cli.py say "Hola, soy Ars Vox." --engine windows
+    python apps/cli/arsvox_cli.py speak "Hola, soy Ars Vox." --play
     python apps/cli/arsvox_cli.py roundtrip "Ponme un video de los Beatles"
-    python apps/cli/arsvox_cli.py listen --seconds 5        # needs a real microphone
+    python apps/cli/arsvox_cli.py ask "recordame tomar la pastilla a las ocho" --trace
+    python apps/cli/arsvox_cli.py chat --speak
+    python apps/cli/arsvox_cli.py talk --seconds 15      # voice in, voice out
+    python apps/cli/arsvox_cli.py log --session cli
+    python apps/cli/arsvox_cli.py sessions
 """
 
 from __future__ import annotations
@@ -20,8 +25,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.arsvox.audio import write_wav  # noqa: E402
-from services.arsvox.tts import EdgeTTS, FakeTTS, WindowsTTS  # noqa: E402
+from services.arsvox.audio import play_wav, write_wav  # noqa: E402
+from services.arsvox.tts import EdgeTTS, FakeTTS  # noqa: E402
 from services.arsvox.voice import DEFAULT_LANGUAGE, FasterWhisperSTT  # noqa: E402
 from tools.stt_baseline import word_error_rate  # noqa: E402
 
@@ -29,15 +34,189 @@ WORK_DIR = REPO_ROOT / "results" / "cli"
 
 
 def build_tts(engine: str):
-    if engine == "edge":
-        return EdgeTTS()
-    if engine == "windows":
-        return WindowsTTS()
-    return FakeTTS()
+    """The product voice is edge-tts. The Windows system voice is banned by ear."""
+    return FakeTTS() if engine == "fake" else EdgeTTS()
 
+
+def build_stt(args: argparse.Namespace) -> FasterWhisperSTT:
+    """The configured engine, with a visible fallback when there is no GPU."""
+    engine = FasterWhisperSTT(model_size=args.model, device=args.device, compute_type=args.compute_type)
+    if args.device != "cpu":
+        try:
+            engine.warmup()
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"aviso: no pude usar {args.device}/{args.compute_type} ({type(exc).__name__}); "
+                "sigo en CPU int8",
+                file=sys.stderr,
+            )
+            engine = FasterWhisperSTT(model_size=args.model, device="cpu", compute_type="int8")
+    return engine
+
+
+# ---- agent -----------------------------------------------------------------
+
+def build_runtime(args: argparse.Namespace):
+    from services.arsvox.config import load_settings
+    from services.arsvox.model import HttpChatModel
+    from services.arsvox.runtime import Runtime
+    from services.arsvox.store import Store
+
+    settings = load_settings(session=args.session)
+    store = Store(settings.db_path)
+    model = HttpChatModel(
+        settings.base_url,
+        settings.model,
+        settings.api_key,
+        temperature=settings.temperature,
+        max_tokens=settings.max_tokens,
+        timeout_s=settings.timeout_s,
+    )
+    return Runtime(settings, store, model), settings, store
+
+
+def report_turn(result, args: argparse.Namespace) -> None:
+    for trace in result.tools:
+        marker = "ok" if trace.allowed else "NO"
+        print(f"   [{marker}] {trace.name}({json.dumps(trace.arguments, ensure_ascii=False)}) -> {trace.result}")
+    if args.trace:
+        usage = result.usage.as_dict()
+        print(
+            f"   {result.steps} paso(s), {result.elapsed_s:.2f}s, "
+            f"prompt {usage['prompt_tokens']} (cache {usage['cached_tokens']}, "
+            f"hit {usage['cache_hit_rate']:.0%}), salida {usage['completion_tokens']}"
+        )
+    if result.error:
+        print(f"   error: {result.error}", file=sys.stderr)
+
+
+def speak_reply(text: str, args: argparse.Namespace) -> None:
+    if not getattr(args, "speak", False) or not text.strip():
+        return
+    out = WORK_DIR / "reply.wav"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    build_tts(args.engine).synthesize(text, out)
+    play_wav(out)
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    runtime, _, _ = build_runtime(args)
+    if args.audio:
+        stt = build_stt(args)
+        heard = stt.transcribe(args.audio)
+        print(f"vos: {heard.text}   ({heard.duration_s:.1f}s audio, {heard.elapsed_s:.2f}s engine)")
+        if not heard.text.strip():
+            print("no entendí el audio", file=sys.stderr)
+            return 1
+        text = heard.text
+    else:
+        text = args.text
+    result = runtime.turn(args.session, text)
+    print(result.text)
+    report_turn(result, args)
+    speak_reply(result.text, args)
+    return 0
+
+
+def cmd_chat(args: argparse.Namespace) -> int:
+    runtime, settings, store = build_runtime(args)
+    print(f"Ars Vox — sesión '{args.session}', modelo {settings.model}. Vacío para salir.\n")
+    while True:
+        try:
+            line = input("vos: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not line:
+            break
+        if line in ("/q", "salir", "chau"):
+            break
+        if line == "/estado":
+            print(f"   {store.state_counts(args.session)}")
+            continue
+        if line == "/log":
+            for event in store.events(args.session)[-8:]:
+                print(f"   {event.id} {event.kind} {json.dumps(event.payload, ensure_ascii=False)[:120]}")
+            continue
+        result = runtime.turn(args.session, line)
+        print(f"ars vox: {result.text}")
+        report_turn(result, args)
+        speak_reply(result.text, args)
+    return 0
+
+
+def cmd_talk(args: argparse.Namespace) -> int:
+    """The whole product loop: microphone, ears, model, tools, voice."""
+    try:
+        from services.arsvox.mic import normalize_gain, record_until_silence
+    except ImportError:
+        print("la captura necesita el venv de Windows con sounddevice", file=sys.stderr)
+        return 2
+
+    runtime, settings, store = build_runtime(args)
+    stt = build_stt(args)
+    print(f"Ars Vox — hablá después del aviso. Modelo {settings.model}. Enter para salir.\n")
+    print(f"calentando el reconocedor ... {stt.warmup() if args.device != 'cpu' else 0:.1f}s")
+
+    while True:
+        try:
+            input("[Enter] para hablar ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        capture = record_until_silence(max_seconds=args.seconds, device=args.input_device)
+        if not capture.has_speech:
+            print("   no escuché nada\n")
+            continue
+        samples = normalize_gain(capture.samples)
+        clip = WORK_DIR / f"talk-{int(time.time())}.wav"
+        clip.parent.mkdir(parents=True, exist_ok=True)
+        write_wav(clip, samples, 16_000)
+        heard = stt.transcribe(samples)
+        print(f"vos: {heard.text}   ({capture.speech_seconds:.1f}s de voz, {heard.elapsed_s:.2f}s)")
+        if not heard.text.strip():
+            print("   no entendí, probá de nuevo\n")
+            continue
+        result = runtime.turn(args.session, heard.text)
+        print(f"ars vox: {result.text}")
+        report_turn(result, args)
+        speak_reply(result.text, args)
+        print()
+    return 0
+
+
+# ---- log -------------------------------------------------------------------
+
+def cmd_log(args: argparse.Namespace) -> int:
+    from services.arsvox.store import Store, project
+
+    store = Store(args.db)
+    events = store.events(args.session)
+    for event in events[-args.limit :]:
+        if args.projected:
+            message = project(event)
+            if message is None:
+                continue
+            print(json.dumps(message, ensure_ascii=False))
+        else:
+            print(f"{event.id:5d} {event.ts[:19]} {event.kind:18s} "
+                  f"{json.dumps(event.payload, ensure_ascii=False)[:150]}")
+    print(f"-- {len(events)} eventos en '{args.session}'", file=sys.stderr)
+    return 0
+
+
+def cmd_sessions(args: argparse.Namespace) -> int:
+    from services.arsvox.store import Store
+
+    for row in Store(args.db).sessions():
+        print(f"{row['session']:20s} {row['events']:5d} eventos   último {row['last_ts'][:19]}")
+    return 0
+
+
+# ---- voice only ------------------------------------------------------------
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
-    engine = FasterWhisperSTT(model_size=args.model)
+    engine = FasterWhisperSTT(model_size=args.model, device=args.device, compute_type=args.compute_type)
     result = engine.transcribe(args.audio, language=args.language)
     if args.json:
         print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
@@ -51,11 +230,13 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_say(args: argparse.Namespace) -> int:
-    out = args.out or WORK_DIR / "say.wav"
+def cmd_speak(args: argparse.Namespace) -> int:
+    out = args.out or WORK_DIR / "speak.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
     path = build_tts(args.engine).synthesize(args.text, out)
     print(path)
+    if args.play:
+        play_wav(path)
     return 0
 
 
@@ -79,19 +260,27 @@ def cmd_listen(args: argparse.Namespace) -> int:
     except ImportError:
         print("sounddevice is not installed: capture needs the service venv", file=sys.stderr)
         return 2
-    import numpy as np
     import sounddevice as sd
 
-    rate = 16_000
-    print(f"recording {args.seconds}s ...", file=sys.stderr)
-    audio = sd.rec(int(args.seconds * rate), samplerate=rate, channels=1, dtype="float32")
-    sd.wait()
+    from services.arsvox.mic import normalize_gain, record_until_silence
+
+    capture = record_until_silence(max_seconds=args.seconds, device=args.input_device)
+    if not capture.has_speech:
+        print("no escuché nada", file=sys.stderr)
+        return 1
+    samples = normalize_gain(capture.samples)
     out = WORK_DIR / f"mic-{int(time.time())}.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_wav(out, audio, rate)
-    result = FasterWhisperSTT(model_size=args.model).transcribe(out)
-    print(result.text)
+    write_wav(out, samples, 16_000)
+    engine = FasterWhisperSTT(model_size=args.model, device=args.device, compute_type=args.compute_type)
+    print(engine.transcribe(samples).text)
     return 0
+
+
+def add_engine_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--model", default="large-v3-turbo")
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--compute-type", default="float16")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -101,26 +290,68 @@ def main(argv: list[str] | None = None) -> int:
     transcribe = sub.add_parser("transcribe", help="transcribe one audio file")
     transcribe.add_argument("audio", type=Path)
     transcribe.add_argument("--model", default="small")
+    transcribe.add_argument("--device", default="cpu")
+    transcribe.add_argument("--compute-type", default="int8")
     transcribe.add_argument("--language", default=DEFAULT_LANGUAGE)
     transcribe.add_argument("--json", action="store_true")
     transcribe.set_defaults(func=cmd_transcribe)
 
-    say = sub.add_parser("say", help="speak text to a wav file")
-    say.add_argument("text")
-    say.add_argument("--engine", default="windows", choices=["edge", "windows", "fake"])
-    say.add_argument("--out", type=Path)
-    say.set_defaults(func=cmd_say)
+    speak = sub.add_parser("speak", help="speak text to a wav file")
+    speak.add_argument("text")
+    speak.add_argument("--engine", default="edge", choices=["edge", "fake"])
+    speak.add_argument("--out", type=Path)
+    speak.add_argument("--play", action="store_true")
+    speak.set_defaults(func=cmd_speak)
 
     roundtrip = sub.add_parser("roundtrip", help="speak then listen, and compare")
     roundtrip.add_argument("text")
-    roundtrip.add_argument("--engine", default="windows", choices=["edge", "windows", "fake"])
+    roundtrip.add_argument("--engine", default="edge", choices=["edge", "fake"])
     roundtrip.add_argument("--model", default="small")
     roundtrip.set_defaults(func=cmd_roundtrip)
 
+    for name, func, help_text in (
+        ("ask", cmd_ask, "one request through the loop, typed or from an audio file"),
+        ("chat", cmd_chat, "typed conversation"),
+    ):
+        node = sub.add_parser(name, help=help_text)
+        if name == "ask":
+            node.add_argument("text", nargs="?")
+            node.add_argument("--audio", type=Path, help="a recorded request instead of typed text")
+            add_engine_flags(node)
+        node.add_argument("--session", default="cli")
+        node.add_argument("--speak", action="store_true", help="read the answer out loud")
+        node.add_argument("--engine", default="edge", choices=["edge", "fake"])
+        node.add_argument("--trace", action="store_true")
+        node.set_defaults(func=func, db=None)
+
+    talk = sub.add_parser("talk", help="voice in, voice out, real microphone")
+    talk.add_argument("--session", default="cli")
+    talk.add_argument("--seconds", type=float, default=15.0)
+    talk.add_argument("--input-device", type=int)
+    talk.add_argument("--engine", default="edge", choices=["edge", "fake"])
+    talk.add_argument("--trace", action="store_true")
+    talk.add_argument("--speak", action="store_true", default=True)
+    talk.set_defaults(func=cmd_talk, db=None)
+    add_engine_flags(talk)
+
     listen = sub.add_parser("listen", help="capture from the microphone and transcribe")
-    listen.add_argument("--seconds", type=float, default=5.0)
+    listen.add_argument("--seconds", type=float, default=15.0)
+    listen.add_argument("--input-device", type=int)
     listen.add_argument("--model", default="small")
+    listen.add_argument("--device", default="cuda")
+    listen.add_argument("--compute-type", default="float16")
     listen.set_defaults(func=cmd_listen)
+
+    log = sub.add_parser("log", help="print the event log")
+    log.add_argument("--session", default="cli")
+    log.add_argument("--db", type=Path, default=REPO_ROOT / "data" / "arsvox.db")
+    log.add_argument("--limit", type=int, default=40)
+    log.add_argument("--projected", action="store_true", help="show the model messages instead")
+    log.set_defaults(func=cmd_log)
+
+    sessions = sub.add_parser("sessions", help="list sessions in the log")
+    sessions.add_argument("--db", type=Path, default=REPO_ROOT / "data" / "arsvox.db")
+    sessions.set_defaults(func=cmd_sessions)
 
     args = parser.parse_args(argv)
     return args.func(args)

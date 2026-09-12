@@ -66,6 +66,56 @@ The session measured 5.01 s per request because the laptop was on battery at
 Same clips, same models, AC against battery on this laptop. The re-process above
 ran on mains and took a 0.56 s median for a six-second request.
 
+## W1 — the loop
+
+Gate: a real turn through the real model, tool calls writing real state, the
+prefix cache hit above zero, and a restart that resumes the session from the log.
+No scripted model appears anywhere in the evidence below.
+
+| what | evidence |
+|---|---|
+| real model, real state | `ask "recordame tomar la pastilla del corazón a las ocho de la noche"` → `reminders_set({text: "Tomar la pastilla del corazón", when_local: "2026-09-12T20:00"})`, stored as reminder 1 |
+| real speech in | five of the user's own recordings from 2026-09-12 replayed through the loop: 13, 10, 11, 15, 17 |
+| prefix cache | first turn 1378 prompt tokens, 1152 cached (84%); then 88, 90, 91, 94% |
+| resume from the log | each replay ran in its own process; turn 17 found reminder 2 that turn 13's process had created |
+| no duplicate work | asked again for a reminder that already existed, the model called `reminders_list` and refused to add it twice |
+| turn latency | 2.8 - 5.1 s per turn, of which recognition 0.62 - 0.73 s |
+
+The five replayed requests, in the user's real voice:
+
+| request | heard | what the loop did |
+|---|---|---|
+| 13 | "Recuérdame tomar la pastilla a las 8 de la noche." | found the existing reminder, did not duplicate it |
+| 10 | "Anota que tengo que llamar al médico." | found the existing task, did not duplicate it |
+| 11 | "Agrega a la lista de comprar pan" | `tasks_add` → task 2 |
+| 15 | "¿Qué tengo que hacer hoy?" | `tasks_list` + `reminders_list` in one turn |
+| 17 | "Borro el recortatorio de las 8." | `reminders_cancel(2)` → cancelled the 20:00 reminder |
+
+Recogniser time for a six-second request: 0.62 - 0.73 s on CUDA with the loader
+path set, against 5.08 s when it silently fell back to CPU. The CLI now prints
+that fallback instead of hiding it.
+
+### Shape
+
+| file | lines | what it is |
+|---|---|---|
+| `services/arsvox/config.py` | 80 | settings, key resolution, one place |
+| `services/arsvox/store.py` | 222 | the event log plus one projection rule, reminders, tasks, preferences |
+| `services/arsvox/model.py` | 196 | raw httpx chat completions, usage and cache accounting |
+| `services/arsvox/context.py` | 118 | ordered prompt sections, strict interpolation, volatile snapshot |
+| `services/arsvox/policy.py` | 168 | rules as data, frozen deny floor, step budget, repetition cap |
+| `services/arsvox/tools.py` | 214 | eight tools, each writing real state |
+| `services/arsvox/runtime.py` | 148 | the turn loop |
+| `apps/cli/arsvox_cli.py` | 361 | `ask`, `chat`, `talk`, `speak`, `listen`, `log`, `sessions` |
+
+## Voice out
+
+The Windows system voice (SAPI through PowerShell) was heard on the real machine
+and rejected. It is banned: it must not come back, not even as a fallback.
+The product voice is edge-tts `es-MX-DaliaNeural` at -4 percent rate, converted
+to wav with ffmpeg for playback. Open item: it needs network, so a local neural
+voice is required before the two-week pilot.
+
 ## Engine, 12 real clips, 270 s (mains power)
 
 | path | model | mean WER | median | worst | mean RTF |
@@ -122,9 +172,10 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 549 |
-| measurement tooling lines | 903 |
-| test lines | 77, thirteen tests green |
-| dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts |
-| fakes | two: the model, the microphone |
+| runtime lines (services + cli) | 1,929 in 8 files |
+| measurement tooling lines | 1,003 |
+| test lines | 292, thirty tests green |
+| dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
+| fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |
+| voice | edge-tts neural; SAPI banned by ear |

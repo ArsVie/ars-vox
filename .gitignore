@@ -7,4 +7,6 @@ results/
 *.mp3
 .DS_Store
 data/baseline/
+data/*.db*
+
 .venv-win/

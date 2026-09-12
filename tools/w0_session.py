@@ -35,7 +35,7 @@ if str(REPO_ROOT) not in sys.path:
 from services.arsvox.audio import write_wav  # noqa: E402
 from services.arsvox.hostinfo import power_state  # noqa: E402
 from services.arsvox.mic import normalize_gain  # noqa: E402
-from services.arsvox.tts import FakeTTS, WindowsTTS  # noqa: E402
+from services.arsvox.tts import EdgeTTS, FakeTTS  # noqa: E402
 from services.arsvox.voice import FasterWhisperSTT  # noqa: E402
 from tools.stt_baseline import normalize  # noqa: E402
 
@@ -143,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default=str(REPO_ROOT / ".." / "models" / "whisper" / "large-v3-turbo"))
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--compute-type", default="float16")
-    parser.add_argument("--engine", default="windows", choices=["windows", "fake"])
+    parser.add_argument("--engine", default="edge", choices=["edge", "fake"])
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "results" / "w0")
     args = parser.parse_args(argv)
 
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         print_sheet(sheet)
         return 0
 
-    engine = FakeTTS() if args.engine == "fake" else WindowsTTS()
+    engine = FakeTTS() if args.engine == "fake" else EdgeTTS()
     stt = FasterWhisperSTT(
         model_size=args.model, device=args.device, compute_type=args.compute_type, language="es"
     )

@@ -1,15 +1,17 @@
 """Text-to-speech for Ars-Vox.
 
-Real providers only, plus one test seam. The assistant must be audible offline,
-so the Windows system voice is a first-class provider, not a fallback curiosity.
+One real provider and one test seam. The Windows system voice (System.Speech /
+SAPI) is banned: it was tested on the real machine and rejected by ear. Do not
+add it back, in any form, including as a fallback.
+
+Offline capability is still an open item: the chosen voice needs network. See
+docs/status.md.
 """
 
 from __future__ import annotations
 
 import asyncio
-import base64
-import subprocess
-import sys
+import os
 from pathlib import Path
 from typing import Protocol
 
@@ -24,66 +26,29 @@ class TTSProvider(Protocol):
 
 
 class EdgeTTS:
-    """Microsoft Edge voices. Needs network. Sounds best of the three."""
+    """Microsoft neural voices. The chosen voice of the product. Needs network."""
 
     name = "edge-tts"
 
-    def __init__(self, voice: str = DEFAULT_EDGE_VOICE, rate: str = "+0%") -> None:
-        self.voice = voice
+    def __init__(self, voice: str | None = None, rate: str = "-4%") -> None:
+        self.voice = voice or os.environ.get("ARSVOX_VOICE", DEFAULT_EDGE_VOICE)
         self.rate = rate
 
     def synthesize(self, text: str, out_path: str | Path) -> Path:
         import edge_tts
 
         out = Path(out_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        wants_wav = out.suffix.lower() == ".wav"
+        target = out.with_suffix(".mp3") if wants_wav else out
 
         async def _run() -> None:
-            await edge_tts.Communicate(text, self.voice, rate=self.rate).save(str(out))
+            await edge_tts.Communicate(text, self.voice, rate=self.rate).save(str(target))
 
         asyncio.run(_run())
-        return out
-
-
-class WindowsTTS:
-    """Offline Spanish voice through the Windows speech stack. No network.
-
-    Runs on Windows directly, and from WSL through powershell.exe interop.
-    The script is sent as an encoded command, so accents survive the trip.
-    """
-
-    name = "windows-sapi"
-
-    def __init__(self, voice_hint: str = "es", rate: int = -2) -> None:
-        self.voice_hint = voice_hint
-        self.rate = rate
-
-    def synthesize(self, text: str, out_path: str | Path) -> Path:
-        out = Path(out_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        if sys.platform == "win32":
-            exe, win_out = "powershell", str(out.resolve())
-        else:
-            exe, win_out = "powershell.exe", _to_windows_path(out)
-        literal = text.replace("'", "''")
-        script = (
-            "Add-Type -AssemblyName System.Speech; "
-            "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-            f"$v = $s.GetInstalledVoices() | Where-Object "
-            f"{{ $_.VoiceInfo.Culture.Name -like '{self.voice_hint}*' }} | Select-Object -First 1; "
-            "if ($v) { $s.SelectVoice($v.VoiceInfo.Name) }; "
-            f"$s.Rate = {self.rate}; "
-            f"$s.SetOutputToWaveFile('{win_out}'); "
-            f"$s.Speak('{literal}'); $s.Dispose()"
-        )
-        encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-        proc = subprocess.run(
-            [exe, "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-            capture_output=True,
-        )
-        if proc.returncode != 0 or not out.exists():
-            detail = proc.stderr.decode(errors="replace")[:400] or proc.stdout.decode(errors="replace")[:400]
-            raise RuntimeError(f"windows tts failed: {detail}")
-        return out
+        if not wants_wav:
+            return target
+        return _mp3_to_wav(target, out)
 
 
 class FakeTTS:
@@ -101,9 +66,19 @@ class FakeTTS:
         return out
 
 
-def _to_windows_path(path: Path) -> str:
-    resolved = str(Path(path).resolve())
-    if resolved.startswith("/mnt/") and len(resolved) > 7:
-        drive = resolved[5].upper()
-        return f"{drive}:{resolved[6:]}".replace("/", "\\")
-    return resolved
+def _mp3_to_wav(source: Path, target: Path) -> Path:
+    """edge-tts returns mp3. The players here take wav, so convert with ffmpeg."""
+    import subprocess
+
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error", "-i", str(source),
+            "-ar", "22050", "-ac", "1", "-c:a", "pcm_s16le", str(target),
+        ],
+        capture_output=True,
+    )
+    if proc.returncode != 0 or not target.exists():
+        detail = proc.stderr.decode(errors="replace")[:200]
+        raise RuntimeError(f"no pude convertir el audio a wav: {detail}")
+    source.unlink(missing_ok=True)
+    return target
