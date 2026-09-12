@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from services.arsvox.audio import write_wav  # noqa: E402
 from services.arsvox.tts import EdgeTTS, FakeTTS, WindowsTTS  # noqa: E402
 from services.arsvox.voice import DEFAULT_LANGUAGE, FasterWhisperSTT  # noqa: E402
 from tools.stt_baseline import word_error_rate  # noqa: E402
@@ -87,23 +88,10 @@ def cmd_listen(args: argparse.Namespace) -> int:
     sd.wait()
     out = WORK_DIR / f"mic-{int(time.time())}.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
-    _write_wav(out, audio, rate)
+    write_wav(out, audio, rate)
     result = FasterWhisperSTT(model_size=args.model).transcribe(out)
     print(result.text)
     return 0
-
-
-def _write_wav(path: Path, samples, rate: int) -> None:
-    import wave
-
-    import numpy as np
-
-    pcm = np.clip(samples, -1.0, 1.0)
-    with wave.open(str(path), "wb") as handle:
-        handle.setnchannels(1)
-        handle.setsampwidth(2)
-        handle.setframerate(rate)
-        handle.writeframes((pcm * 32767).astype("<i2").tobytes())
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -72,11 +72,42 @@ turbo is more accurate than the reference, so mean WER overstates its errors.
 5. Formatting never stabilises (digits, punctuation, capitals). Normalise before
    matching intents; never match raw text.
 
+## W0 gate session — ready to run
+
+One command, in a PowerShell window on this machine:
+
+```
+powershell -ExecutionPolicy Bypass -File C:\dev\ars-vox-v2\tools\windows\run_w0_mic.ps1
+```
+
+It checks the microphone, prints each request, records six seconds, recognises
+it, and scores it. You may override any verdict (Enter accepts, c correct,
+i incorrect, q quit). It writes one ledger under `results/w0-mic/`.
+
+Sheet: 30 requests, 6 per ability, `tools/w0_utterances.json`
+(`python tools/w0_session.py --sheet` prints it).
+
+### Dry harness check (synthetic Windows voice, not the gate)
+
+30 requests spoken by the Windows Spanish voice, recognised by turbo on CUDA:
+20 of 30 understood, recognition median 0.57 s, max 1.26 s.
+
+Label: wiring test only. Every failure is an artefact of robotic synthetic
+speech, and they cluster in the same way: "pausa" heard as "pasa", "llamar" as
+"lamer", "buscame" as "bus game"/"Bus Gamecube", "tengo" as "tango", the name
+"Ana" absorbed into the following word. Human speech on the real clips does not
+show this pattern. What the dry run does prove: 30 requests synthesise, record,
+score and report unattended, and recognition costs well under a second.
+
+Design note from those failures: never key an intent on a short name. "Ana"
+survives as "Anakay", "Anike", "Anukaya" — the matcher must tolerate variant
+spellings of names, and the spoken read-back is what protects the send.
+
 ## Harness state
 
 | item | value |
 |---|---|
-| product lines | 660 |
+| product lines | 700 |
 | test lines | 96, thirteen tests green |
 | external dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts |
 | fakes | two: the model, the microphone |

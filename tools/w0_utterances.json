@@ -1,0 +1,41 @@
+{
+  "language": "es",
+  "notes": "W0 gate sheet. 5 abilities x 6 requests, voseo, low computer literacy phrasing. key_terms are the words that must survive speech recognition for the request to be understood; they are checked after normalisation (accents stripped, digits turned into words). A human verdict overrides the automatic one.",
+  "gate": {"utterances": 30, "success_threshold": 24},
+  "utterances": [
+    {"id": 1, "ability": "media", "text": "Poneme algo de los Beatles en YouTube.", "key_terms": ["beatles", "youtube"]},
+    {"id": 2, "ability": "media", "text": "Buscame musica de tango para escuchar.", "key_terms": ["tango", "musica"]},
+    {"id": 3, "ability": "media", "text": "Pausa la musica un momento.", "key_terms": ["pausa", "musica"]},
+    {"id": 4, "ability": "media", "text": "Subi el volumen, por favor.", "key_terms": ["volumen"]},
+    {"id": 5, "ability": "media", "text": "Poneme musica tranquila para la tarde.", "key_terms": ["musica", "tarde"]},
+    {"id": 6, "ability": "media", "text": "Para la musica.", "key_terms": ["musica"]},
+
+    {"id": 7, "ability": "document", "text": "Abrime el diario de hoy.", "key_terms": ["diario", "hoy"]},
+    {"id": 8, "ability": "document", "text": "Leeme el documento que abri antes.", "key_terms": ["documento"]},
+    {"id": 9, "ability": "document", "text": "Que decia la carta.", "key_terms": ["carta"]},
+    {"id": 10, "ability": "document", "text": "Anota que tengo que llamar al medico.", "key_terms": ["llamar", "medico"]},
+    {"id": 11, "ability": "document", "text": "Agrega a la lista comprar pan.", "key_terms": ["lista", "pan"]},
+    {"id": 12, "ability": "document", "text": "Buscame el archivo donde anote el telefono de Ana.", "key_terms": ["archivo", "telefono"]},
+
+    {"id": 13, "ability": "reminders", "text": "Recordame tomar la pastilla a las ocho de la noche.", "key_terms": ["pastilla", "ocho"]},
+    {"id": 14, "ability": "reminders", "text": "Avisame en una hora que tengo que salir.", "key_terms": ["hora", "salir"]},
+    {"id": 15, "ability": "reminders", "text": "Que tengo que hacer hoy.", "key_terms": ["hacer", "hoy"]},
+    {"id": 16, "ability": "reminders", "text": "Recordame llamar a mi hija los domingos.", "key_terms": ["llamar", "domingos"]},
+    {"id": 17, "ability": "reminders", "text": "Borra el recordatorio de las ocho.", "key_terms": ["recordatorio", "ocho"]},
+    {"id": 18, "ability": "reminders", "text": "Que recordatorios tengo.", "key_terms": ["recordatorios"]},
+
+    {"id": 19, "ability": "messaging", "text": "Mandale un mensaje a Ana que llego a las seis.", "key_terms": ["mensaje", "ana", "seis"]},
+    {"id": 20, "ability": "messaging", "text": "Decile a mi hija que estoy bien.", "key_terms": ["hija", "bien"]},
+    {"id": 21, "ability": "messaging", "text": "Mandale a Ana que no me esperen para comer.", "key_terms": ["ana", "comer"]},
+    {"id": 22, "ability": "messaging", "text": "Me contesto Ana.", "key_terms": ["contesto", "ana"]},
+    {"id": 23, "ability": "messaging", "text": "Escribile a mi hijo que lo quiero.", "key_terms": ["hijo", "quiero"]},
+    {"id": 24, "ability": "messaging", "text": "Manda un mensaje a Ana que ya sali.", "key_terms": ["mensaje", "ana", "sali"]},
+
+    {"id": 25, "ability": "browser", "text": "Abri el navegador y buscame el clima de hoy.", "key_terms": ["clima", "hoy"]},
+    {"id": 26, "ability": "browser", "text": "Que noticias hay.", "key_terms": ["noticias"]},
+    {"id": 27, "ability": "browser", "text": "Buscame cuanto sale el dolar hoy.", "key_terms": ["dolar", "hoy"]},
+    {"id": 28, "ability": "browser", "text": "Abri la pagina del banco.", "key_terms": ["pagina", "banco"]},
+    {"id": 29, "ability": "browser", "text": "Volvi para atras.", "key_terms": ["atras"]},
+    {"id": 30, "ability": "browser", "text": "Buscame en internet como se cocina una tortilla.", "key_terms": ["internet", "tortilla"]}
+  ]
+}
