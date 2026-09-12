@@ -33,6 +33,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.arsvox.audio import write_wav  # noqa: E402
+from services.arsvox.hostinfo import power_state  # noqa: E402
+from services.arsvox.mic import normalize_gain  # noqa: E402
 from services.arsvox.tts import FakeTTS, WindowsTTS  # noqa: E402
 from services.arsvox.voice import FasterWhisperSTT  # noqa: E402
 from tools.stt_baseline import normalize  # noqa: E402
@@ -45,21 +47,39 @@ def load_sheet() -> dict:
     return json.loads(SHEET.read_text(encoding="utf-8"))
 
 
+def _close_enough(word: str, term: str) -> bool:
+    """One spelling difference, or one word being a prefix of the other."""
+    if len(term) >= 6 and len(word) >= 6:
+        if len(term) == len(word):
+            if sum(1 for a, b in zip(word, term) if a != b) <= 1:
+                return True
+        elif abs(len(term) - len(word)) == 1:
+            short, long = (term, word) if len(term) < len(word) else (word, term)
+            for index in range(len(long)):
+                if long[:index] + long[index + 1 :] == short:
+                    return True
+    short, long = sorted((word, term), key=len)
+    return len(short) >= 4 and long.startswith(short)
+
+
 def missing_terms(heard: str, key_terms: list[str]) -> list[str]:
     """Key terms that did not survive recognition.
 
     A term counts as heard when it appears as a word, or - for terms of five
     characters or more - inside a merged token ("volviparaatras" contains
-    "atras"). Short terms are not searched inside other words, so "ana" cannot
-    match "ganas".
+    "atras"), or when a close spelling appears ("recortatorio" for
+    "recordatorio", "saliste" for "sali"). Short terms are never searched inside
+    other words, so "ana" cannot match "ganas".
     """
-    words = set(normalize(heard, strip_accents=True))
-    joined = "".join(normalize(heard, strip_accents=True))
+    words = normalize(heard, strip_accents=True)
+    joined = "".join(words)
     missing = []
     for term in key_terms:
         if term in words:
             continue
         if len(term) >= 5 and term in joined:
+            continue
+        if any(_close_enough(word, term) for word in words):
             continue
         missing.append(term)
     return missing
@@ -88,6 +108,13 @@ def record(seconds: float, input_device: int | None = None) -> tuple:
     return samples, time.perf_counter() - started
 
 
+def record_capture(max_seconds: float, input_device: int | None):
+    from services.arsvox.mic import record_until_silence
+
+    print(f"     listening (up to {max_seconds:.0f}s, stops after a pause) ...", flush=True)
+    return record_until_silence(max_seconds=max_seconds, device=input_device)
+
+
 def probe_mic(input_device: int | None, seconds: float = 3.0) -> int:
     """Record briefly and report the level, so a muted or dead microphone is caught first."""
     import numpy as np
@@ -112,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--auto", action="store_true", help="no prompts; score every request automatically")
     parser.add_argument("--reuse", action="store_true", help="dry mode: reuse existing clips instead of speaking again")
     parser.add_argument("--sheet", action="store_true", help="print the printable sheet and exit")
-    parser.add_argument("--seconds", type=float, default=6.0)
+    parser.add_argument("--seconds", type=float, default=15.0, help="maximum seconds per request")
     parser.add_argument("--model", default=str(REPO_ROOT / ".." / "models" / "whisper" / "large-v3-turbo"))
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--compute-type", default="float16")
@@ -131,6 +158,14 @@ def main(argv: list[str] | None = None) -> int:
     stt = FasterWhisperSTT(
         model_size=args.model, device=args.device, compute_type=args.compute_type, language="es"
     )
+    state = power_state()
+    if state.get("on_battery"):
+        print(
+            f"WARNING: on battery ({state.get('charge_percent')}%). Measured on this laptop: "
+            "the engine runs 5 to 15 times slower than on mains power. Plug in for a valid gate.\n"
+        )
+    elif state.get("source") == "mains":
+        print(f"power: mains ({state.get('charge_percent')}%)\n")
     load = stt.warmup()
     print(f"engine ready in {load:.1f}s ({args.model} on {args.device} {args.compute_type})\n")
 
@@ -148,10 +183,17 @@ def main(argv: list[str] | None = None) -> int:
             if not args.auto:
                 input("   press Enter when you are ready, then read the phrase aloud")
             try:
-                samples, _ = record(args.seconds, args.input_device)
+                capture = record_capture(args.seconds, args.input_device)
             except KeyboardInterrupt:
                 break
-            write_wav(audio, samples, RATE)
+            if not capture.has_speech:
+                print(f"   captured {capture.seconds:.1f}s with no speech — skipped, nothing transcribed")
+                rows.append({**item, "heard": "", "missing": item["key_terms"], "auto": "no_speech",
+                             "verdict": "no_speech", "recognition_s": 0.0,
+                             "captured_s": round(capture.seconds, 2)})
+                continue
+            print(f"   captured {capture.seconds:.1f}s (speech {capture.speech_seconds:.1f}s, peak {capture.peak:.2f})")
+            write_wav(audio, normalize_gain(capture.samples), RATE)
 
         started = time.perf_counter()
         result = stt.transcribe(audio)
@@ -182,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     correct = sum(1 for r in rows if r["verdict"] == "correct")
+    skipped = sum(1 for r in rows if r["verdict"] == "no_speech")
     total = len(rows)
     by_ability: dict[str, list[bool]] = {}
     for row in rows:
@@ -191,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
     print("\n" + "=" * 60)
     print(f"mode: {'dry (synthetic voice)' if args.dry else 'real microphone'}")
     print(f"understood: {correct} of {total}   gate {sheet['gate']['success_threshold']} of {sheet['gate']['utterances']}")
+    if skipped:
+        print(f"  {skipped} request(s) recorded no speech and were skipped")
     for ability, results in by_ability.items():
         print(f"  {ability:<10} {sum(results)}/{len(results)}")
     if recognition:
@@ -204,7 +249,9 @@ def main(argv: list[str] | None = None) -> int:
         "model": args.model,
         "device": args.device,
         "compute_type": args.compute_type,
+        "power": state,
         "correct": correct,
+        "skipped_no_speech": skipped,
         "total": total,
         "gate": sheet["gate"],
         "rows": rows,

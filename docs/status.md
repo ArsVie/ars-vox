@@ -5,47 +5,65 @@ One page. One product number per phase. No narrative.
 ## W0 — voice in / voice out
 
 Gate: 30 real utterances from the target speaker, >= 24 correct, median turn < 3 s.
-Not measured yet: needs the real speaker in front of the real microphone.
+**Not yet valid.** One microphone session has run; two harness faults made it
+unusable as a gate. Both are fixed. A clean session is one command away.
 
-## Real audio baseline — 12 Argentine WhatsApp voice notes (270 s)
+## Microphone session, 2026-09-12 15:13 (real mic, turbo)
 
-Source: the "Audio de WhatsApp" series on the channel "Reíte pue mi gente",
-downloaded with the owner's approval. Compressed mono speech, casual Rioplatense
-Spanish, the domain the assistant will actually meet. Reference: the channel's
-own auto-caption, a SECOND speech engine, not truth. Numbers below therefore
-measure agreement, and they include the reference's own mistakes.
+| measure | value |
+|---|---|
+| strict automatic score | 19 of 30 |
+| fair score, tolerant matching, same audio | 22 of 30 |
+| invalid samples | 3 (recording cut short, or hallucinated on near-silence) |
+| real failures | 5 |
+| recognition median | 5.01 s — invalid, see fault 1 |
+
+### Fault 1: the machine was on battery at 9 percent
+
+Power plan Balanced, GPU SM clock 442 MHz of 3090. Measured in that state:
+turbo on CUDA RTF 1.04 (against 0.068 on mains), small on CPU RTF 0.83 (against
+0.13), recognition median 5.01 s (against 0.57 s in the dry run). Every timing
+from this session measures the power state, not the engine. The gate now reads
+the power source and refuses to look valid on battery.
+
+### Fault 2: a fixed six-second recording window
+
+13 of 30 clips were still speaking when the window closed. Truncation explains
+the worst outcomes: request 7 became "Ahora es el día de hoy, por supuesto" and
+request 14 became "Aviso." The recogniser invented text where the recording held
+almost no speech. The recorder now stops after 1.2 s of silence (15 s cap),
+normalises gain to peak 0.7, and skips any clip with under 0.4 s of speech
+instead of transcribing it.
+
+### Real failures worth keeping
+
+- "Beatles" became "vídeos". Proper nouns from another language are lost.
+- "los domingos" became "del señor". A reminder's recurrence is lost.
+- "Ana" became "Anaki", "Anike", "¿no?". A short name never survives.
+- "hoy" was lost twice at the tail of a sentence.
+- "el dólar, güey": a hallucinated word appended to a correct request.
+
+Design consequences already written into the code: never key an intent on a
+name; read the interpreted request back before acting; treat a no-speech clip as
+no request rather than trusting the model's text.
+
+## Engine, on mains power (12 real clips, 270 s)
 
 | path | model | mean WER | median | worst | mean RTF |
 |---|---|---|---|---|---|
 | CPU int8 (WSL) | tiny | 0.633 | 0.538 | 1.55 | 0.069 |
 | CPU int8 (WSL) | small | 0.424 | 0.336 | 1.55 | 0.187 |
 | CPU int8 (WSL) | large-v3-turbo | 0.295 | 0.233 | 0.75 | 0.416 |
-| CUDA float16 (WSL) | small | 0.417 | 0.342 | 1.35 | 0.103 |
 | CUDA float16 (WSL) | large-v3-turbo | 0.306 | 0.229 | 0.75 | 0.068 |
-| CUDA float16 (Windows) | small | 0.404 | 0.321 | 1.35 | 0.129 |
 | CUDA float16 (Windows) | large-v3-turbo | 0.306 | 0.229 | 0.75 | 0.070 |
+| CUDA float16 (Windows, on battery) | large-v3-turbo | 0.306 | 0.229 | 0.75 | 1.041 |
 
-Hardware: NVIDIA RTX PRO 1000 Blackwell Laptop, 8151 MiB, driver 591.64.
-Windows Python 3.12.10, ctranslate2 4.8.2, faster-whisper 1.2.1.
+Chosen: **large-v3-turbo, CUDA, float16**, on mains power. At RTF 0.07 a 4 s
+request costs 0.28 s of recognition. Corpus and failure modes: section below.
 
-## Decision
+## The transcripts are the evidence
 
-Engine: **large-v3-turbo, CUDA, float16**, on Windows. WSL and Windows measure
-the same (RTF 0.068 against 0.070), so WSL stays the development surface and
-Windows stays the shipping surface.
-
-Latency, from RTF 0.07: a 4 s request costs 0.28 s of speech recognition, a 10 s
-request costs 0.70 s, and the whole 23 s baseline clip costs 1.6 s. The 3 s turn
-budget survives speech recognition with room for the model call.
-
-Speedup from the GPU: 6.1x against CPU int8 (0.416 -> 0.068). Accuracy is
-unchanged within noise (0.295 against 0.306, the difference is int8 against
-float16 numerics). CPU-only operation is not viable with this engine: at RTF
-0.416 a 30 s request alone spends 12 s.
-
-## The transcripts are the evidence, and they read as correct Spanish
-
-Turbo on a 49 s clip (the caption says "o la vecina cómo estás que el calor..."):
+Turbo on a 49 s clip, against a caption that says "o la vecina cómo estás que el calor...":
 
 > Hola vecina, ¿cómo estás? ¡Qué calor que hace! ¡Por favor! Por eso te mando
 > un mensaje. Te quería contar que cambié el aire acondicionado a mi pieza.
@@ -53,62 +71,42 @@ Turbo on a 49 s clip (the caption says "o la vecina cómo estás que el calor...
 > Hay que dormir tapaditos. Así que bueno, a lo mejor si estás sufriendo mucho
 > el calor y tenés ganas, te vendo el aire acondicionado viejo, ¿vale?
 
-Independent checks: the video titles match what turbo heard and the captions do
-not. Clip #57 is titled "Sujetate la jeta" and turbo heard "¡Sujétate la jeta,
-loca!". Clip #58 is "Mamá pidiendo regalos" and turbo heard the gift list. Clip
-#36 is about a Welsh village; turbo heard "Villa Trebelin" (the real town is
-Villa Trevelin, Chubut) where the caption wrote "villa tv link". On those clips
-turbo is more accurate than the reference, so mean WER overstates its errors.
+Independent checks: clip #57 is titled "Sujetate la jeta" and turbo heard
+"¡Sujétate la jeta, loca!"; #58 is "Mamá pidiendo regalos" and turbo heard the
+gift list; #36 turbo heard "Villa Trebelin" (real town: Villa Trevelin, Chubut)
+where the caption wrote "villa tv link". Turbo beats the reference on those
+clips, so mean WER overstates its errors.
 
-## Where it fails
+## Corpus and known failure modes
 
-1. Intentionally distorted joke audio (#64 "Trenpeley Tranpenley"): a made-up
-   word repeated. Unintelligible to humans too; WER there is meaningless.
-2. Very short noisy clips. The 9 s "#65 Café con leche" came out as "Él tomó
-   café con leche, manca yo muy mal."
-3. Dialect interjections. Turbo heard "Sí, ahí me avisó" where the audio says
-   "Che" (medium heard "Che" correctly).
-4. Word-final details: "dale" became "¿vale?".
-5. Formatting never stabilises (digits, punctuation, capitals). Normalise before
-   matching intents; never match raw text.
+12 Argentine WhatsApp voice notes, 270 s, captions as a weak reference. WER is
+agreement with a second engine, not truth. Turbo worst clip 0.75, best 0.089.
 
-## W0 gate session — ready to run
+1. Intentionally distorted joke audio: unintelligible to humans too.
+2. Very short noisy clips.
+3. Dialect interjections ("Che" heard as "Sí").
+4. Word-final details ("dale" as "¿vale?").
+5. Formatting is never stable: normalise before matching, never match raw text.
+6. Confidence is useless as a safety net: zero weak segments while making 3-6
+   word errors, and confident hallucinations on near-silence.
 
-One command, in a PowerShell window on this machine:
+## Gate command
 
 ```
 powershell -ExecutionPolicy Bypass -File C:\dev\ars-vox-v2\tools\windows\run_w0_mic.ps1
 ```
 
-It checks the microphone, prints each request, records six seconds, recognises
-it, and scores it. You may override any verdict (Enter accepts, c correct,
-i incorrect, q quit). It writes one ledger under `results/w0-mic/`.
-
-Sheet: 30 requests, 6 per ability, `tools/w0_utterances.json`
-(`python tools/w0_session.py --sheet` prints it).
-
-### Dry harness check (synthetic Windows voice, not the gate)
-
-30 requests spoken by the Windows Spanish voice, recognised by turbo on CUDA:
-20 of 30 understood, recognition median 0.57 s, max 1.26 s.
-
-Label: wiring test only. Every failure is an artefact of robotic synthetic
-speech, and they cluster in the same way: "pausa" heard as "pasa", "llamar" as
-"lamer", "buscame" as "bus game"/"Bus Gamecube", "tengo" as "tango", the name
-"Ana" absorbed into the following word. Human speech on the real clips does not
-show this pattern. What the dry run does prove: 30 requests synthesise, record,
-score and report unattended, and recognition costs well under a second.
-
-Design note from those failures: never key an intent on a short name. "Ana"
-survives as "Anakay", "Anike", "Anukaya" — the matcher must tolerate variant
-spellings of names, and the spoken read-back is what protects the send.
+Needs mains power. Prints each request, records until you pause, scores it, and
+takes an override (Enter accepts, c correct, i incorrect, q quit).
+Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 ## Harness state
 
 | item | value |
 |---|---|
-| product lines | 700 |
-| test lines | 96, thirteen tests green |
-| external dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts |
+| runtime lines (services + cli) | 549 |
+| measurement tooling lines | 903 |
+| test lines | 77, thirteen tests green |
+| dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts |
 | fakes | two: the model, the microphone |
-| runs | one JSON per run under results/ (git-ignored); numbers above are from those runs |
+| runs | JSON per run under results/ (git-ignored) |
