@@ -201,9 +201,19 @@ step, so stopping costs at most one model call.
    thread where nobody could see it. The service keeps its worker and joins it
    (`AgentService.shutdown`) before anything closes the store.
 
-Not done: Electron packaging was not installed for the new app directory, so the
-gate ran in real Chromium (Edge, headless) rendering the same page. `main.js` is
-committed and starts the service itself, but that path has not been run.
+### The window itself
+
+The gate ran in real Chromium (Edge, headless) rendering the same page the window
+loads. The Electron main was then run for real and produced a renderer target:
+
+```
+page | Ars Vox | http://127.0.0.1:8790/
+```
+
+That run used the v0.1 tree's Electron binary under WSL, because the download for
+this app's own `node_modules` fails in this network (`node node_modules\electron\install.js`
+dies inside `@electron/get`). The Windows binary therefore remains uninstalled;
+`npm install` in `apps/desktop` will finish it wherever that fetch works.
 
 ## Engine, 12 real clips, 270 s (mains power)
 
