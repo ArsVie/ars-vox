@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS reminders (
     when_local TEXT,
     created_ts TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1,
-    fired_ts TEXT
+    repeat TEXT NOT NULL DEFAULT 'once',
+    fired_ts TEXT,
+    last_fired_ts TEXT
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -59,6 +61,16 @@ CREATE TABLE IF NOT EXISTS preferences (
 
 def now_local() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+# Columns added after the first release. A reminder the user set last week must
+# still fire after this upgrade, so the table is migrated, never recreated.
+MIGRATIONS: dict[str, dict[str, str]] = {
+    "reminders": {
+        "repeat": "TEXT NOT NULL DEFAULT 'once'",
+        "last_fired_ts": "TEXT",
+    },
+}
 
 
 @dataclass(slots=True)
@@ -111,7 +123,15 @@ class Store:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        for table, columns in MIGRATIONS.items():
+            existing = {row["name"] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+            for name, declaration in columns.items():
+                if name not in existing:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {declaration}")
 
     # ---- the log ---------------------------------------------------------
     def append(self, session: str, kind: str, payload: dict) -> int:
@@ -150,20 +170,52 @@ class Store:
         return [dict(r) for r in rows]
 
     # ---- state written by tools -----------------------------------------
-    def add_reminder(self, session: str, text: str, when_local: str | None) -> int:
+    def add_reminder(
+        self, session: str, text: str, when_local: str | None, repeat: str = "once"
+    ) -> int:
         cursor = self.conn.execute(
-            "INSERT INTO reminders (session, text, when_local, created_ts) VALUES (?, ?, ?, ?)",
-            (session, text, when_local, now_local()),
+            "INSERT INTO reminders (session, text, when_local, repeat, created_ts) VALUES (?, ?, ?, ?, ?)",
+            (session, text, when_local, repeat if when_local else "once", now_local()),
         )
         self.conn.commit()
         return int(cursor.lastrowid)
 
+    def get_reminder(self, session: str, reminder_id: int) -> dict | None:
+        row = self.conn.execute(
+            "SELECT id, text, when_local, repeat, active, fired_ts, last_fired_ts "
+            "FROM reminders WHERE session = ? AND id = ?",
+            (session, reminder_id),
+        ).fetchone()
+        return dict(row) if row else None
+
     def list_reminders(self, session: str, active_only: bool = True) -> list[dict]:
-        query = "SELECT id, text, when_local, active, fired_ts FROM reminders WHERE session = ?"
+        query = (
+            "SELECT id, text, when_local, repeat, active, fired_ts, last_fired_ts "
+            "FROM reminders WHERE session = ?"
+        )
         if active_only:
             query += " AND active = 1"
         query += " ORDER BY COALESCE(when_local, '9999')"
         return [dict(r) for r in self.conn.execute(query, (session,)).fetchall()]
+
+    def mark_fired(self, session: str, reminder_id: int) -> bool:
+        """One-shot reminders stop after firing; repeats keep their slot."""
+        row = self.get_reminder(session, reminder_id)
+        if row is None:
+            return False
+        if row["repeat"] == "once":
+            cursor = self.conn.execute(
+                "UPDATE reminders SET active = 0, fired_ts = ?, last_fired_ts = ? "
+                "WHERE session = ? AND id = ?",
+                (now_local(), now_local(), session, reminder_id),
+            )
+        else:
+            cursor = self.conn.execute(
+                "UPDATE reminders SET last_fired_ts = ? WHERE session = ? AND id = ?",
+                (now_local(), session, reminder_id),
+            )
+        self.conn.commit()
+        return cursor.rowcount > 0
 
     def cancel_reminder(self, session: str, reminder_id: int) -> bool:
         cursor = self.conn.execute(

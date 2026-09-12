@@ -138,6 +138,38 @@ The product voice is edge-tts `es-MX-DaliaNeural` at -4 percent rate, converted
 to wav with ffmpeg for playback. Open item: it needs network, so a local neural
 voice is required before the two-week pilot.
 
+## W2 — reminders that fire with the app closed
+
+Gate: a reminder set through the loop fires at its time with no ars-vox process
+running, and the log says so.
+
+| step | evidence |
+|---|---|
+| registered by the product | `\ArsVox\reminder-5`, action `pythonw.exe "...\arsvox_cli.py" fire 5 --session cli` |
+| Windows ran it | Last Run Time 4:06:00 PM, **Last Result 0** |
+| the app was closed | no ars-vox process was running; only Task Scheduler |
+| it fired | `results/reminders/fired.log` line at 16:06:01; `reminder-5.wav`, 175,774 bytes, the sentence synthesized |
+| state updated | reminder 5 `active=0` with `fired_ts`; log event `reminder_fired` carrying the spoken sentence |
+| repeats | `daily` and `weekly` use CalendarTrigger and stay active after firing (unit-tested) |
+| not measured | sleep and wake: `StartWhenAvailable` and `WakeToRun` are set in the task XML, but no sleep test was run |
+
+### The defect this wave found
+
+The first real fire attempt never ran: `Last Result: 267011` (has not run). The
+task boundary was written as bare wall-clock text, and this rig has two clocks —
+WSL at -06:00, Windows at -07:00 (Mountain Standard Time, Mexico). Windows read
+"17:03" as its own local time, an hour away from the intended instant.
+
+Fix: `boundary_text()` writes the absolute instant with its offset
+(`2026-09-12T17:06:00-06:00`) and Windows converts it. Confirmed: a 17:06 WSL
+request showed Next Run Time 4:06:00 PM Windows-local, and ran at that second.
+
+Re-register everything after a rebuild or on a fresh machine:
+
+```
+python apps/cli/arsvox_cli.py reminders --session cli --sync --query
+```
+
 ## Engine, 12 real clips, 270 s (mains power)
 
 | path | model | mean WER | median | worst | mean RTF |
@@ -194,9 +226,9 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 1,883 in 8 files |
+| runtime lines (services + cli) | 2282 in 9 files |
 | measurement tooling lines | 1,003 |
-| test lines | 292, thirty tests green |
+| test lines | 561, forty-four tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |

@@ -8,10 +8,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Protocol
 
 from services.arsvox.config import Settings
+from services.arsvox.scheduler import REPEATS
 from services.arsvox.store import Store
+
+
+class Scheduler(Protocol):
+    def register(self, reminder: dict, session: str) -> str: ...
+
+    def unregister(self, reminder_id: int) -> bool: ...
 
 
 @dataclass(slots=True)
@@ -20,6 +27,7 @@ class ToolContext:
     session: str
     settings: Settings
     now: datetime
+    scheduler: Scheduler | None = None
 
 
 @dataclass(slots=True)
@@ -52,11 +60,26 @@ def reminders_set(context: ToolContext, arguments: dict) -> str:
     when, error = _parse_when(arguments.get("when_local"))
     if error:
         return error
-    reminder_id = context.store.add_reminder(context.session, arguments["text"], when)
+    repeat = arguments.get("repeat") or "once"
+    if repeat not in REPEATS:
+        repeat = "once"
+    reminder_id = context.store.add_reminder(context.session, arguments["text"], when, repeat)
     if when:
         readable = datetime.fromisoformat(when).strftime("%H:%M del %d/%m")
-        return f"Listo, recordatorio {reminder_id} guardado para las {readable}: {arguments['text']}"
-    return f"Listo, recordatorio {reminder_id} guardado: {arguments['text']}"
+        line = f"Listo, recordatorio {reminder_id} guardado para las {readable}: {arguments['text']}"
+    else:
+        return (
+            f"Guardé '{arguments['text']}' como recordatorio {reminder_id}, pero sin hora no te aviso. "
+            "Decime a qué hora."
+        )
+    if context.scheduler is None:
+        return line
+    try:
+        context.scheduler.register(context.store.get_reminder(context.session, reminder_id), context.session)
+    except Exception as exc:  # noqa: BLE001 - a task that will not fire must be said out loud
+        return f"{line}. Ojo: no pude programarlo en Windows ({type(exc).__name__}), no va a sonar."
+    repeat_text = {"daily": " (todos los días)", "weekly": " (una vez por semana)"}.get(repeat, "")
+    return f"{line}{repeat_text}. Va a sonar aunque el programa esté cerrado."
 
 
 def reminders_list(context: ToolContext, arguments: dict) -> str:
@@ -66,15 +89,18 @@ def reminders_list(context: ToolContext, arguments: dict) -> str:
     parts = []
     for row in rows:
         when = f" para {row['when_local'][:16].replace('T', ' a las ')}" if row["when_local"] else ""
-        parts.append(f"{row['id']}) {row['text']}{when}")
+        repeat = {"daily": " todos los días", "weekly": " cada semana"}.get(row.get("repeat") or "", "")
+        parts.append(f"{row['id']}) {row['text']}{when}{repeat}")
     return "Recordatorios activos: " + "; ".join(parts)
 
 
 def reminders_cancel(context: ToolContext, arguments: dict) -> str:
     reminder_id = int(arguments["reminder_id"])
-    if context.store.cancel_reminder(context.session, reminder_id):
-        return f"Borrado el recordatorio {reminder_id}."
-    return f"No encontré un recordatorio activo con el número {reminder_id}."
+    if not context.store.cancel_reminder(context.session, reminder_id):
+        return f"No encontré un recordatorio activo con el número {reminder_id}."
+    if context.scheduler is not None:
+        context.scheduler.unregister(reminder_id)
+    return f"Borrado el recordatorio {reminder_id}."
 
 
 def tasks_add(context: ToolContext, arguments: dict) -> str:
@@ -128,6 +154,11 @@ def build_registry() -> dict[str, Tool]:
                         "when_local": {
                             "type": "string",
                             "description": "cuándo, en ISO local (2026-09-12T20:00). Omitilo si no dijo hora.",
+                        },
+                        "repeat": {
+                            "type": "string",
+                            "enum": ["once", "daily", "weekly"],
+                            "description": "once por defecto; daily o weekly si pidió que se repita",
                         },
                     },
                     "required": ["text"],

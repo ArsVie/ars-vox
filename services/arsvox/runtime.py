@@ -51,10 +51,12 @@ class Runtime:
         store: Store,
         model: Model,
         max_steps: int | None = None,
+        scheduler=None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.model = model
+        self.scheduler = scheduler
         self.registry = build_registry()
         self.schemas = tool_schemas(self.registry)
         self.builder = default_builder(tool_guidance(self.registry))
@@ -154,7 +156,13 @@ class Runtime:
             return f"{note}{error}", call.arguments, False
         try:
             text = tool.handler(
-                ToolContext(self.store, session, self.settings, datetime.now().astimezone()),
+                ToolContext(
+                    self.store,
+                    session,
+                    self.settings,
+                    datetime.now().astimezone(),
+                    self.scheduler,
+                ),
                 arguments,
             )
         except Exception as exc:  # noqa: BLE001 - a broken tool must not kill the turn

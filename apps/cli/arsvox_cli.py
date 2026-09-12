@@ -60,6 +60,7 @@ def build_runtime(args: argparse.Namespace):
     from services.arsvox.config import load_settings
     from services.arsvox.model import HttpChatModel
     from services.arsvox.runtime import Runtime
+    from services.arsvox.scheduler import TaskScheduler
     from services.arsvox.store import Store
 
     settings = load_settings(session=args.session)
@@ -72,7 +73,7 @@ def build_runtime(args: argparse.Namespace):
         max_tokens=settings.max_tokens,
         timeout_s=settings.timeout_s,
     )
-    return Runtime(settings, store, model), settings, store
+    return Runtime(settings, store, model, scheduler=TaskScheduler(REPO_ROOT)), settings, store
 
 
 def report_turn(result, args: argparse.Namespace) -> None:
@@ -182,6 +183,63 @@ def cmd_talk(args: argparse.Namespace) -> int:
         report_turn(result, args)
         speak_reply(result.text, args)
         print()
+    return 0
+
+
+# ---- reminders -------------------------------------------------------------
+
+def cmd_fire(args: argparse.Namespace) -> int:
+    """What a scheduled task runs. Never prints: pythonw has no console."""
+    from services.arsvox.store import Store
+
+    store = Store(args.db)
+    reminder = store.get_reminder(args.session, args.id)
+    log_dir = REPO_ROOT / "results" / "reminders"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with (log_dir / "fired.log").open("a", encoding="utf-8") as handle:
+        if reminder is None:
+            handle.write(f"{stamp} id={args.id} no existe\n")
+            return 1
+        spoken = f"Acordate: {reminder['text']}."
+        wav = log_dir / f"reminder-{args.id}.wav"
+        error = ""
+        try:
+            build_tts(args.engine).synthesize(spoken, wav)
+            if not args.silent:
+                play_wav(wav)
+        except Exception as exc:  # noqa: BLE001 - a reminder with no voice still happened
+            error = f"{type(exc).__name__}: {exc}"[:200]
+        store.append(
+            args.session,
+            "reminder_fired",
+            {"id": args.id, "spoken": spoken, "played": not args.silent and not error, "error": error},
+        )
+        store.mark_fired(args.session, args.id)
+        handle.write(
+            f"{stamp} id={args.id} repeat={reminder['repeat']} "
+            f"played={not args.silent and not error} wav={wav.name} {error}\n"
+        )
+    return 0
+
+
+def cmd_reminders(args: argparse.Namespace) -> int:
+    from services.arsvox.scheduler import TaskScheduler
+    from services.arsvox.store import Store
+
+    store = Store(args.db)
+    rows = store.list_reminders(args.session, active_only=not args.all)
+    if not rows:
+        print(f"sin recordatorios activos en '{args.session}'")
+    scheduler = TaskScheduler(REPO_ROOT) if (args.sync or args.query) else None
+    for row in rows:
+        line = f"{row['id']:3d}  {row['text'][:44]:44s}  {row['when_local'] or 'sin hora':16s}  {row['repeat']}"
+        if scheduler and args.query and row["when_local"]:
+            info = scheduler.query(int(row["id"]))
+            line += f"  tarea: {info.next_run or 'FALTA'}"
+        print(line)
+    if args.sync:
+        print(json.dumps(scheduler.sync(rows, args.session), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -348,6 +406,22 @@ def main(argv: list[str] | None = None) -> int:
     log.add_argument("--limit", type=int, default=40)
     log.add_argument("--projected", action="store_true", help="show the model messages instead")
     log.set_defaults(func=cmd_log)
+
+    fire = sub.add_parser("fire", help="fire one reminder: speak it, log it, mark it done")
+    fire.add_argument("id", type=int)
+    fire.add_argument("--session", default="cli")
+    fire.add_argument("--db", type=Path, default=REPO_ROOT / "data" / "arsvox.db")
+    fire.add_argument("--engine", default="edge", choices=["edge", "fake"])
+    fire.add_argument("--silent", action="store_true", help="write the audio but do not play it")
+    fire.set_defaults(func=cmd_fire)
+
+    reminders = sub.add_parser("reminders", help="list reminders and their scheduled tasks")
+    reminders.add_argument("--session", default="cli")
+    reminders.add_argument("--db", type=Path, default=REPO_ROOT / "data" / "arsvox.db")
+    reminders.add_argument("--all", action="store_true", help="include cancelled and fired ones")
+    reminders.add_argument("--sync", action="store_true", help="re-register every timed reminder")
+    reminders.add_argument("--query", action="store_true", help="ask Windows for the next run time")
+    reminders.set_defaults(func=cmd_reminders)
 
     sessions = sub.add_parser("sessions", help="list sessions in the log")
     sessions.add_argument("--db", type=Path, default=REPO_ROOT / "data" / "arsvox.db")
