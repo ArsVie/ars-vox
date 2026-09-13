@@ -22,7 +22,7 @@ docs/status.md     one page, one product number per phase
 
 | wave | build | gate |
 |---|---|---|
-| W0 | voice in/out, push-to-talk, harness | 30 real utterances, >= 24 correct, median turn < 3 s |
+| W0 | voice in/out, push-to-talk, harness | 30 real utterances, >= 24 correct, turn under 20 s |
 | W1 | headless agent loop | prefix cache hit > 0, session resumes from the event log |
 | W2 | safety floor, reminders that survive power-off | deny-list green, stop works offline, reminder fires with app closed |
 | W3 | desktop shell | socket unplug/replug mid-turn, UI matches the log |

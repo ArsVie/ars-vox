@@ -4,7 +4,8 @@ One page. One product number per phase. No narrative.
 
 ## W0 — voice in / voice out
 
-Gate: 30 real utterances from the target speaker, >= 24 correct, median turn < 3 s.
+Gate: 30 real utterances from the target speaker, >= 24 correct, turn under 20 s. The 20 s is Ars's
+number; the `< 3 s` this file carried earlier was agent-drafted and never his.
 
 **Result on the single recorded session: 22 of 30 understood, 4 of those 30
 destroyed by the recording window, 3 genuine recognition losses.**
@@ -328,6 +329,20 @@ Python side: PyInstaller `--onedir` (never onefile: unpacking a 2 GB bundle into
 temp on every launch would cost a minute), with `nvidia-cublas-cu12` and
 `nvidia-cudnn-cu12` collected as data, and the whisper models left outside the
 bundle in `C:\dev\models\whisper`.
+
+The 20 s budget also settles the hardware question from the other side: **a GPU is
+not required.** Measured on the target speaker's own 30 recordings, speech-trimmed
+and warm, Whisper large-v3 on CPU (int8) scored mean WER 0.291 at 3.81 s per
+utterance, against 0.267 at 0.84 s on CUDA. Both fit inside 20 s with the model
+turn on top, so the CUDA wheels (~2 GB) and the GPU driver dependency are optional
+rather than mandatory. Engine choice is now accuracy-first, and the measurement
+says large-v3 rather than turbo: large-v3 beat large-v3-turbo in **both** runtimes
+on this speaker (native Q8 0.242 vs 0.357; Python fp16 0.267 vs 0.294). Turbo's
+speed was never needed. Nine engines were compared on the same 30 clips — Cohere
+Transcribe 0.343, Voxtral Mini 4B Realtime 0.332, Qwen3-ASR 0.6B 0.381, Nemotron
+3.5 0.519, Parakeet v3 0.571, Canary 180M 0.696 — and the remaining error class is
+proper nouns ("los Beatles" -> "los vídeos" / "los metros" / "los mitos" across
+three engines), which is a context-bias or fine-tuning problem, not a model choice.
 
 ## Engine, 12 real clips, 270 s (mains power)
 

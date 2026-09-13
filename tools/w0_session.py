@@ -13,7 +13,7 @@ A request counts as understood when every key term survives recognition.
 The operator can override any verdict: Enter accepts, c marks correct,
 i marks incorrect, q ends the session.
 
-Recognition is only part of a turn. The turn budget (median under 3 s) also
+Recognition is only part of a turn. The turn budget (under 20 s, Ars's number) also
 contains the model call, which does not exist yet at W0; this session reports
 recognition seconds separately and labels them.
 """
