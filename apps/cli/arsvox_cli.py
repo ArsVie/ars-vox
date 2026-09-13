@@ -35,9 +35,9 @@ from tools.stt_baseline import word_error_rate  # noqa: E402
 WORK_DIR = REPO_ROOT / "results" / "cli"
 
 
-def build_tts(engine: str):
+def build_tts(engine: str, voice: str | None = None):
     """The product voice is edge-tts. The Windows system voice is banned by ear."""
-    return FakeTTS() if engine == "fake" else EdgeTTS()
+    return FakeTTS() if engine == "fake" else EdgeTTS(voice=voice)
 
 
 def build_stt(args: argparse.Namespace) -> FasterWhisperSTT:
@@ -189,7 +189,7 @@ def cmd_talk(args: argparse.Namespace) -> int:
         heard = stt.transcribe(samples)
         print(f"vos: {heard.text}   ({capture.speech_seconds:.1f}s de voz, {heard.elapsed_s:.2f}s)")
         if not heard.text.strip():
-            print("   no entendí, probá de nuevo\n")
+            print("   no entendí, pruebe de nuevo\n")
             continue
         result = runtime.turn(args.session, heard.text)
         print(f"ars vox: {result.text}")
@@ -206,7 +206,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from services.arsvox.api import AgentService, serve
 
     runtime, settings, store = build_runtime(args)
-    tts = None if args.no_tts else build_tts(args.engine)
+    tts = None if args.no_tts else build_tts(args.engine, settings.voice)
     stt = None if args.no_ears else build_stt(args)
     agent = AgentService(
         runtime,
@@ -252,7 +252,7 @@ def cmd_fire(args: argparse.Namespace) -> int:
         if reminder is None:
             handle.write(f"{stamp} id={args.id} no existe\n")
             return 1
-        spoken = f"Acordate: {reminder['text']}."
+        spoken = f"Acuérdese: {reminder['text']}."
         wav = log_dir / f"reminder-{args.id}.wav"
         error = ""
         try:

@@ -270,7 +270,20 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
+class PortBusy(RuntimeError):
+    """Another Ars Vox already holds this port. Fail loudly instead of shadowing it."""
+
+
 def serve(service: AgentService, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer((host, port), make_handler(service))
+    # A second instance must error, not quietly share the port: four stale services once
+    # all sat on 8790 and the oldest one answered every request.
+    ThreadingHTTPServer.allow_reuse_address = False
+    try:
+        server = ThreadingHTTPServer((host, port), make_handler(service))
+    except OSError as exc:
+        raise PortBusy(
+            f"el puerto {port} ya está ocupado ({exc.strerror}). "
+            "Hay otro Ars Vox corriendo: cerralo antes de abrir este."
+        ) from exc
     server.daemon_threads = True
     return server

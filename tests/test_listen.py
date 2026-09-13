@@ -153,3 +153,20 @@ def test_the_window_has_a_talk_button_and_knows_when_it_cannot_hear(tmp_path: Pa
         agent.shutdown()
         server.server_close()
         store.close()
+
+
+def test_a_second_service_on_the_same_port_refuses_to_start(tmp_path: Path):
+    """Four stale services once shared one port, and the oldest kept answering."""
+    import pytest
+
+    from services.arsvox.api import PortBusy, serve
+
+    agent, port, store, server = start(tmp_path, FakeModel([]), None)
+    try:
+        with pytest.raises(PortBusy):
+            serve(agent, host="127.0.0.1", port=port)
+    finally:
+        server.shutdown()
+        agent.shutdown()
+        server.server_close()
+        store.close()

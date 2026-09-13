@@ -60,7 +60,7 @@ class Runtime:
         self.scheduler = scheduler
         self.registry = build_registry()
         self.schemas = tool_schemas(self.registry)
-        self.builder = default_builder(tool_guidance(self.registry))
+        self.builder = default_builder(tool_guidance(self.registry), persona=settings.persona)
         self.max_steps = max_steps or settings.max_steps
 
     # ---- prompt ----------------------------------------------------------
@@ -71,7 +71,12 @@ class Runtime:
     def refresh_snapshot(self, session: str, now: datetime | None = None) -> bool:
         """Append the runtime context only when its text changed. Cache hygiene."""
         moment = now or datetime.now().astimezone()
-        text = snapshot_text(moment, self.store.state_counts(session), self.store.preferences(session))
+        text = snapshot_text(
+            moment,
+            self.store.state_counts(session),
+            self.store.preferences(session),
+            note=self.settings.note,
+        )
         if self.store.last_snapshot(session) == text:
             return False
         self.store.append(session, "runtime_snapshot", {"text": text})
@@ -84,10 +89,13 @@ class Runtime:
     def turn(self, session: str, user_text: str, should_stop=None) -> TurnResult:
         """One turn. `should_stop` is the always-visible stop control, checked each step."""
         started = time.perf_counter()
+        # The context block goes in before the user's words, so the request is the last
+        # thing the model reads and not the boilerplate.
+        snapshot_appended = self.refresh_snapshot(session)
         self.store.append(session, "user_text", {"text": user_text})
         budget = StepBudget(self.max_steps)
         doom = DoomLoopCap()
-        result = TurnResult(text="")
+        result = TurnResult(text="", snapshot_appended=snapshot_appended)
 
         step = 0
         while True:
@@ -101,7 +109,7 @@ class Runtime:
             allowed, reason = budget.check(step)
             if not allowed:
                 result.error = reason
-                result.text = "Me quedé sin pasos para terminar el pedido. Probá de nuevo o pedímelo más simple."
+                result.text = "Me quedé sin pasos para terminar el pedido. Pruebe de nuevo o pídalo más simple."
                 self.store.append(session, "assistant_text", {"text": result.text})
                 break
 

@@ -280,6 +280,38 @@ Two things this step cost:
   entirely on Windows, so this only affects the development rig: drive the service
   over HTTP, or use the Windows python.
 
+## El registro — español de México, de usted
+
+The product copy, the 30-request sheet, the search locale and the persona were all
+Rioplatense voseo. Nothing stood behind that: the voice that already shipped was
+`es-MX-DaliaNeural`, the user's own requests in the old logs ask about Mexicali, and
+the machine runs on Mexico time. The one direct sample of the real speaker settles it —
+"¿Puedes ponerme un video de YouTube?" is *tú*, not *vos*.
+
+Now one setting decides it: `config.REGISTERS` (`ARSVOX_REGISTER`, default `es-MX`)
+holds the persona text, the TTS voice and the country the search answers for. The
+30-request sheet is rewritten in Mexican Spanish, tool descriptions are in the
+infinitive (no person to imitate), and the assistant addresses the user as *usted* —
+respectful for an elderly person in Mexico, and what the model chose on its own when
+given only the persona. Two guard tests keep it: one fails the build if voseo
+morphology returns to the copy, another keeps the tool sentences in the same address
+form as the replies.
+
+### The measurement trap, which is worth more than the fix
+
+**Four services were bound to 8790 at once.** Stdlib `allow_reuse_address` let every
+new instance shadow the previous one, and the *oldest* — started before any of these
+changes — answered every request. So each "the model kept ignoring the persona" result
+was produced by a process that did not contain the persona. A marker sentence planted
+to test whether instructions were honored at all came back missing for that reason, and
+I nearly recorded "the model prefers voseo" as a finding about the model. `pkill` from
+WSL never killed those services: they are Windows processes, and `ps` in WSL lists none
+of them.
+
+Fixed: `allow_reuse_address = False`, a `PortBusy` error that names the problem, and a
+regression test. Verified after cleaning up: exactly one listener on 8790, and 4 of 4
+replies in usted.
+
 ## Packaging — what the executable should be
 
 Measured on this machine: **Electron is the wrong tool here.**

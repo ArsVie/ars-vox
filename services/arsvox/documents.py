@@ -4,7 +4,7 @@ The user says "abrí el diario de hoy" or "leeme el documento que abrí". There 
 reader panel and no viewer: the document is a piece of paper the assistant reads
 aloud, in parts, from wherever it lives in the user's own folders.
 
-One cursor per session, kept in the log, so "seguí leyendo" works after a restart.
+One cursor per session, kept in the log, so "siga leyendo" works after a restart.
 """
 
 from __future__ import annotations

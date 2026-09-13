@@ -32,6 +32,8 @@ class EdgeTTS:
 
     def __init__(self, voice: str | None = None, rate: str = "-4%") -> None:
         self.voice = voice or os.environ.get("ARSVOX_VOICE", DEFAULT_EDGE_VOICE)
+        # The product voice comes from config.REGISTERS[register]["voice"]; this default is
+        # only for callers that do not have settings at hand.
         self.rate = rate
 
     def synthesize(self, text: str, out_path: str | Path) -> Path:

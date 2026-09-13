@@ -9,6 +9,35 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASE_URL = "https://api.commandcode.ai/provider/v1"
+DEFAULT_REGISTER = "es-MX"
+# One place decides how the assistant talks, which voice reads it, and which country
+# the search engine answers for. Evidence, not vibes: the user is in Mexicali and the
+# voice that shipped before was es-MX. Voseo was an assumption with nothing behind it.
+REGISTERS = {
+    "es-MX": {
+        "region": "mx-es",
+        "voice": "es-MX-DaliaNeural",
+        "note": "Cómo le hablas: de usted, en español de México, con respeto y cariño.",
+        "persona": (
+            "Le hablas de usted, con respeto y cariño, como se le habla a una persona mayor en "
+            "México, en palabras sencillas. Nunca le hablas de vos ni de tú. Si el usuario te "
+            "habla de vos o de tú, no lo corrijas y no cambies tu forma de hablar. No supongas "
+            "si es hombre o mujer: sin saberlo, no uses 'don', 'doña', 'señor' ni 'señora'. Si no "
+            "entiendes el pedido, lo dices y haces una sola pregunta concreta. Nunca inventas "
+            "datos: si no sabes algo, lo dices."
+        ),
+    },
+    "es-AR": {
+        "region": "ar-es",
+        "voice": "es-AR-ElenaNeural",
+        "note": "Cómo le hablas: de usted, en español rioplatense, con respeto y cariño.",
+        "persona": (
+            "Le hablas de usted, con respeto y cariño, en español rioplatense, en palabras sencillas. "
+            "Si no entiendes el pedido, lo dices y haces una sola pregunta concreta. "
+            "Nunca inventas datos: si no sabes algo, lo dices."
+        ),
+    },
+}
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 API_KEY_VARS = ("ARSVOX_API_KEY", "LILY_TOKEN", "COMMANDCODE_API_KEY", "OPENCODE_GO_API_KEY")
 # Where this product keeps its own key on the machine that runs it. Never in the tree.
@@ -55,9 +84,34 @@ class Settings:
     max_steps: int = 6
     language: str = "es"
     session: str = "cli"
+    register: str = DEFAULT_REGISTER
+
+    @property
+    def region(self) -> str:
+        return REGISTERS[self.register]["region"]
+
+    @property
+    def voice(self) -> str:
+        return REGISTERS[self.register]["voice"]
+
+    @property
+    def persona(self) -> str:
+        return REGISTERS[self.register]["persona"]
+
+    @property
+    def note(self) -> str:
+        return REGISTERS[self.register]["note"]
 
     def local_time(self) -> datetime:
         return datetime.now().astimezone()
+
+
+def load_register() -> str:
+    """Which Spanish this product speaks. One knob; the default follows the evidence."""
+    chosen = os.environ.get("ARSVOX_REGISTER", DEFAULT_REGISTER).strip()
+    if chosen not in REGISTERS:
+        raise ConfigError(f"registro desconocido: {chosen}; usá uno de {', '.join(REGISTERS)}")
+    return chosen
 
 
 def load_settings(session: str = "cli", db_path: Path | None = None) -> Settings:

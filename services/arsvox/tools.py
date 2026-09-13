@@ -71,7 +71,7 @@ def reminders_set(context: ToolContext, arguments: dict) -> str:
     else:
         return (
             f"Guardé '{arguments['text']}' como recordatorio {reminder_id}, pero sin hora no te aviso. "
-            "Decime a qué hora."
+            "Dígame a qué hora."
         )
     if context.scheduler is None:
         return line
@@ -146,12 +146,12 @@ def documents_open(context: ToolContext, arguments: dict) -> str:
     query = arguments["query"]
     hits, cut = documents.find(query, limit=4)
     if not hits:
-        extra = " Busqué rápido, así que probá con otra palabra." if cut else ""
+        extra = " Busqué rápido, así que pruebe con otra palabra." if cut else ""
         return f"No encontré ningún archivo que se llame '{query}' en tus carpetas.{extra}"
     best = hits[0]
     if len(hits) > 1 and hits[1].score >= best.score:
         titles = "; ".join(f"{hit.title} ({hit.path.suffix.lstrip('.')})" for hit in hits[:3])
-        return f"Encontré varios: {titles}. ¿Cuál querés que abra?"
+        return f"Encontré varios: {titles}. ¿Cuál abro?"
     try:
         text = documents.extract_text(best.path)
     except ModuleNotFoundError:
@@ -161,13 +161,13 @@ def documents_open(context: ToolContext, arguments: dict) -> str:
     if not text.strip():
         return f"'{best.title}' no tiene texto que pueda leer. ¿Será una foto o algo escaneado?"
     context.store.set_document(context.session, str(best.path), best.title)
-    return f"Abrí '{best.title}'. Tiene {len(text)} letras. Decime 'leelo' y arranco."
+    return f"Abrí '{best.title}'. Tiene {len(text)} letras. Dígame 'léalo' y arranco."
 
 
 def documents_read(context: ToolContext, arguments: dict) -> str:
     row = context.store.get_document(context.session)
     if not row:
-        return "No tengo ningún documento abierto. Decime cuál querés que abra."
+        return "No tengo ningún documento abierto. Dígame cuál abro."
     try:
         text = documents.extract_text(row["path"])
     except Exception as exc:  # noqa: BLE001
@@ -194,7 +194,7 @@ def media_play(context: ToolContext, arguments: dict) -> str:
     channel = f" de {best['channel']}" if best["channel"] else ""
     return (
         f"Puse '{best['title']}'{channel}{length}. Se abrió en el navegador. "
-        "Decime si querés que lo pare."
+        "Dígame si lo paro."
     )
 
 
@@ -232,14 +232,14 @@ def build_registry() -> dict[str, Tool]:
         for tool in (
             Tool(
                 "reminders_set",
-                "Crear un recordatorio. Usala cuando el usuario pida que le recuerdes algo.",
+                "Crear un recordatorio. Usarla cuando el usuario pida que se le recuerde algo.",
                 {
                     "type": "object",
                     "properties": {
                         "text": {"type": "string", "description": "qué hay que recordar"},
                         "when_local": {
                             "type": "string",
-                            "description": "cuándo, en ISO local (2026-09-12T20:00). Omitilo si no dijo hora.",
+                            "description": "cuándo, en ISO local (2026-09-12T20:00). Omitirlo si el usuario no dijo hora.",
                         },
                         "repeat": {
                             "type": "string",
@@ -308,14 +308,14 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "preferences_list",
-                "Leer lo que ya sabés de las preferencias del usuario.",
+                "Leer lo que ya se sabe de las preferencias del usuario.",
                 {"type": "object", "properties": {}},
                 preferences_list,
             ),
             Tool(
                 "documents_open",
                 "Abrir un documento del usuario por su nombre, para leerlo en voz alta. "
-                "Buscá en sus carpetas: diario, carta, receta, manual.",
+                "Buscar en sus carpetas: diario, carta, receta, manual.",
                 {
                     "type": "object",
                     "properties": {
@@ -327,14 +327,14 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "documents_read",
-                "Leer el próximo pedazo del documento abierto. Usala cuando diga 'leelo' o 'seguí'. "
-                "Lo que va entre corchetes es para vos, no se lee en voz alta.",
+                "Leer el próximo pedazo del documento abierto. Usarla cuando el usuario diga 'léalo' "
+                "o 'siga'. Lo que va entre corchetes es información interna: no se lee en voz alta.",
                 {"type": "object", "properties": {}},
                 documents_read,
             ),
             Tool(
                 "media_play",
-                "Poner música o un video. Busca y lo abre en el navegador.",
+                "Poner música o un video: lo busca y lo abre en el navegador.",
                 {
                     "type": "object",
                     "properties": {
@@ -362,8 +362,8 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "web_read",
-                "Leer el texto de una página que ya encontraste. Usala cuando el resumen no "
-                "alcanza: el clima, el precio del dólar, una noticia.",
+                "Leer el texto de una página ya encontrada. Usarla cuando el resumen no "
+                "alcance: el clima, el precio del dólar, una noticia.",
                 {
                     "type": "object",
                     "properties": {"url": {"type": "string", "description": "dirección completa"}},

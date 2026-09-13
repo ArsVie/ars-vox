@@ -51,8 +51,9 @@ def parse_results(page: str, limit: int = 5) -> list[dict]:
     return results
 
 
-def search(query: str, limit: int = 5) -> list[dict]:
-    url = SEARCH_URL + "?" + urllib.parse.urlencode({"q": query, "kl": "ar-es"})
+def search(query: str, limit: int = 5, region: str = "mx-es") -> list[dict]:
+    """`region` decides whose results these are. It followed the copy into Argentina."""
+    url = SEARCH_URL + "?" + urllib.parse.urlencode({"q": query, "kl": region})
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:

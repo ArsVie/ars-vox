@@ -247,7 +247,7 @@ def test_fire_speaks_logs_and_marks_done(tmp_path: Path, monkeypatch):
     assert arsvox_cli.cmd_fire(Args()) == 0
     assert store.get_reminder("cli", 1)["active"] == 0
     events = [e for e in store.events("cli") if e.kind == "reminder_fired"]
-    assert events and events[0].payload["spoken"] == "Acordate: tomar la pastilla."
+    assert events and events[0].payload["spoken"] == "Acuérdese: tomar la pastilla."
     assert (tmp_path / "results" / "reminders" / "reminder-1.txt").is_file()
     assert "played=False" in (tmp_path / "results" / "reminders" / "fired.log").read_text(encoding="utf-8")
 
