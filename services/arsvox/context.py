@@ -133,7 +133,7 @@ def snapshot_text(
         lines.append(note)
     if preferences:
         remembered = "; ".join(f"{key}: {value}" for key, value in sorted(preferences.items()))
-        lines.append(f"Lo que recordás del usuario: {remembered}")
+        lines.append(f"Lo que recuerdo del usuario: {remembered}")
     else:
-        lines.append("Lo que recordás del usuario: nada todavía")
+        lines.append("Lo que recuerdo del usuario: nada todavía")
     return "\n".join(lines)

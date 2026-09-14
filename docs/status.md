@@ -245,9 +245,9 @@ Five abilities from the sheet. Status after this wave:
    read "Quedan 1874082 letras" aloud. The note is now bracketed as `[Meta: ...]`
    with the tool description saying brackets are not for reading out loud.
 
-15 tools are visible to the model. The paper puts deferred tool loading above
-about 15, so this is the number to watch: the next ability has to justify itself
-or consolidate.
+15 tools were visible after this wave; the web work below brought the count to 17.
+The paper puts deferred tool loading above about 15, so every addition from here
+has to justify itself or the surface consolidates.
 
 ### El micrófono por la ventana (voice-in)
 
@@ -280,6 +280,27 @@ Two things this step cost:
   `disk I/O error` (WAL plus drvfs does not lock across OSes). The product runs
   entirely on Windows, so this only affects the development rig: drive the service
   over HTTP, or use the Windows python.
+
+### Las fuentes web: weather and news measured, search no longer lies (2026-09-14)
+
+DuckDuckGo lite soft-blocks after volume: HTTP 202, a 14 KB page, zero result
+anchors. `web.search()` swallowed it, so weather, dollar and news died together
+and silently — the same design flaw sat in `web.read()` and `media.resolve()`
+(returning empty for "could not ask"). All three now say why.
+
+| what | evidence |
+|---|---|
+| weather | `weather_get` reads open-meteo (geocode + forecast; no key, never a stale page). Real turn: "En Mexicali ahora hay 33 grados, se siente como 32" — the raw API the same minute said 32.7 / 32.1; "mañana" read the right day (máx 41 against the API's 40.8) |
+| news | `news_list` reads La Jornada's RSS with a real item reader. Real turn: five titles; "Pumas CU se impone a Burros Blancos" is in the live feed |
+| search | DuckDuckGo gets one retry on a soft-block, then Mojeek; blocked, empty and unreadable are three different sentences now |
+| register | two drifts the guard had missed are fixed: the snapshot said "recordás" and `documents_open` said "en tus carpetas"; the guard carries "recordás" |
+| tests | 103 green, from 77 |
+
+Mojeek's parser is written to searxng's selectors (`ul.results-standard > li >
+a.ob`, title in `h2 > a`, snippet in `p.s`) and unit-tested; live verification is
+pending because Mojeek captcha'd this IP during the work (temporary, volume). The
+dollar rate stays parked with Ars: which rate (market, DOF, bank) is his call;
+only the market one is measured (`open.er-api.com`, USD→MXN).
 
 ## El registro — español de México, de usted
 
@@ -400,9 +421,9 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 3240 in 12 files |
+| runtime lines (services + cli) | 3,652 in 19 files |
 | measurement tooling lines | 1,003 |
-| test lines | 1,127, seventy-seven tests green |
+| test lines | 1,482, one hundred three tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |

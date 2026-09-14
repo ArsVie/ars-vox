@@ -10,6 +10,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASE_URL = "https://api.commandcode.ai/provider/v1"
 DEFAULT_REGISTER = "es-MX"
+# The city the weather answers for when the user does not name one. Evidence, not
+# vibes: the requests in the old logs ask about Mexicali, and the machine runs on
+# Mexico time.
+DEFAULT_CITY = "Mexicali"
 # One place decides how the assistant talks, which voice reads it, and which country
 # the search engine answers for. Evidence, not vibes: the user is in Mexicali and the
 # voice that shipped before was es-MX. Voseo was an assumption with nothing behind it.
@@ -85,6 +89,7 @@ class Settings:
     language: str = "es"
     session: str = "cli"
     register: str = DEFAULT_REGISTER
+    city: str = DEFAULT_CITY
 
     @property
     def region(self) -> str:
@@ -125,4 +130,5 @@ def load_settings(session: str = "cli", db_path: Path | None = None) -> Settings
         max_tokens=int(os.environ.get("ARSVOX_MAX_TOKENS", 1024)),
         max_steps=int(os.environ.get("ARSVOX_MAX_STEPS", 6)),
         session=session,
+        city=os.environ.get("ARSVOX_CITY", DEFAULT_CITY),
     )

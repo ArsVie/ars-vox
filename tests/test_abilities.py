@@ -24,6 +24,52 @@ Tiempo en Mexicali</a><td class='result-snippet'>Ahora hace <b>31</b> grados</td
 <td class='result-snippet'>Compra 17,20 - Venta 17,60</td>
 </body></html>"""
 
+# Structure per searxng's mojeek engine: ul.results-standard > li, the link in
+# `a.ob`, the title in `h2 > a`, the snippet in `p.s`.
+MOJEEK_PAGE = """<html><body>
+<ul class="results-standard">
+<li>
+<a class="ob" href="https://ejemplo.com/clima"><span class="i">ejemplo.com</span></a>
+<h2><a href="https://ejemplo.com/clima">Tiempo en Mexicali</a></h2>
+<p class="s">Ahora hace <b>31</b> grados en la ciudad.</p>
+</li>
+<li>
+<h2><a href="https://otro.mx/dolar">Dólar hoy</a></h2>
+<p class="s">Compra 17,20 - Venta 17,60</p>
+</li>
+</ul>
+</body></html>"""
+
+# Shaped like the real open-meteo answer for Mexicali on 2026-09-14.
+CURRENT = {"temperature_2m": 33.0, "apparent_temperature": 35.9, "weather_code": 0}
+DAILY = {
+    "time": ["2026-09-14", "2026-09-15"],
+    "temperature_2m_max": [42.2, 40.0],
+    "temperature_2m_min": [28.2, 26.3],
+    "precipitation_probability_max": [0, 65],
+    "weather_code": [0, 95],
+}
+
+FEED = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+<title>La Jornada</title>
+<item>
+  <title>Editorial: BRICS: multilateralismo pragmático</title>
+  <link>https://www.jornada.com.mx/1</link>
+  <description>Texto largo</description>
+</item>
+<item>
+  <title>   Sismo   de magnitud 5 al sur de Oaxaca </title>
+  <link>https://www.jornada.com.mx/2</link>
+</item>
+<item>
+  <title>Agua &amp; sequía en el norte</title>
+</item>
+<item>
+  <title></title>
+</item>
+</channel></rss>"""
+
 
 def context(tmp_path: Path, session: str = "cli") -> ToolContext:
     settings = Settings(base_url="http://x", model="fake", api_key="k", db_path=tmp_path / "t.db")
@@ -130,10 +176,108 @@ def test_parsing_a_result_page_unwraps_the_links():
     assert results[0]["snippet"] == "Ahora hace 31 grados"
 
 
+def test_the_second_engine_page_parses():
+    results = web.parse_mojeek(MOJEEK_PAGE)
+    assert [result["url"] for result in results] == ["https://ejemplo.com/clima", "https://otro.mx/dolar"]
+    assert results[0]["title"] == "Tiempo en Mexicali"
+    assert results[0]["snippet"] == "Ahora hace 31 grados en la ciudad."
+
+
+def test_the_first_engine_retries_once_after_a_soft_block(monkeypatch):
+    pages = [(202, "bloqueado"), (200, PAGE)]
+    calls: list[str] = []
+
+    def fake_fetch(url, timeout=12):  # noqa: ANN001
+        calls.append(url)
+        return pages.pop(0)
+
+    monkeypatch.setattr(web, "_fetch", fake_fetch)
+    results = web._ddg("clima", 4, "mx-es")
+    assert len(calls) == 2 and results[0]["title"] == "Tiempo en Mexicali"
+
+
+def test_a_200_with_no_results_is_genuinely_empty(monkeypatch):
+    calls: list[int] = []
+
+    def fake_fetch(url, timeout=12):  # noqa: ANN001
+        calls.append(1)
+        return (200, "<html><body>No results.</body></html>")
+
+    monkeypatch.setattr(web, "_fetch", fake_fetch)
+    assert web._ddg("xyz", 4, "mx-es") == [] and len(calls) == 1
+
+
+def test_search_falls_back_to_the_second_engine(monkeypatch):
+    def blocked(query, limit, region):
+        raise web.WebError("el buscador principal respondió 202")
+
+    monkeypatch.setattr(web, "_ddg", blocked)
+    monkeypatch.setattr(web, "_mojeek", lambda query, limit, region: web.parse_mojeek(MOJEEK_PAGE))
+    results = web.search("clima")
+    assert results[0]["title"] == "Tiempo en Mexicali"
+
+
+def test_search_with_both_engines_blocked_names_the_failure(monkeypatch):
+    monkeypatch.setattr(web, "_fetch", lambda url, timeout=12: (202, "no"))
+
+    with pytest.raises(web.WebError) as caught:
+        web.search("clima")
+    assert "202" in str(caught.value) and "segundo" in str(caught.value)
+
+
+def test_search_that_truly_finds_nothing_is_not_an_error(monkeypatch):
+    monkeypatch.setattr(web, "_ddg", lambda query, limit, region: [])
+    monkeypatch.setattr(web, "_mojeek", lambda query, limit, region: [])
+    assert web.search("xyzxyz") == []
+
+
+def test_the_weather_sentence_speaks_today():
+    line = web.weather_sentence("Mexicali", "hoy", CURRENT, DAILY)
+    assert "ahora hay 33 grados" in line and "se siente como 36" in line
+    assert "Máxima de 42" in line and "mínima de 28" in line
+    assert "despejado" in line and "sin lluvia prevista" in line
+
+
+def test_the_weather_sentence_speaks_tomorrow():
+    line = web.weather_sentence("Mexicali", "mañana", CURRENT, DAILY)
+    assert "mañana" in line and "Máxima de 40" in line and "mínima de 26" in line
+    assert "tormenta eléctrica" in line and "probabilidad de lluvia de 65 por ciento" in line
+
+
+def test_the_weather_sentence_survives_missing_fields():
+    line = web.weather_sentence("Partes", "hoy", {}, {"temperature_2m_max": [10]})
+    assert "En Partes." in line and "máxima de 10" in line.lower()
+
+
+def test_weather_asks_the_map_then_the_forecast(monkeypatch):
+    payloads = [
+        {"results": [{"name": "Mexicali", "latitude": 32.6, "longitude": -115.4}]},
+        {"current": CURRENT, "daily": DAILY},
+    ]
+    monkeypatch.setattr(web, "_get_json", lambda url: payloads.pop(0))
+    assert "ahora hay 33 grados" in web.weather("Mexicali")
+
+
+def test_a_city_the_map_does_not_know_says_so(monkeypatch):
+    monkeypatch.setattr(web, "_get_json", lambda url: {"results": []})
+    with pytest.raises(web.WebError) as caught:
+        web.geocode("Xyzzy")
+    assert "no encontré esa ciudad" in str(caught.value)
+
+
+def test_the_news_feed_titles_parse():
+    titles = web.parse_headlines(FEED, limit=5)
+    assert titles == [
+        "Editorial: BRICS: multilateralismo pragmático",
+        "Sismo de magnitud 5 al sur de Oaxaca",
+        "Agua & sequía en el norte",
+    ]
+
+
 def test_search_speaks_its_results(tmp_path: Path, monkeypatch):
     from services.arsvox import tools
 
-    monkeypatch.setattr(tools.web, "search", lambda query, limit=4: web.parse_results(PAGE))
+    monkeypatch.setattr(tools.web, "search", lambda query, limit=4, region=None: web.parse_results(PAGE))
     answer = tools.web_search(context(tmp_path), {"query": "clima"})
     assert "31 grados" in answer and "Tiempo en Mexicali" in answer
 
@@ -141,8 +285,19 @@ def test_search_speaks_its_results(tmp_path: Path, monkeypatch):
 def test_search_that_finds_nothing_admits_it(tmp_path: Path, monkeypatch):
     from services.arsvox import tools
 
-    monkeypatch.setattr(tools.web, "search", lambda query, limit=4: [])
-    assert "No pude buscar" in tools.web_search(context(tmp_path), {"query": "xyz"})
+    monkeypatch.setattr(tools.web, "search", lambda query, limit=4, region=None: [])
+    assert "No encontré resultados" in tools.web_search(context(tmp_path), {"query": "xyz"})
+
+
+def test_search_that_is_blocked_names_the_block(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    def blocked(query, limit=4, region=None):
+        raise web.WebError("el buscador principal respondió 202")
+
+    monkeypatch.setattr(tools.web, "search", blocked)
+    answer = tools.web_search(context(tmp_path), {"query": "xyz"})
+    assert "No pude buscar" in answer and "202" in answer
 
 
 def test_reading_a_page_returns_text(tmp_path: Path, monkeypatch):
@@ -150,6 +305,49 @@ def test_reading_a_page_returns_text(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(tools.web, "read", lambda url, limit=1800: "Compra 17,20 Venta 17,60")
     assert "17,60" in tools.web_read(context(tmp_path), {"url": "https://x"})
+
+
+def test_reading_a_page_that_fails_says_why(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    def failing(url, limit=1800):
+        raise web.WebError("no respondió (TimeoutError)")
+
+    monkeypatch.setattr(tools.web, "read", failing)
+    answer = tools.web_read(context(tmp_path), {"url": "https://x"})
+    assert "No pude leer" in answer and "TimeoutError" in answer
+
+
+def test_the_weather_tool_uses_the_default_city(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    seen: dict[str, str] = {}
+
+    def fake_weather(city, when="hoy"):
+        seen["city"] = city
+        return f"En {city}, despejado."
+
+    monkeypatch.setattr(tools.web, "weather", fake_weather)
+    answer = tools.weather_get(context(tmp_path), {})
+    assert seen["city"] == "Mexicali" and "Mexicali" in answer
+
+
+def test_the_weather_tool_says_why_it_could_not(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    def broken(city, when="hoy"):
+        raise web.WebError("respondió 500")
+
+    monkeypatch.setattr(tools.web, "weather", broken)
+    assert "No pude consultar el clima" in tools.weather_get(context(tmp_path), {"city": "Tijuana"})
+
+
+def test_the_news_tool_numbers_the_headlines(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    monkeypatch.setattr(tools.web, "headlines", lambda limit=5: ["Uno", "Dos"])
+    answer = tools.news_list(context(tmp_path), {})
+    assert "Titulares de La Jornada" in answer and "1) Uno" in answer and "2) Dos" in answer
 
 
 # ---- media ----------------------------------------------------------------
@@ -176,6 +374,17 @@ def test_playing_something_that_does_not_exist(tmp_path: Path, monkeypatch):
     assert "No encontré nada" in tools.media_play(context(tmp_path), {"query": "asdf"})
 
 
+def test_playing_when_the_search_breaks_says_why(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    def broken(query, limit=3):
+        raise media.MediaError("la búsqueda falló (DownloadError)")
+
+    monkeypatch.setattr(tools.media, "resolve", broken)
+    answer = tools.media_play(context(tmp_path), {"query": "beatles"})
+    assert "No pude buscar" in answer and "DownloadError" in answer
+
+
 def test_an_empty_url_opens_nothing():
     assert media.open_in_browser("") is False
 
@@ -184,7 +393,8 @@ def test_an_empty_url_opens_nothing():
 
 def test_every_tool_declares_a_usable_schema():
     registry = build_registry()
-    assert len(registry) == 15
+    assert len(registry) == 17
+    assert {"weather_get", "news_list"} <= set(registry)
     for tool in registry.values():
         assert tool.description.strip()
         assert tool.parameters["type"] == "object"

@@ -147,7 +147,7 @@ def documents_open(context: ToolContext, arguments: dict) -> str:
     hits, cut = documents.find(query, limit=4)
     if not hits:
         extra = " Busqué rápido, así que pruebe con otra palabra." if cut else ""
-        return f"No encontré ningún archivo que se llame '{query}' en tus carpetas.{extra}"
+        return f"No encontré ningún archivo que se llame '{query}' en sus carpetas.{extra}"
     best = hits[0]
     if len(hits) > 1 and hits[1].score >= best.score:
         titles = "; ".join(f"{hit.title} ({hit.path.suffix.lstrip('.')})" for hit in hits[:3])
@@ -184,7 +184,10 @@ def documents_read(context: ToolContext, arguments: dict) -> str:
 
 def media_play(context: ToolContext, arguments: dict) -> str:
     query = arguments["query"]
-    found = media.resolve(query, limit=3)
+    try:
+        found = media.resolve(query, limit=3)
+    except media.MediaError as exc:
+        return f"No pude buscar '{query}': {exc}."
     if not found:
         return f"No encontré nada para '{query}'."
     best = found[0]
@@ -206,17 +209,23 @@ def media_pause(context: ToolContext, arguments: dict) -> str:
 
 def web_search(context: ToolContext, arguments: dict) -> str:
     query = arguments["query"]
-    results = web.search(query, limit=4)
+    try:
+        results = web.search(query, limit=4, region=context.settings.region)
+    except web.WebError as exc:
+        return f"No pude buscar '{query}': {exc}."
     if not results:
-        return f"No pude buscar '{query}'. Puede ser que no haya internet."
+        return f"No encontré resultados para '{query}'."
     return "Esto es lo que encontré: " + web.readable(results, limit=3)
 
 
 def web_read(context: ToolContext, arguments: dict) -> str:
     url = arguments["url"]
-    text = web.read(url, limit=1800)
+    try:
+        text = web.read(url, limit=1800)
+    except web.WebError as exc:
+        return f"No pude leer {url}: {exc}."
     if not text:
-        return f"No pude leer {url}."
+        return f"Leí {url} pero no tiene texto que pueda contar."
     return f"De {url}: {text}"
 
 
@@ -224,6 +233,26 @@ def web_open(context: ToolContext, arguments: dict) -> str:
     if media.open_in_browser(arguments["url"]):
         return "Te abrí la página en el navegador."
     return "No pude abrir esa página."
+
+
+def weather_get(context: ToolContext, arguments: dict) -> str:
+    city = str(arguments.get("city") or "").strip() or context.settings.city
+    when = str(arguments.get("when") or "hoy")
+    try:
+        return web.weather(city, when)
+    except web.WebError as exc:
+        return f"No pude consultar el clima de {city}: {exc}."
+
+
+def news_list(context: ToolContext, arguments: dict) -> str:
+    try:
+        titles = web.headlines(limit=5)
+    except web.WebError as exc:
+        return f"No pude leer las noticias: {exc}."
+    if not titles:
+        return "El periódico no trae titulares en este momento."
+    numbered = "; ".join(f"{number}) {title}" for number, title in enumerate(titles, 1))
+    return f"Titulares de La Jornada: {numbered}"
 
 
 def build_registry() -> dict[str, Tool]:
@@ -352,7 +381,7 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "web_search",
-                "Buscar en internet: clima, noticias, precios, cualquier dato actual.",
+                "Buscar en internet: precios, personas, lugares, cualquier dato actual sin herramienta propia.",
                 {
                     "type": "object",
                     "properties": {"query": {"type": "string"}},
@@ -362,8 +391,7 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "web_read",
-                "Leer el texto de una página ya encontrada. Usarla cuando el resumen no "
-                "alcance: el clima, el precio del dólar, una noticia.",
+                "Leer el texto de una página ya encontrada, cuando el resumen no alcance o haga falta el detalle.",
                 {
                     "type": "object",
                     "properties": {"url": {"type": "string", "description": "dirección completa"}},
@@ -380,6 +408,31 @@ def build_registry() -> dict[str, Tool]:
                     "required": ["url"],
                 },
                 web_open,
+            ),
+            Tool(
+                "weather_get",
+                "Consultar el clima de hoy o de mañana en una ciudad; sin ciudad es Mexicali.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "city": {
+                            "type": "string",
+                            "description": "la ciudad; omitirlo si el usuario no dijo ninguna",
+                        },
+                        "when": {
+                            "type": "string",
+                            "enum": ["hoy", "mañana"],
+                            "description": "hoy por defecto; mañana si preguntó por el día siguiente",
+                        },
+                    },
+                },
+                weather_get,
+            ),
+            Tool(
+                "news_list",
+                "Leer los titulares de las noticias de hoy.",
+                {"type": "object", "properties": {}},
+                news_list,
             ),
         )
     }

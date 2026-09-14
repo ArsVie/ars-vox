@@ -26,7 +26,7 @@ from services.arsvox.context import default_builder  # noqa: E402
 VOSEO = re.compile(
     r"\b(decime|abrime|poneme|buscame|usala|usalo|usalas|acordate|fijate|decile|escribile|"
     r"contame|decilo|querés|podés|tenés|sabés|volvé|vení|hacé|mirá|anotá|mandá|llevá|tomá|"
-    r"andá|dejá|esperá|escuchá|probá|empezá|terminá|cerrá|buscá|seguí|sos)\b",
+    r"andá|dejá|esperá|escuchá|probá|empezá|terminá|cerrá|buscá|seguí|sos|recordás)\b",
     re.IGNORECASE,
 )
 COPY_ROOTS = ("services/arsvox", "apps/cli", "apps/desktop", "tools/w0_utterances.json")
@@ -90,9 +90,12 @@ def test_the_other_register_is_still_reachable(monkeypatch):
 def test_the_search_asks_for_mexican_results(monkeypatch):
     seen: dict[str, str] = {}
 
+    class Page(io.BytesIO):
+        status = 200
+
     def fake_urlopen(request, timeout=None):  # noqa: ANN001
         seen["url"] = request.full_url if hasattr(request, "full_url") else str(request)
-        return io.BytesIO(b"<html></html>")
+        return Page(b'<a class="result-link" href="https://x">algo</a>')
 
     monkeypatch.setattr(web.urllib.request, "urlopen", fake_urlopen)
     web.search("clima de hoy", region="mx-es")

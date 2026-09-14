@@ -12,18 +12,26 @@ import subprocess
 import sys
 
 
+class MediaError(Exception):
+    """The search could not be done, and the reason is worth saying out loud."""
+
+
 def resolve(query: str, limit: int = 5) -> list[dict]:
-    """Search without downloading. Returns candidates the model can read aloud."""
+    """Search without downloading. Returns candidates the model can read aloud.
+
+    Raises MediaError when the search could not be made: a missing component or a
+    dead network is not the same thing as "nothing was found", and the tool says so.
+    """
     try:
         import yt_dlp
-    except ModuleNotFoundError:
-        return []
+    except ModuleNotFoundError as exc:
+        raise MediaError("no está instalado el buscador de videos") from exc
     options = {"quiet": True, "no_warnings": True, "skip_download": True, "extract_flat": "in_playlist"}
     try:
         with yt_dlp.YoutubeDL(options) as downloader:
             info = downloader.extract_info(f"ytsearch{limit}:{query}", download=False)
-    except Exception:  # noqa: BLE001 - a search that fails is a sentence, not a crash
-        return []
+    except Exception as exc:  # noqa: BLE001 - a search that fails is a sentence, not a crash
+        raise MediaError(f"la búsqueda falló ({type(exc).__name__})") from exc
     results = []
     for entry in (info or {}).get("entries") or []:
         if not entry:
