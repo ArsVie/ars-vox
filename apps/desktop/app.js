@@ -31,7 +31,7 @@ function setStatus(nextBusy, label) {
 function setEars(available) {
   talkButton.dataset.ready = available ? "1" : "";
   talkButton.disabled = !available;
-  talkButton.title = available ? "Hablá y te escucho" : "acá no hay micrófono";
+  talkButton.title = available ? "Hable y le escucho" : "acá no hay micrófono";
   if (!available) talkButton.classList.remove("recording");
 }
 

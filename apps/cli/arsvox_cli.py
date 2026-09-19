@@ -169,7 +169,7 @@ def cmd_talk(args: argparse.Namespace) -> int:
 
     runtime, settings, store = build_runtime(args)
     stt = build_stt(args)
-    print(f"Ars Vox — hablá después del aviso. Modelo {settings.model}. Enter para salir.\n")
+    print(f"Ars Vox — hable después del aviso. Modelo {settings.model}. Enter para salir.\n")
     print(f"calentando el reconocedor ... {stt.warmup() if args.device != 'cpu' else 0:.1f}s")
 
     while True:

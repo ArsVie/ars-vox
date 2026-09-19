@@ -23,10 +23,14 @@ from services.arsvox.config import REGISTERS, Settings, load_register  # noqa: E
 from services.arsvox.context import default_builder  # noqa: E402
 
 # Second person of "vos" only: these spellings do not exist in Mexican Spanish.
+# "hablá", "escribí", "dictá" and "necesitás" shipped once in the window and the CLI
+# because this list lacked them; the additions below are that same family.
 VOSEO = re.compile(
     r"\b(decime|abrime|poneme|buscame|usala|usalo|usalas|acordate|fijate|decile|escribile|"
     r"contame|decilo|querés|podés|tenés|sabés|volvé|vení|hacé|mirá|anotá|mandá|llevá|tomá|"
-    r"andá|dejá|esperá|escuchá|probá|empezá|terminá|cerrá|buscá|seguí|sos|recordás)\b",
+    r"andá|dejá|esperá|escuchá|probá|empezá|terminá|cerrá|buscá|seguí|sos|recordás|"
+    r"hablá|hablás|dictá|dictás|escribí|escribís|necesitás|tené|poné|avisá|sacá|entrá|"
+    r"llamá|pagá|apretá|sentate|quedate)\b",
     re.IGNORECASE,
 )
 COPY_ROOTS = ("services/arsvox", "apps/cli", "apps/desktop", "tools/w0_utterances.json")
