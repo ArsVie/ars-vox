@@ -35,7 +35,11 @@ FOLDER_NAME = "Ars Vox Libros"
 WINDOWS_BAD = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 LICENSE_START = re.compile(r"\*{3}\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*{3}", re.S)
 LICENSE_END = re.compile(r"\*{3}\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*", re.S)
-LANGUAGE_NAMES = {"en": "inglés", "fr": "francés", "de": "alemán", "it": "italiano", "pt": "portugués"}
+LANGUAGE_NAMES = {
+    "en": "inglés", "fr": "francés", "de": "alemán", "it": "italiano", "pt": "portugués",
+    "hu": "húngaro", "nl": "neerlandés", "ru": "ruso", "sv": "sueco", "da": "danés",
+    "pl": "polaco", "el": "griego", "ja": "japonés", "zh": "chino", "la": "latín",
+}
 
 
 class BookError(Exception):
@@ -71,14 +75,31 @@ def search(title: str, language: str | None = "es") -> list[dict]:
 
 
 def find(title: str, language: str = "es") -> dict | None:
-    """The book to bring home: Spanish first, any language after, None if nothing."""
-    results = search(title, language)
-    if not results and language:
-        results = search(title, None)
+    """The book to bring home: Spanish first — the full title, then a shorter form
+    when the catalog finds nothing under it — any language after, None if nothing."""
+    if language:
+        for candidate in title_candidates(title):
+            results = search(candidate, language)
+            if results:
+                return first_readable(results) or results[0]
+    results = search(title, None)
+    return (first_readable(results) or results[0]) if results else None
+
+
+def title_candidates(title: str) -> list[str]:
+    """The full title, then its first two words. The catalog matches every word, so
+    a long title ('Don Quijote de la Mancha') misses the Spanish short-titled edition
+    and the unfiltered fallback lands on whichever translation carries it verbatim."""
+    words = title.split()
+    short = " ".join(words[:2]) if len(words) > 2 else ""
+    return list(dict.fromkeys(part for part in (title, short) if part))
+
+
+def first_readable(results: list[dict]) -> dict | None:
     for book in results:
         if text_url(book):
             return book
-    return results[0] if results else None
+    return None
 
 
 def text_url(book: dict) -> str | None:

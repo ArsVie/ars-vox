@@ -437,6 +437,27 @@ def test_book_search_stops_when_spanish_answers(monkeypatch):
     assert calls == ["es"]
 
 
+def test_a_long_title_retries_short_in_spanish_before_any_language(monkeypatch):
+    calls: list = []
+
+    def fake_search(title, language="es"):
+        calls.append((title, language))
+        if (title, language) == ("Don Quijote", "es"):
+            return [{"title": "Don Quijote", "languages": ["es"]}]
+        return []
+
+    monkeypatch.setattr(books, "search", fake_search)
+    book = books.find("Don Quijote de la Mancha")
+    assert book["title"] == "Don Quijote"
+    assert calls == [("Don Quijote de la Mancha", "es"), ("Don Quijote", "es")]
+
+
+def test_language_note_names_the_language_in_spanish():
+    assert books.language_note({"languages": ["hu"]}) == " Está en húngaro."
+    assert books.language_note({"languages": ["es"]}) == ""
+    assert books.language_note({"languages": ["xx"]}) == " Está en xx."
+
+
 def test_the_text_link_prefers_utf8_plain():
     assert books.text_url(GUTENDEX_BOOK) == "https://www.gutenberg.org/ebooks/2000.txt.utf-8"
 
