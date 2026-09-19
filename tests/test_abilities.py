@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.arsvox import documents, media, web  # noqa: E402
+from services.arsvox import books, documents, media, web  # noqa: E402
 from services.arsvox.config import Settings  # noqa: E402
 from services.arsvox.store import Store  # noqa: E402
 from services.arsvox.tools import ToolContext, build_registry, documents_open, documents_read  # noqa: E402
@@ -69,6 +69,27 @@ FEED = """<?xml version="1.0" encoding="UTF-8"?>
   <title></title>
 </item>
 </channel></rss>"""
+
+# Shaped like the real Gutendex answer for Don Quijote: the Spanish edition, and
+# the utf-8 plain text is the format the reader wants.
+GUTENDEX_BOOK = {
+    "id": 2000,
+    "title": "Don Quijote",
+    "authors": [{"name": "Cervantes Saavedra, Miguel de"}],
+    "languages": ["es"],
+    "formats": {
+        "application/epub+zip": "https://www.gutenberg.org/ebooks/2000.epub.noimages",
+        "text/html": "https://www.gutenberg.org/ebooks/2000.html",
+        "text/plain; charset=utf-8": "https://www.gutenberg.org/ebooks/2000.txt.utf-8",
+        "text/plain; charset=us-ascii": "https://www.gutenberg.org/ebooks/2000.txt",
+    },
+}
+
+BOOK_TEXT = (
+    "*** START OF THE PROJECT GUTENBERG EBOOK DON QUIJOTE ***\n\n"
+    "En un lugar de la Mancha, de cuyo nombre no quiero acordarme...\n\n"
+    "*** END OF THE PROJECT GUTENBERG EBOOK DON QUIJOTE ***\n"
+)
 
 
 def context(tmp_path: Path, session: str = "cli") -> ToolContext:
@@ -389,12 +410,134 @@ def test_an_empty_url_opens_nothing():
     assert media.open_in_browser("") is False
 
 
+# ---- books -----------------------------------------------------------------
+
+def test_book_search_prefers_spanish_and_falls_back(monkeypatch):
+    calls: list = []
+
+    def fake_search(title, language="es"):
+        calls.append(language)
+        return [] if language else [{"title": "Moby Dick"}]
+
+    monkeypatch.setattr(books, "search", fake_search)
+    book = books.find("moby dick")
+    assert calls == ["es", None]
+    assert book["title"] == "Moby Dick"
+
+
+def test_book_search_stops_when_spanish_answers(monkeypatch):
+    calls: list = []
+
+    def fake_search(title, language="es"):
+        calls.append(language)
+        return [{"title": "Don Quijote"}]
+
+    monkeypatch.setattr(books, "search", fake_search)
+    assert books.find("quijote")["title"] == "Don Quijote"
+    assert calls == ["es"]
+
+
+def test_the_text_link_prefers_utf8_plain():
+    assert books.text_url(GUTENDEX_BOOK) == "https://www.gutenberg.org/ebooks/2000.txt.utf-8"
+
+
+def test_a_book_without_plain_text_has_none():
+    assert books.text_url({"formats": {"application/epub+zip": "https://x"}}) is None
+
+
+def test_the_filename_is_windows_safe_and_carries_the_id():
+    name = books.file_name({"id": 2701, "title": "Moby Dick; Or, The Whale", "authors": [{"name": "Melville, Herman"}]})
+    assert name == "Moby Dick - Melville, Herman (2701).txt"
+    assert not any(bad in name for bad in '<>:"/\\|?*')
+
+
+def test_the_license_around_the_book_is_not_saved():
+    stripped = books.strip_license(BOOK_TEXT)
+    assert stripped.startswith("En un lugar")
+    assert "GUTENBERG" not in stripped
+    assert books.strip_license("sin marcadores") == "sin marcadores"
+
+
+def test_getting_a_book_saves_it_and_opens_it(tmp_path, monkeypatch):
+    from services.arsvox import tools
+
+    monkeypatch.setattr(tools.books, "find", lambda title, language="es": GUTENDEX_BOOK)
+    monkeypatch.setattr(tools.books, "fetch", lambda url: BOOK_TEXT)
+    monkeypatch.setattr(tools.books, "books_home", lambda: tmp_path / "libros")
+    ctx = context(tmp_path)
+    answer = tools.books_get(ctx, {"title": "don quijote"})
+    assert "Listo" in answer and "Don Quijote" in answer
+    saved = list((tmp_path / "libros").glob("*.txt"))
+    assert len(saved) == 1
+    assert saved[0].read_text(encoding="utf-8").startswith("En un lugar")
+    assert ctx.store.get_document("cli")["title"] == "Don Quijote"
+
+
+def test_a_book_that_is_not_in_the_catalog_says_so(tmp_path, monkeypatch):
+    from services.arsvox import tools
+
+    monkeypatch.setattr(tools.books, "find", lambda title, language="es": None)
+    assert "No encontré" in tools.books_get(context(tmp_path), {"title": "cien años de soledad"})
+
+
+def test_a_book_that_is_not_spanish_says_its_language(tmp_path, monkeypatch):
+    from services.arsvox import tools
+
+    english = dict(GUTENDEX_BOOK, languages=["en"])
+    monkeypatch.setattr(tools.books, "find", lambda title, language="es": english)
+    monkeypatch.setattr(tools.books, "fetch", lambda url: BOOK_TEXT)
+    monkeypatch.setattr(tools.books, "books_home", lambda: tmp_path / "libros")
+    assert "inglés" in tools.books_get(context(tmp_path), {"title": "moby dick"})
+
+
+def test_a_book_that_will_not_download_names_the_reason(tmp_path, monkeypatch):
+    from services.arsvox import tools
+
+    monkeypatch.setattr(tools.books, "find", lambda title, language="es": GUTENDEX_BOOK)
+
+    def broken(url):
+        raise books.BookError("no respondió (TimeoutError)")
+
+    monkeypatch.setattr(tools.books, "fetch", broken)
+    answer = tools.books_get(context(tmp_path), {"title": "don quijote"})
+    assert "no pude descargarlo" in answer and "TimeoutError" in answer
+
+
+def test_the_catalog_keeps_trying_through_a_stall_wave(monkeypatch):
+    attempts: list = []
+
+    class Page:
+        status = 200
+
+        def __init__(self, body):
+            self.body = body
+
+        def read(self, *args):
+            return self.body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise TimeoutError("the read never returned")
+        return Page(b'{"results": [{"title": "Don Quijote"}]}')
+
+    monkeypatch.setattr(books.urllib.request, "urlopen", fake_urlopen)
+    assert books.search("quijote", "es")[0]["title"] == "Don Quijote"
+    assert len(attempts) == 3
+
+
 # ---- the registry ---------------------------------------------------------
 
 def test_every_tool_declares_a_usable_schema():
     registry = build_registry()
-    assert len(registry) == 17
-    assert {"weather_get", "news_list"} <= set(registry)
+    assert len(registry) == 18
+    assert {"weather_get", "news_list", "books_get"} <= set(registry)
     for tool in registry.values():
         assert tool.description.strip()
         assert tool.parameters["type"] == "object"

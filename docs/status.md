@@ -324,6 +324,27 @@ pending because Mojeek captcha'd this IP during the work (temporary, volume). Th
 dollar rate stays parked with Ars: which rate (market, DOF, bank) is his call;
 only the market one is measured (`open.er-api.com`, USD→MXN).
 
+### Los libros: books_get, and the Quijote read on the first ask (2026-09-19)
+
+The father should be able to name any classical novel and have it read to him. One
+tool covers that road: `books_get` searches Project Gutenberg through its keyless
+JSON API (Gutendex), prefers a Spanish edition, fetches the plain text, strips the
+Project Gutenberg header and footer, saves it under `Documents\Ars Vox Libros\` and
+registers it as the current document — `documents_read` continues from there. The
+visible-tool count is 18: this one is the reading feature itself, not another web
+source.
+
+| what | evidence |
+|---|---|
+| real turn, first ask | `ask "léame el quijote"` → `books_get({"title": "El Quijote"})` → *"Listo, ya tengo 'Don Quijote', de Cervantes Saavedra, Miguel de. Dígame 'léalo' y arranco."* → `documents_read` → the reply offers to continue: *"comencé a leerlo... Dígame 'siga' cuando quiera que continúe."* |
+| the file | 2,148,396 characters of Spanish text, `Documents\Ars Vox Libros\Don Quijote - Cervantes Saavedra, Miguel de (2000).txt`, license markers stripped — verified from both WSL and Windows |
+| the catalog flaps | Gutendex stalled in waves all afternoon (reads hanging into timeout, both machines) and 403s the default Python user agent. The fetch sends a browser-shaped agent; the search takes three 10-s tries. Mid-wave a turn can still miss — the tool then says why and offers to try again. |
+| tests | 115 green |
+
+A sibling check, same day, off-tree: libgen.li works end to end — search → download →
+md5 of the received file equals the catalog's recorded md5 (2 of 2 downloads). The
+in-copyright route stays unwired; that decision is Ars's.
+
 ## El registro — español de México, de usted
 
 The product copy, the 30-request sheet, the search locale and the persona were all
@@ -451,9 +472,9 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 3,652 in 19 files |
+| runtime lines (services + cli) | 3,873 in 20 files |
 | measurement tooling lines | 1,003 |
-| test lines | 1,482, one hundred three tests green |
+| test lines | 1,668, one hundred fifteen tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |

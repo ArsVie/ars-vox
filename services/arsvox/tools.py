@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Protocol
 
-from services.arsvox import documents, media, web
+from services.arsvox import books, documents, media, web
 from services.arsvox.config import Settings
 from services.arsvox.scheduler import REPEATS
 from services.arsvox.store import Store
@@ -255,6 +255,30 @@ def news_list(context: ToolContext, arguments: dict) -> str:
     return f"Titulares de La Jornada: {numbered}"
 
 
+def books_get(context: ToolContext, arguments: dict) -> str:
+    title = arguments["title"]
+    try:
+        book = books.find(title, language=context.settings.language)
+    except books.BookError as exc:
+        return f"No pude buscar '{title}': {exc}."
+    if book is None:
+        return f"No encontré '{title}' en el catálogo de dominio público. Puedo intentar con otro título."
+    url = books.text_url(book)
+    if not url:
+        return f"Encontré '{book['title']}' pero no tiene un texto que pueda leer."
+    try:
+        text = books.fetch(url)
+    except books.BookError as exc:
+        return f"Encontré '{book['title']}' pero no pude descargarlo: {exc}."
+    path, letters = books.save(book, text)
+    context.store.set_document(context.session, str(path), books.short_title(book))
+    return (
+        f"Listo, ya tengo '{books.short_title(book)}', de {books.author_name(book)}."
+        f"{books.language_note(book)} Dígame 'léalo' y arranco. "
+        f"[Meta: {path.name}, {letters} letras; quedó abierto como documento actual.]"
+    )
+
+
 def build_registry() -> dict[str, Tool]:
     return {
         tool.name: tool
@@ -433,6 +457,24 @@ def build_registry() -> dict[str, Tool]:
                 "Leer los titulares de las noticias de hoy.",
                 {"type": "object", "properties": {}},
                 news_list,
+            ),
+            Tool(
+                "books_get",
+                "Conseguir un libro de dominio público y dejarlo listo para leer en voz alta. "
+                "Lo busca en el catálogo de Project Gutenberg, prefiere una edición en español y lo "
+                "guarda en la carpeta de libros del usuario. Continuar con documents_read si el "
+                "usuario pidió que se lo lea.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "el título del libro, como lo dijo el usuario",
+                        }
+                    },
+                    "required": ["title"],
+                },
+                books_get,
             ),
         )
     }
