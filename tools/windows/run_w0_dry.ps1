@@ -10,7 +10,7 @@ $runArgs = @(
   "--dry", "--auto",
   "--model", "C:\dev\models\whisper\large-v3-turbo",
   "--device", "cuda", "--compute-type", "float16",
-  "--out", "results\w0-dry2"
+  "--out", "results\archive\w0-dry2"
 )
-& $py @runArgs 2>&1 | Out-File -Encoding utf8 "results\w0-dry-session.log"
-Get-Content "results\w0-dry-session.log" -Tail 30
+& $py @runArgs 2>&1 | Out-File -Encoding utf8 "results\logs\w0-dry-session.log"
+Get-Content "results\logs\w0-dry-session.log" -Tail 30

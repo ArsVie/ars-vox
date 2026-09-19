@@ -174,7 +174,7 @@ python apps/cli/arsvox_cli.py reminders --session cli --sync --query
 ## W3 — the window
 
 Gate: the window dies mid-turn, comes back, and the conversation continues from
-the log. Measured, all four conditions true (`results/w3-cut.json`):
+the log. Measured, all four conditions true (`results/ui/w3-cut.json`):
 
 | step | evidence |
 |---|---|
