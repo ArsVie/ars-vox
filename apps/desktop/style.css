@@ -123,3 +123,4 @@ footer {
 .send { background: var(--accent); border-color: #34705a; color: #fff; font-weight: 600; }
 .talk { background: #eef4f0; border-color: #bcd4c6; color: var(--accent); font-weight: 650; letter-spacing: 0.5px; }
 .talk.recording { background: #fdeccd; border-color: #e8cd97; }
+.talk.recording:disabled { opacity: 1; } /* the open microphone stays lit */

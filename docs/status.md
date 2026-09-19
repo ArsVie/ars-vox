@@ -281,6 +281,28 @@ Two things this step cost:
   entirely on Windows, so this only affects the development rig: drive the service
   over HTTP, or use the Windows python.
 
+### What the first hand on the window found (2026-09-19, live use)
+
+One sentence, five recordings. The log carries five `heard` rows for the same
+"Hola, hola, probando 3, 2, 1.": the first became the turn, four came back
+"ya estoy con otra cosa", one captured no speech — and the window showed a
+duplicated bubble and note times an hour off. Four defects, all fixed:
+
+1. **`busy` did not cover the recording.** The 700 ms poll saw `busy:false` while
+   the first recording was still open, flipped the status back to "listo" and
+   re-enabled HABLAR; the button was pressed again, and again. The service now
+   reports `busy` while it listens (`_listening`), the poll reinforces "escuchando…"
+   instead of erasing it, and the button reads ESCUCHANDO…, staying lit while the
+   microphone is open.
+2. **Nothing serialized `/listen`.** Each press recorded the same sentence from the
+   same microphone; one of them then caught no speech at all. One recording at a
+   time now (`_listen_lock`); a concurrent press is answered "todavía estoy
+   escuchando lo anterior".
+3. **Two overlapping polls could render one event twice** — the duplicated green
+   bubble. `pull()` drops ticks while a request is in flight.
+4. **Notes were stamped UTC** ("19:00") against the server's local ("12:00"). The
+   window now stamps notes with the same local clock.
+
 ### Las fuentes web: weather and news measured, search no longer lies (2026-09-14)
 
 DuckDuckGo lite soft-blocks after volume: HTTP 202, a 14 KB page, zero result
@@ -318,6 +340,14 @@ respectful for an elderly person in Mexico, and what the model chose on its own 
 given only the persona. Two guard tests keep it: one fails the build if voseo
 morphology returns to the copy, another keeps the tool sentences in the same address
 form as the replies.
+
+A third crop of voseo surfaced on 2026-09-19, in the window's own copy: the input
+placeholder («Escribí o dictá lo que necesitás»), the HABLAR tooltip («Hablá y te
+escucho») and the CLI banner («hablá después del aviso»). The guard's file roots
+already covered those files; its token list did not carry the forms — hablá, escribí,
+dictá, necesitás were all missing. Copy fixed to usted; the list now carries them plus
+the same family (hablás, dictás, escribís, tené, poné, avisá, sacá, entrá, llamá,
+pagá, apretá, sentate, quedate).
 
 ### The measurement trap, which is worth more than the fix
 

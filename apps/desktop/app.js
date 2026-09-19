@@ -1,11 +1,22 @@
 /* The window holds no state: everything on screen is rebuilt from the log.
    Losing the connection therefore costs nothing — we simply ask again for the
-   events that came after the last id we saw. */
+   events that came after the last id we saw.
+   The poll owns the status: only it knows whether the service is really done,
+   which is why a /listen response never sets the status itself. */
 
 const POLL_MS = 700;
 let lastId = 0;
 let busy = false;
+let recording = false;
+let pulling = false;
 let polling = null;
+
+// Server events carry local time; the notes this window writes must show the same clock.
+function localStamp() {
+  const now = new Date();
+  const shifted = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return shifted.toISOString();
+}
 
 const conversation = document.getElementById("conversation");
 const indicator = document.getElementById("indicator");
@@ -22,7 +33,7 @@ function setStatus(nextBusy, label) {
   busy = nextBusy;
   indicator.className = "square " + (busy ? "busy" : "idle");
   statusText.textContent = label || (busy ? "trabajando" : "listo");
-  thinking.hidden = !busy;
+  thinking.hidden = !busy || recording; // "pensando…" would be a lie while the microphone is open
   sendButton.disabled = busy;
   talkButton.disabled = busy || !talkButton.dataset.ready;
   stopButton.disabled = !busy;
@@ -32,7 +43,13 @@ function setEars(available) {
   talkButton.dataset.ready = available ? "1" : "";
   talkButton.disabled = !available;
   talkButton.title = available ? "Hable y le escucho" : "acá no hay micrófono";
-  if (!available) talkButton.classList.remove("recording");
+  if (!available) setRecording(false);
+}
+
+function setRecording(on) {
+  recording = on;
+  talkButton.classList.toggle("recording", on);
+  talkButton.textContent = on ? "ESCUCHANDO…" : "HABLAR";
 }
 
 function bubble(role, text, ts, withListen) {
@@ -94,6 +111,8 @@ function render(event) {
 }
 
 async function pull() {
+  if (pulling) return; // two overlapping polls once rendered the same bubble twice
+  pulling = true;
   try {
     const response = await fetch(`/events?after=${lastId}`);
     const data = await response.json();
@@ -102,10 +121,12 @@ async function pull() {
       lastId = Math.max(lastId, event.id);
     }
     lastId = Math.max(lastId, data.last_id || 0);
-    if (data.busy) setStatus(true, "trabajando");
+    if (data.busy) setStatus(true, recording ? "escuchando…" : "trabajando");
     else if (busy) setStatus(false, "listo");
   } catch (error) {
     setStatus(true, "sin conexión — reintentando");
+  } finally {
+    pulling = false;
   }
 }
 
@@ -123,7 +144,7 @@ async function health() {
 
 async function talk() {
   if (busy || !talkButton.dataset.ready) return;
-  talkButton.classList.add("recording");
+  setRecording(true);
   setStatus(true, "escuchando…");
   try {
     const response = await fetch("/listen", {
@@ -132,13 +153,12 @@ async function talk() {
       body: "{}",
     });
     const data = await response.json();
-    if (!data.ok) bubble("note", data.reason || "no escuché nada", new Date().toISOString(), false);
+    if (!data.ok) bubble("note", data.reason || "no escuché nada", localStamp(), false);
   } catch (error) {
-    bubble("note", "no pude escuchar: se cortó la conexión", new Date().toISOString(), false);
+    bubble("note", "no pude escuchar: se cortó la conexión", localStamp(), false);
   }
-  talkButton.classList.remove("recording");
-  setStatus(false, "listo");
-  pull();
+  setRecording(false);
+  await pull(); // the poll owns the status: it knows whether a turn is still running
 }
 
 async function submit() {
@@ -152,7 +172,7 @@ async function submit() {
   });
   const data = await response.json();
   if (!data.accepted) {
-    bubble("note", data.reason || "no pude empezar", new Date().toISOString(), false);
+    bubble("note", data.reason || "no pude empezar", localStamp(), false);
     return;
   }
   setStatus(true, "trabajando");

@@ -148,6 +148,7 @@ def test_the_window_has_a_talk_button_and_knows_when_it_cannot_hear(tmp_path: Pa
             script = response.read().decode("utf-8")
         assert "HABLAR" in page
         assert '/listen' in script and "setEars" in script
+        assert "ESCUCHANDO" in script  # the recording is visible while it happens
     finally:
         server.shutdown()
         agent.shutdown()
@@ -166,6 +167,44 @@ def test_a_second_service_on_the_same_port_refuses_to_start(tmp_path: Path):
         with pytest.raises(PortBusy):
             serve(agent, host="127.0.0.1", port=port)
     finally:
+        server.shutdown()
+        agent.shutdown()
+        server.server_close()
+        store.close()
+
+
+def test_one_recording_at_a_time(tmp_path: Path):
+    """Five overlapping /listen calls once recorded one sentence five times over.
+
+    The window showed one answer and four "ya estoy con otra cosa" notes because
+    the poll re-enabled HABLAR while the first recording was still open and
+    nothing serialized the microphone.
+    """
+    said = tmp_path / "said.txt"
+    said.write_text("Hola, hola, probando 3, 2, 1.", encoding="utf-8")
+    started = threading.Event()
+    release = threading.Event()
+
+    class SlowSpeechToText(FakeSpeechToText):
+        def transcribe(self, audio_path, language=None):  # noqa: ANN001
+            started.set()
+            release.wait(5)
+            return super().transcribe(audio_path, language)
+
+    agent, port, store, server = start(tmp_path, FakeModel([ModelReply(text="Hola.")]), SlowSpeechToText())
+    try:
+        outcome: dict = {}
+        worker = threading.Thread(target=lambda: outcome.update(first=post(port, "/listen", {"wav": str(said)})))
+        worker.start()
+        assert started.wait(5)
+        status, body = post(port, "/listen", {"wav": str(said)})
+        assert body["ok"] is False and "escuchando" in body["reason"]
+        assert get(port, "/health")["busy"] is True
+        release.set()
+        worker.join(5)
+        assert outcome["first"][1]["ok"] is True
+    finally:
+        release.set()
         server.shutdown()
         agent.shutdown()
         server.server_close()

@@ -53,6 +53,8 @@ class AgentService:
         self.audio_dir = (self.static_dir or Path(".")) / "audio"
         self._lock = threading.Lock()
         self._busy = False
+        self._listening = False
+        self._listen_lock = threading.Lock()
         self._stop = threading.Event()
         self._worker: threading.Thread | None = None
         self.last_error = ""
@@ -61,7 +63,7 @@ class AgentService:
     @property
     def busy(self) -> bool:
         with self._lock:
-            return self._busy
+            return self._busy or self._listening
 
     def health(self) -> dict:
         counts = self.store.state_counts(self.session)
@@ -96,7 +98,7 @@ class AgentService:
         if not text:
             return False, "texto vacío"
         with self._lock:
-            if self._busy:
+            if self._busy or self._listening:
                 return False, "ya estoy con otra cosa"
             self._busy = True
             self._stop.clear()
@@ -132,8 +134,9 @@ class AgentService:
                 self._busy = False
 
     def stop(self) -> bool:
-        if not self.busy:
-            return False
+        with self._lock:
+            if not self._busy:  # a recording in flight is not a turn to stop
+                return False
         self._stop.set()
         self.store.append(self.session, "stop_requested", {"by": "ventana"})
         return True
@@ -141,34 +144,53 @@ class AgentService:
     # ---- voice -----------------------------------------------------------
     def listen(self, wav: str | None = None) -> dict:
         """Hear one request, then run it. `wav` is for the development rig: a real
-        recording on disk instead of the microphone."""
+        recording on disk instead of the microphone.
+
+        One recording at a time. Five overlapping /listen calls once captured the
+        same sentence five times over — the window's poll had re-enabled the button
+        mid-recording because `busy` did not cover the recording phase — and the log
+        got five `heard` rows for one utterance.
+        """
         if self.stt is None:
             return {"ok": False, "reason": "acá no tengo micrófono"}
-        if self.busy:
-            return {"ok": False, "reason": "ya estoy con otra cosa"}
-        meta: dict = {}
-        if wav:
-            result = self.stt.transcribe(wav)
-            meta = {"source": "archivo", "audio_s": round(result.duration_s, 2)}
-        else:
-            from services.arsvox.mic import normalize_gain, record_until_silence
+        if not self._listen_lock.acquire(blocking=False):
+            return {"ok": False, "reason": "todavía estoy escuchando lo anterior"}
+        try:
+            with self._lock:
+                if self._busy:
+                    return {"ok": False, "reason": "ya estoy con otra cosa"}
+                self._listening = True
+            try:
+                meta: dict = {}
+                if wav:
+                    result = self.stt.transcribe(wav)
+                    meta = {"source": "archivo", "audio_s": round(result.duration_s, 2)}
+                else:
+                    from services.arsvox.mic import normalize_gain, record_until_silence
 
-            capture = record_until_silence(max_seconds=self.listen_seconds)
-            if not capture.has_speech:
-                self.store.append(self.session, "heard", {"source": "micrófono", "speech_s": 0.0})
-                return {"ok": False, "reason": "no escuché nada", "seconds": round(capture.seconds, 2)}
-            result = self.stt.transcribe(normalize_gain(capture.samples))
-            meta = {"source": "micrófono", "speech_s": round(capture.speech_seconds, 2)}
-        text = result.text.strip()
-        self.store.append(
-            self.session,
-            "heard",
-            {**meta, "engine_s": round(result.elapsed_s, 2), "text": text},
-        )
-        if not text:
-            return {"ok": False, "reason": "no entendí", **meta}
-        accepted, reason = self.start_turn(text)
-        return {"ok": accepted, "heard": text, "reason": reason, "engine_s": round(result.elapsed_s, 2), **meta}
+                    capture = record_until_silence(max_seconds=self.listen_seconds)
+                    if not capture.has_speech:
+                        self.store.append(
+                            self.session, "heard", {"source": "micrófono", "speech_s": 0.0}
+                        )
+                        return {"ok": False, "reason": "no escuché nada", "seconds": round(capture.seconds, 2)}
+                    result = self.stt.transcribe(normalize_gain(capture.samples))
+                    meta = {"source": "micrófono", "speech_s": round(capture.speech_seconds, 2)}
+                text = result.text.strip()
+                self.store.append(
+                    self.session,
+                    "heard",
+                    {**meta, "engine_s": round(result.elapsed_s, 2), "text": text},
+                )
+            finally:
+                with self._lock:
+                    self._listening = False
+            if not text:
+                return {"ok": False, "reason": "no entendí", **meta}
+            accepted, reason = self.start_turn(text)
+            return {"ok": accepted, "heard": text, "reason": reason, "engine_s": round(result.elapsed_s, 2), **meta}
+        finally:
+            self._listen_lock.release()
 
     def speak(self, text: str) -> str:
         if self.tts is None or not (text or "").strip():
