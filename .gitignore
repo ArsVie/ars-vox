@@ -12,3 +12,7 @@ data/*.db*
 .venv-win/
 apps/desktop/audio/
 node_modules/
+
+# internal working notes — live on disk, never shipped
+hey.md
+docs/status.md

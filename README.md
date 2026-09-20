@@ -5,8 +5,8 @@ Spanish, addressed as *usted*. Talk or type; it answers out loud, and everything
 it does stays visible on one window: the conversation on the left, a panel on
 the right.
 
-Refactor of `C:\dev\ars-vox` (archived, v0.1). The route is the harness anatomy
-of arXiv 2609.00006; the plan lives at `C:\dev\ars-vox-refactor-plan.md`.
+A from-scratch refactor of the v1 prototype, built wave by wave on the harness
+anatomy of arXiv 2609.00006.
 
 ![The window — a spoken answer, music playing, video, and a real book open as pages](docs/ui/surface.png)
 
@@ -59,5 +59,4 @@ python -m apps.cli.arsvox_cli transcribe clip.m4a
 ## For developers
 
 `services/arsvox/` is the agent runtime, one module per harness subsystem;
-`apps/desktop/` is the window page; `tests/` guards behavior. The state of every
-wave, with its evidence, lives in `docs/status.md`.
+`apps/desktop/` is the window page; `tests/` guards behavior.
