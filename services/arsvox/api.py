@@ -259,15 +259,28 @@ class AgentService:
         return {"ok": True, "id": self.store.append(self.session, "media_state", {"action": action})}
 
     def documents_control(self, action: str) -> dict:
-        """The book's ✕: the log records it like any other event."""
-        if action not in ("close",):
+        """The panel's own controls (✕, page arrows); the log records them like any event."""
+        if action == "close":
+            if self.store.get_document(self.session) is None:
+                return {"ok": False, "reason": "no hay ningún documento abierto"}
+            return {
+                "ok": True,
+                "id": self.store.append(self.session, "document_state", {"action": "close"}),
+            }
+        if action not in ("next", "previous"):
             return {"ok": False, "reason": f"no conozco la acción '{action}'"}
-        if self.store.get_document(self.session) is None:
+        row = self.store.get_document(self.session)
+        if row is None:
             return {"ok": False, "reason": "no hay ningún documento abierto"}
-        return {
-            "ok": True,
-            "id": self.store.append(self.session, "document_state", {"action": "close"}),
-        }
+        try:
+            moved = documents.paginate(
+                row["path"], int(row["cursor"]), step=1 if action == "next" else -1
+            )
+        except Exception:  # noqa: BLE001 - a document we cannot reopen is a sentence
+            return {"ok": False, "reason": "no pude abrir el documento otra vez"}
+        self.store.advance_document(self.session, moved["cursor"] - int(row["cursor"]))
+        payload = documents.page_payload(row["title"], moved)
+        return {"ok": True, "id": self.store.append(self.session, "document_state", payload)}
 
     def media_failed(self, payload: dict) -> dict:
         """The panel could not show a video: the log records it and the assistant speaks.
@@ -291,6 +304,16 @@ class AgentService:
         return {"ok": True, "id": event_id, "turn": started}
 
     # ---- the folders the user sets from the window ------------------------
+    def document_page_image(self, page: int) -> bytes | None:
+        """One rendered page of the open document, or None when there is no pdf open."""
+        row = self.store.get_document(self.session)
+        if not row or not documents.is_pdf(row["path"]):
+            return None
+        try:
+            return documents.render_pdf_page(row["path"], page)
+        except Exception:  # noqa: BLE001 - a page that cannot render is a 404, not a crash
+            return None
+
     def apply_config(self) -> None:
         """The books folder the user set reaches the reader (and where books save)."""
         books_path = (self.store.config(self.session).get("books_path") or "").strip()
@@ -358,6 +381,14 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
                 ".svg": "image/svg+xml",
             }.get(target.suffix, "application/octet-stream")
             self._send(200, target.read_bytes(), kind)
+
+        def _document_page(self, page: int) -> None:
+            """One page of the open pdf, as the image the panel fits to its width."""
+            body = service.document_page_image(page)
+            if body is None:
+                self._json(404, {"error": "no está"})
+                return
+            self._send(200, body, "image/png")
 
         def _media_file(self, path_text: str) -> None:
             """Serve one local media file, with Range so video seeking works.
@@ -430,6 +461,8 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
                 self._json(200, service.config_get())
             elif parsed.path == "/media/file":
                 self._media_file((query.get("path") or [""])[0])
+            elif parsed.path == "/documents/page":
+                self._document_page(int((query.get("page") or ["1"])[0] or 1))
             else:
                 self._static(parsed.path)
 

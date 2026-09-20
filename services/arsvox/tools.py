@@ -152,7 +152,7 @@ def tasks_done(context: ToolContext, arguments: dict) -> str:
 
 
 def documents_open(context: ToolContext, arguments: dict) -> str:
-    """Open by name, without a viewer: the document is something we read aloud."""
+    """Open by name and show it on the panel; the text is never read out loud."""
     query = str(arguments.get("query") or "").strip()
     if not query:
         return "¿Cuál archivo abro? Dígame cómo lo llama."
@@ -161,47 +161,67 @@ def documents_open(context: ToolContext, arguments: dict) -> str:
         extra = " Busqué rápido, así que pruebe con otra palabra." if cut else ""
         return f"No encontré ningún archivo que se llame '{query}' en sus carpetas.{extra}"
     best = hits[0]
-    if len(hits) > 1 and hits[1].score >= best.score:
-        titles = "; ".join(f"{hit.title} ({hit.path.suffix.lstrip('.')})" for hit in hits[:3])
-        return f"Encontré varios: {titles}. ¿Cuál abro?"
+    if (
+        len(hits) > 1
+        and hits[1].score >= best.score
+        and hits[1].title.lower() != best.title.lower()
+    ):
+        names = ", ".join(f"'{hit.title}'" for hit in hits[:3])
+        return f"Encontré varios parecidos: {names}. ¿Cuál abro?"
+    if documents.is_pdf(best.path):
+        try:
+            pages = documents.pdf_pages(best.path)
+            documents.render_pdf_page(best.path, 1)  # a page that cannot render is refused here
+        except Exception as exc:  # noqa: BLE001 - a file we cannot show is a sentence
+            return f"Encontré '{best.title}' pero no pude abrirlo ({type(exc).__name__})."
+        context.store.set_document(context.session, str(best.path), best.title)
+        context.store.append(
+            context.session,
+            "document_state",
+            {"action": "open", "title": best.title, "mode": "pdf", "page": 1, "pages": pages},
+        )
+        return f"Abrí '{best.title}' y lo puse en el panel: {pages} páginas. Dígame si quiere que pase de página."
     try:
         text = documents.extract_text(best.path)
     except ModuleNotFoundError:
-        return f"Encontré '{best.title}' pero no tengo con qué leer ese tipo de archivo."
-    except Exception as exc:  # noqa: BLE001 - a file we cannot read is a sentence
-        return f"Encontré '{best.title}' pero no pude leerlo ({type(exc).__name__})."
+        return f"Encontré '{best.title}' pero no tengo con qué abrir ese tipo de archivo."
+    except Exception as exc:  # noqa: BLE001 - a file we cannot show is a sentence
+        return f"Encontré '{best.title}' pero no pude abrirlo ({type(exc).__name__})."
     if not text.strip():
-        return f"'{best.title}' no tiene texto que pueda leer. ¿Será una foto o algo escaneado?"
+        return f"'{best.title}' no tiene texto que pueda mostrar. ¿Será una foto o algo escaneado?"
+    pages = documents.page_count(best.path, text)
     context.store.set_document(context.session, str(best.path), best.title)
     context.store.append(
         context.session,
         "document_state",
-        {"action": "open", "title": best.title, "total": len(text)},
+        {
+            "action": "open",
+            "title": best.title,
+            "mode": "text",
+            "page": 1,
+            "pages": pages,
+            "text": documents.text_page(text, 1),
+        },
     )
-    return f"Abrí '{best.title}'. Tiene {len(text)} letras. Dígame 'léalo' y arranco."
+    return f"Abrí '{best.title}' y lo puse en el panel: {pages} páginas. Dígame si quiere que pase de página."
 
 
-def documents_read(context: ToolContext, arguments: dict) -> str:
+def documents_page(context: ToolContext, arguments: dict) -> str:
+    """Turn to a page of the open document; the panel shows it, nobody reads it out."""
     row = context.store.get_document(context.session)
     if not row:
         return "No tengo ningún documento abierto. Dígame cuál abro."
+    raw_to = str(arguments.get("to") or "").strip()
+    target = int(raw_to) if raw_to.isdigit() else None
+    step = int(arguments.get("step") or 0) or None
     try:
-        text = documents.extract_text(row["path"])
-    except Exception as exc:  # noqa: BLE001
-        return f"No pude volver a leer '{row['title']}' ({type(exc).__name__})."
-    cursor = int(row["cursor"])
-    if cursor >= len(text):
-        return f"Ya le leí todo '{row['title']}'."
-    chunk = text[cursor : cursor + documents.CHUNK_CHARS]
-    new_cursor = context.store.advance_document(context.session, len(chunk))
-    remaining = max(len(text) - new_cursor, 0)
-    tail = "[Meta: es todo el documento.]" if remaining == 0 else f"[Meta: quedan {remaining} letras.]"
-    context.store.append(
-        context.session,
-        "document_state",
-        {"action": "read", "title": row["title"], "text": chunk, "remaining": remaining},
-    )
-    return f"{chunk}\n\n{tail}"
+        moved = documents.paginate(row["path"], int(row["cursor"]), to=target, step=step)
+    except Exception as exc:  # noqa: BLE001 - a file we cannot reopen is a sentence
+        return f"No pude abrir '{row['title']}' otra vez ({type(exc).__name__})."
+    context.store.advance_document(context.session, moved["cursor"] - int(row["cursor"]))
+    context.store.append(context.session, "document_state", documents.page_payload(row["title"], moved))
+    note = " Es la última." if moved["page"] == moved["pages"] and moved["pages"] > 1 else ""
+    return f"Página {moved['page']} de {moved['pages']}.{note}"
 
 
 def documents_list(context: ToolContext, arguments: dict) -> str:
@@ -393,15 +413,25 @@ def books_get(context: ToolContext, arguments: dict) -> str:
     except books.BookError as exc:
         return f"Encontré '{book['title']}' pero no pude descargarlo: {exc}."
     path, letters = books.save(book, text)
+    body = documents.extract_text(path)
+    pages = documents.page_count(path, body)
     context.store.set_document(context.session, str(path), books.short_title(book))
     context.store.append(
         context.session,
         "document_state",
-        {"action": "open", "title": books.short_title(book), "total": letters},
+        {
+            "action": "open",
+            "title": books.short_title(book),
+            "mode": "text",
+            "page": 1,
+            "pages": pages,
+            "text": documents.text_page(body, 1),
+        },
     )
     return (
         f"Listo, ya tengo '{books.short_title(book)}', de {books.author_name(book)}."
-        f"{books.language_note(book)} Dígame 'léalo' y arranco. "
+        f"{books.language_note(book)} Lo puse en el panel: {pages} páginas. "
+        f"Dígame si quiere que pase de página. "
         f"[Meta: {path.name}, {letters} letras; quedó abierto como documento actual.]"
     )
 
@@ -420,7 +450,7 @@ AGENDA_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
 }
 DOCUMENTS_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
     "open_document": documents_open,
-    "read_next": documents_read,
+    "page": documents_page,
     "list_documents": documents_list,
     "get_book": books_get,
 }
@@ -502,18 +532,19 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "documents",
-                "Leer en voz alta lo que el usuario pide. "
+                "Mostrar documentos del usuario en el panel de la ventana. "
                 "open_document(query) busca un archivo en sus carpetas por el nombre que él usa — "
-                "'el diario', 'la receta' — y lo deja listo; si hay varios parecidos, pregunta cuál. "
-                "read_next entrega el próximo pedazo del documento abierto cuando el usuario diga "
-                "'léalo' o 'siga'; el texto entre corchetes es interno y no se lee en voz alta. "
-                "get_book(title) es solo para clásicos de dominio público que el usuario no tiene en "
-                "sus carpetas; lo deja abierto como documento (edición en español preferida). "
+                "'el diario', 'la receta' — y lo muestra en el panel; si hay varios parecidos, "
+                "pregunta cuál. Los PDF se ven tal como son, página por página; el texto se corta "
+                "en páginas. Nada de esto se lee en voz alta: el documento se VE en el panel, no "
+                "se recita ni se repite en la conversación. "
+                "page pasa las páginas cuando diga 'siguiente', 'atrás' o 'vaya a la página 20' "
+                "(step: 1 adelante, -1 atrás; to: el número exacto). "
                 "list_documents() enseña qué documentos hay en sus carpetas, del más nuevo al más "
-                "viejo; úselo cuando pregunte qué libros tiene o pida leer algo sin decir cuál. "
-                "Para seguir leyendo ('léalo', 'siga') siempre es read_next, jamás get_book, aunque el "
-                "libro venga del catálogo; si el documento ya se acabó, read_next lo dice y usted se lo "
-                "cuenta tal cual, sin buscar el libro otra vez.",
+                "viejo; úselo cuando pregunte qué libros tiene. "
+                "get_book(title) es solo para clásicos de dominio público que el usuario no tiene "
+                "en sus carpetas (edición en español preferida); también queda en el panel, "
+                "igual que los demás.",
                 {
                     "type": "object",
                     "properties": {
@@ -529,6 +560,14 @@ def build_registry() -> dict[str, Tool]:
                         "title": {
                             "type": "string",
                             "description": "el título del libro, como lo dijo el usuario",
+                        },
+                        "to": {
+                            "type": "integer",
+                            "description": "el número de página al que quiere ir ('vaya a la página 20')",
+                        },
+                        "step": {
+                            "type": "integer",
+                            "description": "cuántas páginas avanzar: 1 siguiente, -1 anterior",
                         },
                     },
                     "required": ["action"],

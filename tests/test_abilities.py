@@ -15,7 +15,12 @@ if str(REPO_ROOT) not in sys.path:
 from services.arsvox import books, documents, media, web  # noqa: E402
 from services.arsvox.config import Settings  # noqa: E402
 from services.arsvox.store import Store  # noqa: E402
-from services.arsvox.tools import ToolContext, build_registry, documents_open, documents_read  # noqa: E402
+from services.arsvox.tools import (  # noqa: E402
+    ToolContext,
+    build_registry,
+    documents_open,
+    documents_page,
+)
 
 PAGE = """<html><body>
 <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fejemplo.com%2Fclima" class='result-link'>
@@ -135,18 +140,47 @@ def test_extract_reads_a_pdf(tmp_path: Path):
     assert "Dos pastillas" in documents.extract_text(target)
 
 
-def test_opening_and_reading_put_the_book_on_the_panel(tmp_path: Path, monkeypatch):
-    root = tree(tmp_path)
+def test_opening_shows_a_page_and_paging_turns_it(tmp_path: Path, monkeypatch):
+    root = tmp_path / "Documents"
+    root.mkdir()
+    (root / "novela.txt").write_text("Párrafo con palabras. " * 130, encoding="utf-8")
     monkeypatch.setattr(documents, "search_folders", lambda: [root])
     ctx = context(tmp_path)
-    assert "Abrí" in documents_open(ctx, {"query": "diario de hoy"})
+    assert "panel" in documents_open(ctx, {"query": "novela"})
     states = [e for e in ctx.store.events("cli") if e.kind == "document_state"]
     assert states[-1].payload["action"] == "open"
-    assert states[-1].payload["title"] == "Diario de hoy"
-    assert "El diario de hoy" in documents_read(ctx, {})
+    assert states[-1].payload["mode"] == "text"
+    assert states[-1].payload["page"] == 1
+    assert states[-1].payload["pages"] == 3
+    assert states[-1].payload["text"].startswith("Párrafo")
+    assert documents_page(ctx, {"step": 1}) == "Página 2 de 3."
     states = [e for e in ctx.store.events("cli") if e.kind == "document_state"]
-    assert states[-1].payload["action"] == "read"
-    assert "El diario de hoy: nada importante." in states[-1].payload["text"]
+    assert states[-1].payload["action"] == "page"
+    assert states[-1].payload["page"] == 2 and states[-1].payload["text"]
+    assert documents_page(ctx, {"to": 99}) == "Página 3 de 3. Es la última."
+    assert documents_page(ctx, {"step": -1}) == "Página 2 de 3."
+
+
+def test_a_pdf_opens_as_its_own_pages_and_renders(tmp_path: Path, monkeypatch):
+    pymupdf = pytest.importorskip("pymupdf")
+    root = tmp_path / "Documents"
+    root.mkdir()
+    document = pymupdf.open()
+    for number in range(1, 4):
+        document.new_page().insert_text((72, 72), f"Página {number}")
+    pdf = root / "cuaderno.pdf"
+    document.save(str(pdf))
+    document.close()
+    monkeypatch.setattr(documents, "search_folders", lambda: [root])
+    ctx = context(tmp_path)
+    assert "panel" in documents_open(ctx, {"query": "cuaderno"})
+    states = [e for e in ctx.store.events("cli") if e.kind == "document_state"]
+    assert states[-1].payload["mode"] == "pdf"
+    assert states[-1].payload["pages"] == 3
+    assert "text" not in states[-1].payload  # a pdf page is an image, not a transcription
+    assert documents_page(ctx, {"to": 2}) == "Página 2 de 3."
+    png = documents.render_pdf_page(pdf, 2)
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_opening_says_what_it_found(tmp_path: Path):
@@ -161,7 +195,7 @@ def test_opening_says_what_it_found(tmp_path: Path):
         answer = documents_open(ctx, {"query": "diario de hoy"})
     finally:
         module.search_folders = monkey_roots
-    assert "Abrí" in answer and "letras" in answer
+    assert "Abrí" in answer and "panel" in answer
     assert ctx.store.get_document("cli")["title"] == "Diario de hoy"
 
 
@@ -186,21 +220,29 @@ def test_ambiguity_asks_instead_of_guessing(tmp_path: Path, monkeypatch):
     assert ctx.store.get_document("cli") is None
 
 
-def test_reading_advances_the_cursor_and_marks_the_end(tmp_path: Path, monkeypatch):
+def test_a_file_with_the_same_name_twice_is_not_an_ambiguity(tmp_path: Path, monkeypatch):
+    for folder in ("uno", "dos"):
+        target = tmp_path / folder
+        target.mkdir()
+        (target / "Recetas de la abuela.txt").write_text("sopa", encoding="utf-8")
+    monkeypatch.setattr(documents, "search_folders", lambda: [tmp_path])
+    ctx = context(tmp_path)
+    assert "Abrí" in documents_open(ctx, {"query": "recetas de la abuela"})
+
+
+def test_paging_advances_the_cursor_and_marks_the_end(tmp_path: Path, monkeypatch):
     target = tmp_path / "largo.txt"
     target.write_text("A" * (documents.CHUNK_CHARS + 10), encoding="utf-8")
     monkeypatch.setattr(documents, "search_folders", lambda: [tmp_path])
     ctx = context(tmp_path)
     documents_open(ctx, {"query": "largo"})
-    first = documents_read(ctx, {})
-    assert len(first) > documents.CHUNK_CHARS and "quedan" in first.lower()
+    assert documents_page(ctx, {}) == "Página 2 de 2. Es la última."
     assert ctx.store.get_document("cli")["cursor"] == documents.CHUNK_CHARS
-    second = documents_read(ctx, {})
-    assert "es todo el documento" in second.lower()
+    assert documents_page(ctx, {}) == "Página 2 de 2. Es la última."  # stays on the last page
 
 
-def test_reading_with_nothing_open_says_so(tmp_path: Path):
-    assert "No tengo ningún documento" in documents_read(context(tmp_path), {})
+def test_paging_with_nothing_open_says_so(tmp_path: Path):
+    assert "No tengo ningún documento" in documents_page(context(tmp_path), {})
 
 
 # ---- web ------------------------------------------------------------------

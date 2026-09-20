@@ -567,6 +567,9 @@ Shots under `results/uicheck/` (`s2-*`, `s4-*`, `s5-*`, git-ignored).
 
 ## W4 — el panel del libro (2026-09-19)
 
+*(Superseded the same night — see W5: the reader is a viewer now and book
+read-aloud is out.)*
+
 Slice 2's follow-up came straight out of a live turn: "Léalo." put the Quijote somewhere
 the user could not see it — the text lived only in the tool result and in the spoken
 words. Now documents announce themselves and the same one panel grows a page.
@@ -579,3 +582,26 @@ words. Now documents announce themselves and the same one panel grows a page.
 | the ✕ lives in the log | it posts `/documents/control close` → a `document_state close` event; a reload afterwards stays closed, and "siga leyendo" brings the page back where it stopped |
 | the index, honestly | the Quijote's first chunks are its real front matter and chapter index (52 entries, hard-wrapped in the source); the model says so truthfully and the page proves it |
 | tests | 143 green |
+
+
+## W5 — el visor: el lector deja de leer en voz alta (2026-09-19)
+
+Ars's correction, same night: reading books aloud was supposed to stay **deferred**
+— it must not be in the app — and the reader as built was *awful*: prove it with a
+**real pdf**, and **fit to width must be the default**. W4's page was a text flow
+that narrated itself; it is replaced by a viewer.
+
+| what | evidence |
+|---|---|
+| read-aloud is out | `read_next` and the whole read-aloud path are deleted (family: `open_document` / `page` / `list_documents` / `get_book`); nothing narrates documents — the model's reply lengths across the live arc: 166 / 70 / 68 / 154 chars |
+| pdf pages as pages | `documents.render_pdf_page` (pymupdf, rendered at 1400 px wide) served by `GET /documents/page?page=N` as `image/png`; the window fits it to the panel; verified with a REAL 85-page pdf (`Documents\Guerra\Polity Manual.pdf`): fit 1136 == 1136 css px, route 80,899 bytes |
+| fit to width by default | measured in both layouts: sidecar 1136 == scroll width; grown 1904 == 1904 (conversation aside); the text shape fills the same width — the 62 ch column is gone |
+| paging by voice and by hand | `page {step, to}` («Pase la página.» → page 2; «Vaya a la página 1.» → back; «Es la última.» at the end); the bar's ◀ ▶ post `/documents/control next|previous` — verified: arrows turn pages with no model turn |
+| text documents | cut into page-sized pieces (`CHUNK_CHARS` = 1400); the Quijote shows 1 / 1527; `pre-wrap` keeps the source's own line breaks |
+| same-name copies | two identical filenames are not an ambiguity: the same-title guard opens the best hit (live: Polity exists under `Documents\Guerra` and `Documents\Thesis\Guerra` — it opened instead of asking) |
+| junk never shows | dotfiles and macOS `._` forks are never documents (the walk skips them) |
+| the page route is honest | 404 when what is open is not a pdf (checked live with the Quijote open) — and 404 with nothing open |
+| tests | 146 green |
+
+Captures `results/uicheck/viewer-0*.png` (real pdf open / page 2 / grown / text /
+reload-closed), git-ignored like the rest.

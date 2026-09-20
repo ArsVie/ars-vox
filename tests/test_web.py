@@ -328,6 +328,15 @@ def test_the_book_panel_close_reaches_the_log(service, tmp_path: Path):
     assert states[-1].payload["action"] == "close"
 
 
+def test_the_page_image_route_refuses_without_a_pdf(service):
+    _, port, _, _ = service(scripted())
+    try:
+        urlopen(f"http://127.0.0.1:{port}/documents/page?page=1", timeout=5)
+        raise AssertionError("served a page with no pdf open")
+    except HTTPError as exc:
+        assert exc.code == 404
+
+
 def test_config_roundtrip_over_the_window_api(service, tmp_path):
     from services.arsvox import documents
 

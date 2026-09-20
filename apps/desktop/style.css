@@ -252,24 +252,45 @@ footer {
 }
 .panel-note[hidden] { display: none; }
 
-/* the book: a page, not a player — what she hears is what the page shows */
+/* the document viewer: the document's own pages, fit to the panel's width */
 .book {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding: 30px 34px 48px;
+  display: flex;
+  flex-direction: column;
   background: #fffdf6;
 }
 .book[hidden] { display: none; }
+.book-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.book-image { display: block; width: 100%; height: auto; } /* fit to width, by default */
+.book-image[hidden] { display: none; }
 .book-page {
-  margin: 0 auto;
-  max-width: 62ch;
+  margin: 0;
+  padding: 26px 30px 44px;
   font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
   font-size: 20px;
   line-height: 1.7;
   color: var(--ink);
   white-space: pre-wrap;
   overflow-wrap: break-word;
+}
+.book-page[hidden] { display: none; }
+.book-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: #fffdfa;
+}
+.book-bar[hidden] { display: none; }
+.book-count {
+  min-width: 96px;
+  text-align: center;
+  font-size: 18px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
 }
 
 .yt-holder { width: 100%; height: 100%; }

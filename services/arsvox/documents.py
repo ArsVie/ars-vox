@@ -1,10 +1,10 @@
-"""Documents the user actually has on the machine.
+"""Documents the user actually has on the machine, shown on the panel as pages.
 
-The user says "abrí el diario de hoy" or "leeme el documento que abrí". There is no
-reader panel and no viewer: the document is a piece of paper the assistant reads
-aloud, in parts, from wherever it lives in the user's own folders.
-
-One cursor per session, kept in the log, so "siga leyendo" works after a restart.
+The user says "abrí el diario de hoy" or "pase la página". The document is shown
+in the window's panel — pdf pages exactly as they are, text cut into page-sized
+pieces — and nothing is read out loud: reading aloud is deferred (Ars's call,
+2026-09-19). One cursor per session, kept in the log, so the page survives a
+restart.
 """
 
 from __future__ import annotations
@@ -169,6 +169,8 @@ def _walk(root: Path, deadline: float, depth_limit: int = MAX_DEPTH):
                         continue
                     stack.append((Path(entry.path), depth + 1))
                 elif entry.is_file(follow_symlinks=False):
+                    if entry.name.startswith("."):
+                        continue  # hidden files and macOS ._ forks are never the document
                     yield Path(entry.path)
             except OSError:
                 continue
@@ -249,3 +251,92 @@ def extract_text(path: str | Path) -> str:
         text = target.read_text(encoding="utf-8", errors="replace")
     text = re.sub(r"[ \t\u00a0]+", " ", text)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+# ---- showing: the panel's pages --------------------------------------------
+
+PAGE_WIDTH = 1400  # a pdf page renders this wide; the window fits it to the panel
+
+
+def is_pdf(path: str | Path) -> bool:
+    return Path(path).suffix.lower() == ".pdf"
+
+
+def pdf_pages(path: str | Path) -> int:
+    import pymupdf
+
+    with pymupdf.open(str(path)) as document:
+        return document.page_count
+
+
+def render_pdf_page(path: str | Path, page: int, width: int = PAGE_WIDTH) -> bytes:
+    """One pdf page as a png, rendered wide enough for the panel to fit it."""
+    import pymupdf
+
+    with pymupdf.open(str(path)) as document:
+        number = max(1, min(page, document.page_count))
+        target = document[number - 1]
+        zoom = width / max(target.rect.width, 1)
+        pixmap = target.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        return pixmap.tobytes("png")
+
+
+def page_count(path: str | Path, text: str | None = None) -> int:
+    """How many pages the panel shows: pdf pages, or text cut into page-sized pieces."""
+    if is_pdf(path):
+        return pdf_pages(path)
+    body = text if text is not None else extract_text(path)
+    return max(1, -(-len(body) // CHUNK_CHARS))
+
+
+def text_page(text: str, page: int) -> str:
+    start = max(page - 1, 0) * CHUNK_CHARS
+    return text[start : start + CHUNK_CHARS]
+
+
+def paginate(path: str | Path, cursor: int, to: int | None = None, step: int | None = None) -> dict:
+    """Where a page request lands: the page, the new cursor, and the page's text.
+
+    Pdf documents page over their own pages (the cursor is the page number);
+    text documents cut into page-sized pieces (the cursor is a character offset).
+    """
+    if is_pdf(path):
+        pages = pdf_pages(path)
+        current = max(1, min(cursor, pages))
+        mode = "pdf"
+        body = None
+    else:
+        body = extract_text(path)
+        pages = page_count(path, body)
+        current = min(cursor // CHUNK_CHARS + 1, pages)
+        mode = "text"
+    if to:
+        page = to
+    elif step:
+        page = current + step
+    else:
+        page = current + 1  # "pase la página" means forward
+    page = max(1, min(page, pages))
+    moved = {
+        "mode": mode,
+        "page": page,
+        "pages": pages,
+        "cursor": page if mode == "pdf" else (page - 1) * CHUNK_CHARS,
+    }
+    if mode == "text":
+        moved["text"] = text_page(body, page)
+    return moved
+
+
+def page_payload(title: str, moved: dict) -> dict:
+    """The document_state event a page request leaves in the log."""
+    payload = {
+        "action": "page",
+        "title": title,
+        "mode": moved["mode"],
+        "page": moved["page"],
+        "pages": moved["pages"],
+    }
+    if moved["mode"] == "text":
+        payload["text"] = moved["text"]
+    return payload

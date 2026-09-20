@@ -120,6 +120,11 @@ const ctlSeek = document.getElementById("ctl-seek");
 const ctlDuration = document.getElementById("ctl-duration");
 const bookBox = document.getElementById("book");
 const bookPage = document.getElementById("book-page");
+const bookImage = document.getElementById("book-image");
+const bookBar = document.getElementById("book-bar");
+const bookCount = document.getElementById("book-count");
+const bookPrev = document.getElementById("book-prev");
+const bookNext = document.getElementById("book-next");
 const ctlVolume = document.getElementById("ctl-volume");
 const cardTemplate = document.getElementById("card-template");
 
@@ -362,7 +367,11 @@ function clearPanelBody() {
   stage.hidden = true;
   controlsBox.hidden = true;
   bookBox.hidden = true;
+  bookImage.hidden = true;
+  bookImage.removeAttribute("src");
+  bookPage.hidden = true;
   bookPage.textContent = "";
+  bookBar.hidden = true;
   panelNote.hidden = true;
   panelNote.textContent = "";
   setPlayState(false);
@@ -430,13 +439,26 @@ function showPlayer(payload, fresh) {
   panel.hidden = false;
 }
 
-/* the book: a page in the same panel. What she hears is what the page shows,
-   and the page stays where she stopped — until she closes it. */
+/* the document viewer: the panel shows the document's own pages — pdf pages
+   exactly as they are, fit to the panel's width — and nothing is narrated. The
+   page stays where she stopped until she closes the panel. */
 function showDocument(payload) {
   clearPanelBody();
   panelMode = "book";
-  panelTitle.textContent = payload.title || "Libro";
-  bookPage.textContent = payload.text || "";
+  panelTitle.textContent = payload.title || "Documento";
+  const pages = Math.max(Number(payload.pages) || 1, 1);
+  const page = Math.min(Math.max(Number(payload.page) || 1, 1), pages);
+  if (payload.mode === "pdf") {
+    bookImage.src = `/documents/page?page=${page}`;
+    bookImage.hidden = false;
+  } else {
+    bookPage.textContent = payload.text || "";
+    bookPage.hidden = false;
+  }
+  if (pages > 1) {
+    bookCount.textContent = `${page} / ${pages}`;
+    bookBar.hidden = false;
+  }
   bookBox.hidden = false;
   setLayout(workspace.className === "focus" ? "focus" : "sidecar");
   panel.hidden = false;
@@ -508,6 +530,16 @@ ctlVolume.addEventListener("input", () => {
 
 panelClose.addEventListener("click", async () => {
   await control("close", panelMode === "book" ? "/documents/control" : "/media/control");
+  pull();
+});
+
+bookPrev.addEventListener("click", async () => {
+  await control("previous", "/documents/control");
+  pull();
+});
+
+bookNext.addEventListener("click", async () => {
+  await control("next", "/documents/control");
   pull();
 });
 

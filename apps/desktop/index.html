@@ -50,7 +50,15 @@
         <input id="ctl-volume" class="ctl-volume" type="range" min="0" max="100" step="5" value="100" aria-label="volumen" />
       </div>
       <div id="book" class="book" hidden>
-        <p id="book-page" class="book-page"></p>
+        <div class="book-scroll">
+          <img id="book-image" class="book-image" alt="página del documento" hidden />
+          <p id="book-page" class="book-page" hidden></p>
+        </div>
+        <div id="book-bar" class="book-bar" hidden>
+          <button id="book-prev" class="panel-button" type="button" aria-label="página anterior">◀</button>
+          <span id="book-count" class="book-count"></span>
+          <button id="book-next" class="panel-button" type="button" aria-label="página siguiente">▶</button>
+        </div>
       </div>
     </section>
   </div>

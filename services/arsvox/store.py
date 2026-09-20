@@ -298,7 +298,7 @@ class Store:
             "events": len(self.events(session)),
         }
 
-    # ---- the document being read aloud ----------------------------------
+    # ---- the document shown on the panel ---------------------------------
     @locked
     def set_document(self, session: str, path: str, title: str) -> None:
         self.conn.execute(
