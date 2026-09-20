@@ -252,6 +252,26 @@ footer {
 }
 .panel-note[hidden] { display: none; }
 
+/* the book: a page, not a player — what she hears is what the page shows */
+.book {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 30px 34px 48px;
+  background: #fffdf6;
+}
+.book[hidden] { display: none; }
+.book-page {
+  margin: 0 auto;
+  max-width: 62ch;
+  font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  font-size: 20px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
 .yt-holder { width: 100%; height: 100%; }
 
 /* ---- the folders the user can set from the window ----------------------- */

@@ -563,3 +563,19 @@ a video that refuses to embed used to die on screen with no path forward.
 | tests | 141 green |
 
 Shots under `results/uicheck/` (`s2-*`, `s4-*`, `s5-*`, git-ignored).
+
+
+## W4 — el panel del libro (2026-09-19)
+
+Slice 2's follow-up came straight out of a live turn: "Léalo." put the Quijote somewhere
+the user could not see it — the text lived only in the tool result and in the spoken
+words. Now documents announce themselves and the same one panel grows a page.
+
+| what | evidence |
+|---|---|
+| `document_state` events | `open_document` / `get_book` emit `{action:"open", title, total}`; `read_next` emits `{action:"read", title, text, remaining}` — the page shows exactly the piece being read aloud |
+| automatic, no button | the panel mounts on the event; verified live on 8790 (real turns: "Léame el Quijote" → title page on screen; "Léalo." → page; "Siga leyendo." → next page) |
+| a page, not a player | cream paper, serif, 20 px, 62 ch column; `agrandar` gives it the whole screen (chrome aside, "achicar" back — measured 761 px column in a 1920 px window), the audio panel still refuses full screen |
+| the ✕ lives in the log | it posts `/documents/control close` → a `document_state close` event; a reload afterwards stays closed, and "siga leyendo" brings the page back where it stopped |
+| the index, honestly | the Quijote's first chunks are its real front matter and chapter index (52 entries, hard-wrapped in the source); the model says so truthfully and the page proves it |
+| tests | 143 green |

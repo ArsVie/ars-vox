@@ -118,6 +118,8 @@ const ctlPlay = document.getElementById("ctl-play");
 const ctlTime = document.getElementById("ctl-time");
 const ctlSeek = document.getElementById("ctl-seek");
 const ctlDuration = document.getElementById("ctl-duration");
+const bookBox = document.getElementById("book");
+const bookPage = document.getElementById("book-page");
 const ctlVolume = document.getElementById("ctl-volume");
 const cardTemplate = document.getElementById("card-template");
 
@@ -359,6 +361,8 @@ function clearPanelBody() {
   offersBox.hidden = true;
   stage.hidden = true;
   controlsBox.hidden = true;
+  bookBox.hidden = true;
+  bookPage.textContent = "";
   panelNote.hidden = true;
   panelNote.textContent = "";
   setPlayState(false);
@@ -373,6 +377,7 @@ function clearPanelBody() {
 
 function showOffers(payload) {
   clearPanelBody();
+  panelMode = "media";
   const label = payload.type === "music" ? "Canciones" : "Opciones";
   panelTitle.textContent = payload.query ? `${label}: ${payload.query}` : label;
   for (const item of payload.items || []) {
@@ -406,6 +411,7 @@ function showOffers(payload) {
 
 function showPlayer(payload, fresh) {
   clearPanelBody();
+  panelMode = "media";
   const audioOnly = payload.source === "music" || (payload.source === "local" && payload.kind === "audio");
   panelTitle.textContent = payload.title || (payload.source === "youtube" ? "Video de YouTube" : "Música");
   stage.classList.toggle("audio-only", audioOnly);
@@ -422,6 +428,23 @@ function showPlayer(payload, fresh) {
   controlsBox.hidden = false;
   setLayout(workspace.className === "focus" ? "focus" : "sidecar");
   panel.hidden = false;
+}
+
+/* the book: a page in the same panel. What she hears is what the page shows,
+   and the page stays where she stopped — until she closes it. */
+function showDocument(payload) {
+  clearPanelBody();
+  panelMode = "book";
+  panelTitle.textContent = payload.title || "Libro";
+  bookPage.textContent = payload.text || "";
+  bookBox.hidden = false;
+  setLayout(workspace.className === "focus" ? "focus" : "sidecar");
+  panel.hidden = false;
+}
+
+function applyDocument(payload) {
+  if (payload.action === "close") hidePanel();
+  else showDocument(payload);
 }
 
 function hidePanel() {
@@ -443,8 +466,10 @@ function applyMedia(payload, fresh) {
   else if (payload.action === "close") hidePanel();
 }
 
-async function control(action) {
-  await fetch("/media/control", {
+let panelMode = "media";
+
+async function control(action, path = "/media/control") {
+  await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action }),
@@ -482,7 +507,7 @@ ctlVolume.addEventListener("input", () => {
 });
 
 panelClose.addEventListener("click", async () => {
-  await control("close");
+  await control("close", panelMode === "book" ? "/documents/control" : "/media/control");
   pull();
 });
 
@@ -629,6 +654,7 @@ function render(event, fresh) {
   else if (kind === "stop_requested") chip("detener", {});
   else if (kind === "media_offers") showOffers(payload);
   else if (kind === "media_state") applyMedia(payload, fresh);
+  else if (kind === "document_state") applyDocument(payload);
 }
 
 async function pull() {

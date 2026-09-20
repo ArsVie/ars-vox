@@ -173,6 +173,11 @@ def documents_open(context: ToolContext, arguments: dict) -> str:
     if not text.strip():
         return f"'{best.title}' no tiene texto que pueda leer. ¿Será una foto o algo escaneado?"
     context.store.set_document(context.session, str(best.path), best.title)
+    context.store.append(
+        context.session,
+        "document_state",
+        {"action": "open", "title": best.title, "total": len(text)},
+    )
     return f"Abrí '{best.title}'. Tiene {len(text)} letras. Dígame 'léalo' y arranco."
 
 
@@ -191,6 +196,11 @@ def documents_read(context: ToolContext, arguments: dict) -> str:
     new_cursor = context.store.advance_document(context.session, len(chunk))
     remaining = max(len(text) - new_cursor, 0)
     tail = "[Meta: es todo el documento.]" if remaining == 0 else f"[Meta: quedan {remaining} letras.]"
+    context.store.append(
+        context.session,
+        "document_state",
+        {"action": "read", "title": row["title"], "text": chunk, "remaining": remaining},
+    )
     return f"{chunk}\n\n{tail}"
 
 
@@ -384,6 +394,11 @@ def books_get(context: ToolContext, arguments: dict) -> str:
         return f"Encontré '{book['title']}' pero no pude descargarlo: {exc}."
     path, letters = books.save(book, text)
     context.store.set_document(context.session, str(path), books.short_title(book))
+    context.store.append(
+        context.session,
+        "document_state",
+        {"action": "open", "title": books.short_title(book), "total": letters},
+    )
     return (
         f"Listo, ya tengo '{books.short_title(book)}', de {books.author_name(book)}."
         f"{books.language_note(book)} Dígame 'léalo' y arranco. "

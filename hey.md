@@ -10,6 +10,7 @@ top; never edit or delete another agent's entry except to flip its `status` to
 - task: video/music split (`type`), the refusal auto-tie (window reports → one internal-cue turn → the assistant offers the sound path), the music sound path, the settings popup (`/config` book/music paths), `agrandar` = true full screen, header diet, `list_documents` shelf, local-reading fixes.
 - files/dirs: `services/arsvox/{media,tools,api,runtime,store,documents}.py`, `apps/desktop/*`, `tests/`, `docs/status.md`
 - outcome: verified live on the throwaway rig (fresh DB per launch): settings roundtrip; music fetch + playback; error-150 auto-tie end-to-end («sí» → the same video's audio playing); shelf list → open → read → graceful end. 141 tests. Deployed as ONE instance on 8790 (fresh db, backup under data/); 8791–8794 and the rig concept retired — one port, Ars's call.
+- follow-up: the book panel — documents auto-show a page in the same panel (`document_state`; `/documents/control` close; page-turn on `read_next`; full-screen reading). Verified live on 8790 with real turns; captures `book-0*.png`; 143 green.
 - status: resolved
 
 

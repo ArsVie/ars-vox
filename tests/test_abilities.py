@@ -135,6 +135,20 @@ def test_extract_reads_a_pdf(tmp_path: Path):
     assert "Dos pastillas" in documents.extract_text(target)
 
 
+def test_opening_and_reading_put_the_book_on_the_panel(tmp_path: Path, monkeypatch):
+    root = tree(tmp_path)
+    monkeypatch.setattr(documents, "search_folders", lambda: [root])
+    ctx = context(tmp_path)
+    assert "Abrí" in documents_open(ctx, {"query": "diario de hoy"})
+    states = [e for e in ctx.store.events("cli") if e.kind == "document_state"]
+    assert states[-1].payload["action"] == "open"
+    assert states[-1].payload["title"] == "Diario de hoy"
+    assert "El diario de hoy" in documents_read(ctx, {})
+    states = [e for e in ctx.store.events("cli") if e.kind == "document_state"]
+    assert states[-1].payload["action"] == "read"
+    assert "El diario de hoy: nada importante." in states[-1].payload["text"]
+
+
 def test_opening_says_what_it_found(tmp_path: Path):
     root = tree(tmp_path)
     ctx = context(tmp_path)

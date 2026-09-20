@@ -315,6 +315,19 @@ def test_media_failed_is_logged_and_the_assistant_speaks_first(service):
     assert "oír" in event["payload"]["text"]
 
 
+def test_the_book_panel_close_reaches_the_log(service, tmp_path: Path):
+    _, port, store, _ = service(scripted())
+    status, body = post_json(port, "/documents/control", {"action": "close"})
+    assert status == 200 and body["ok"] is False  # nothing open yet
+    book = tmp_path / "novela.txt"
+    book.write_text("Había una vez...", encoding="utf-8")
+    store.set_document("cli", str(book), "novela")
+    status, body = post_json(port, "/documents/control", {"action": "close"})
+    assert status == 200 and body["ok"] is True
+    states = [e for e in store.events("cli") if e.kind == "document_state"]
+    assert states[-1].payload["action"] == "close"
+
+
 def test_config_roundtrip_over_the_window_api(service, tmp_path):
     from services.arsvox import documents
 

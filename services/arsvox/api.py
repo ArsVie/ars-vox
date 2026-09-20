@@ -258,6 +258,17 @@ class AgentService:
             return {"ok": False, "reason": "no hay nada puesto"}
         return {"ok": True, "id": self.store.append(self.session, "media_state", {"action": action})}
 
+    def documents_control(self, action: str) -> dict:
+        """The book's ✕: the log records it like any other event."""
+        if action not in ("close",):
+            return {"ok": False, "reason": f"no conozco la acción '{action}'"}
+        if self.store.get_document(self.session) is None:
+            return {"ok": False, "reason": "no hay ningún documento abierto"}
+        return {
+            "ok": True,
+            "id": self.store.append(self.session, "document_state", {"action": "close"}),
+        }
+
     def media_failed(self, payload: dict) -> dict:
         """The panel could not show a video: the log records it and the assistant speaks.
 
@@ -432,6 +443,8 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
                 self._json(200, service.media_play(body))
             elif parsed.path == "/media/control":
                 self._json(200, service.media_control(str(body.get("action") or "")))
+            elif parsed.path == "/documents/control":
+                self._json(200, service.documents_control(str(body.get("action") or "")))
             elif parsed.path == "/media/failed":
                 self._json(200, service.media_failed(body))
             elif parsed.path == "/config":
