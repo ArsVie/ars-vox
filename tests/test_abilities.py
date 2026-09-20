@@ -373,19 +373,74 @@ def test_the_news_tool_numbers_the_headlines(tmp_path: Path, monkeypatch):
 
 # ---- media ----------------------------------------------------------------
 
-def test_playing_something_reports_what_it_opened(tmp_path: Path, monkeypatch):
+VIDEO = {
+    "title": "Let It Be",
+    "url": "https://www.youtube.com/watch?v=def67890abc",
+    "channel": "The Beatles",
+    "seconds": 243,
+}
+VIDEO_2 = {
+    "title": "Hey Jude",
+    "url": "https://youtu.be/abc12345xyz",
+    "channel": "The Beatles",
+    "seconds": 431,
+}
+
+
+def play_events(ctx) -> list:
+    return [e for e in ctx.store.events("cli") if e.kind == "media_state"]
+
+
+def test_search_leaves_the_options_in_the_log_and_reads_them_out(tmp_path: Path, monkeypatch):
     from services.arsvox import tools
 
-    opened: list[str] = []
-    monkeypatch.setattr(
-        tools.media,
-        "resolve",
-        lambda query, limit=3: [{"title": "Let It Be", "url": "https://y/1", "channel": "The Beatles", "seconds": 243}],
-    )
-    monkeypatch.setattr(tools.media, "open_in_browser", lambda url: opened.append(url) or True)
-    answer = tools.media_play(context(tmp_path), {"query": "beatles"})
-    assert opened == ["https://y/1"]
-    assert "Let It Be" in answer and "The Beatles" in answer and "4 minutos" in answer
+    monkeypatch.setattr(tools.media, "resolve", lambda query, limit=4: [VIDEO_2, VIDEO])
+    ctx = context(tmp_path)
+    answer = tools.media_search(ctx, {"query": "beatles"})
+    assert "1) Hey Jude" in answer and "2) Let It Be" in answer
+    assert "7:11" in answer  # 431 seconds, mm:ss
+    assert VIDEO["url"] in answer
+    offers = [e for e in ctx.store.events("cli") if e.kind == "media_offers"]
+    assert len(offers) == 1
+    assert offers[0].payload["items"][0]["title"] == "Hey Jude"
+
+
+def test_search_without_a_query_asks(tmp_path: Path):
+    from services.arsvox import tools
+
+    assert "¿Qué busca?" in tools.media_search(context(tmp_path), {})
+
+
+def test_play_resolves_the_first_result_and_logs_it(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    monkeypatch.setattr(tools.media, "resolve", lambda query, limit=3: [VIDEO])
+    ctx = context(tmp_path)
+    answer = tools.media_play(ctx, {"query": "let it be"})
+    assert "Let It Be" in answer and "The Beatles" in answer and "panel" in answer
+    (event,) = play_events(ctx)
+    assert event.payload["action"] == "play"
+    assert event.payload["source"] == "youtube"
+    assert event.payload["video_id"] == "def67890abc"
+
+
+def test_play_with_a_url_takes_exactly_that_one(tmp_path: Path):
+    from services.arsvox import tools
+
+    ctx = context(tmp_path)
+    answer = tools.media_play(ctx, {"url": VIDEO_2["url"], "title": "Hey Jude"})
+    assert "Hey Jude" in answer
+    (event,) = play_events(ctx)
+    assert event.payload["video_id"] == "abc12345xyz"
+
+
+def test_play_a_url_that_is_not_youtube_says_so(tmp_path: Path):
+    from services.arsvox import tools
+
+    ctx = context(tmp_path)
+    answer = tools.media_play(ctx, {"url": "https://example.com/video"})
+    assert "no es un video de YouTube" in answer
+    assert play_events(ctx) == []
 
 
 def test_playing_something_that_does_not_exist(tmp_path: Path, monkeypatch):
@@ -404,6 +459,49 @@ def test_playing_when_the_search_breaks_says_why(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(tools.media, "resolve", broken)
     answer = tools.media_play(context(tmp_path), {"query": "beatles"})
     assert "No pude buscar" in answer and "DownloadError" in answer
+
+
+def test_controls_do_nothing_when_nothing_is_on(tmp_path: Path):
+    from services.arsvox import tools
+
+    ctx = context(tmp_path)
+    assert "No hay nada" in tools.media_pause(ctx, {})
+    assert "No hay nada" in tools.media_resume(ctx, {})
+    assert "No hay nada" in tools.media_close(ctx, {})
+    assert play_events(ctx) == []
+
+
+def test_pause_resume_and_close_follow_a_play(tmp_path: Path, monkeypatch):
+    from services.arsvox import tools
+
+    monkeypatch.setattr(tools.media, "resolve", lambda query, limit=3: [VIDEO])
+    ctx = context(tmp_path)
+    tools.media_play(ctx, {"query": "let it be"})
+    assert "pausa" in tools.media_pause(ctx, {})
+    assert "sigue" in tools.media_resume(ctx, {})
+    assert "panel" in tools.media_close(ctx, {})
+    assert [e.payload["action"] for e in play_events(ctx)] == ["play", "pause", "resume", "close"]
+    assert "No hay nada" in tools.media_pause(ctx, {})  # the close ended it
+
+
+def test_the_video_id_survives_every_url_shape():
+    assert media.video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30s") == "dQw4w9WgXcQ"
+    assert media.video_id("https://youtu.be/dQw4w9WgXcQ?si=x") == "dQw4w9WgXcQ"
+    assert media.video_id("https://www.youtube.com/shorts/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert media.video_id("https://www.youtube.com/embed/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert media.video_id("https://example.com/nada") == ""
+
+
+def test_only_media_files_can_be_served(tmp_path: Path):
+    assert media.media_type("cancion.MP3") == ("audio", "audio/mpeg")
+    assert media.media_type("video.mp4") == ("video", "video/mp4")
+    assert media.media_type("notas.txt") is None
+    assert media.local_event(tmp_path / "notas.txt") is None
+    sound = tmp_path / "canto.mp3"
+    sound.write_bytes(b"ID3")
+    event = media.local_event(sound)
+    assert event["source"] == "local" and event["kind"] == "audio"
+    assert "/media/file?path=" in event["url"]
 
 
 def test_an_empty_url_opens_nothing():

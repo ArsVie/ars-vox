@@ -1,15 +1,25 @@
 """Playing something for the user, and controlling it.
 
-The machine has a browser and a network; there is no media library here and no
-video player of our own. So: resolve the request to a real thing, open it in the
-browser, and let the keyboard's own play/pause key do the controlling. Saying
-"te lo abrí" is honest; pretending we own a player is not.
+The window has a media panel: a YouTube video embeds in it, a local file plays
+in it (audio or video), and one control bar drives both. This module resolves a
+request to a real thing (yt-dlp search, no download), gates which files on disk
+the panel may serve, and answers "what is on" by reading the log.
+
+Nothing here keeps a second copy of the playback state. The log's last
+`media_state` event is the only authority — `play` names the thing and `close`
+ends it — and the panel rebuilds from those events, so a reload loses nothing
+worth keeping. Position and pause live in the page, next to the player: a
+service-side "playback authority" with snapshots and reconciliation was the v1
+mistake this shape removes on purpose.
 """
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
+from pathlib import Path
+from urllib.parse import quote
 
 
 class MediaError(Exception):
@@ -47,8 +57,91 @@ def resolve(query: str, limit: int = 5) -> list[dict]:
     return results
 
 
+VIDEO_ID = re.compile(
+    r"(?:youtube\.com/(?:watch\?(?:[^#]*&)?v=|shorts/|embed/|live/)|youtu\.be/)([A-Za-z0-9_-]{6,})"
+)
+
+
+def video_id(url: str) -> str:
+    """The video id, out of any of the url shapes YouTube hands out."""
+    match = VIDEO_ID.search(url or "")
+    return match.group(1) if match else ""
+
+
+# What the panel can play from disk, and what the file server may hand out. A
+# closed list, so /media/file can never serve something that is not media.
+MEDIA_TYPES: dict[str, tuple[str, str]] = {
+    ".mp3": ("audio", "audio/mpeg"),
+    ".wav": ("audio", "audio/wav"),
+    ".m4a": ("audio", "audio/mp4"),
+    ".ogg": ("audio", "audio/ogg"),
+    ".opus": ("audio", "audio/ogg"),
+    ".flac": ("audio", "audio/flac"),
+    ".mp4": ("video", "video/mp4"),
+    ".webm": ("video", "video/webm"),
+    ".mkv": ("video", "video/x-matroska"),
+}
+
+
+def media_type(path: str | Path) -> tuple[str, str] | None:
+    """(kind, content-type) for a path the panel could play, or None."""
+    return MEDIA_TYPES.get(Path(path).suffix.lower())
+
+
+def local_url(path: str | Path) -> str:
+    """The url the panel plays a file from; the service serves it."""
+    return "/media/file?path=" + quote(str(path))
+
+
+def youtube_event(url: str, title: str = "", channel: str = "", seconds: int = 0) -> dict | None:
+    """One `play` event shape for every YouTube path (the tool and the click)."""
+    video = video_id(url)
+    if not video:
+        return None
+    return {
+        "action": "play",
+        "source": "youtube",
+        "url": url,
+        "video_id": video,
+        "title": title or "Video de YouTube",
+        "channel": channel,
+        "seconds": int(seconds or 0),
+    }
+
+
+def local_event(path: str | Path, title: str = "") -> dict | None:
+    """One `play` event shape for a file on disk, or None if it is not media."""
+    target = Path(path).expanduser()
+    kind = media_type(target)
+    if kind is None or not target.is_file():
+        return None
+    return {
+        "action": "play",
+        "source": "local",
+        "url": local_url(target),
+        "kind": kind[0],
+        "title": title or target.name,
+    }
+
+
+def current(store, session: str) -> dict | None:
+    """What is on the panel, per the log: the last play, unless a close came after."""
+    for event in reversed(store.events(session)):
+        if event.kind != "media_state":
+            continue
+        action = event.payload.get("action")
+        if action == "play":
+            return event.payload
+        if action == "close":
+            return None
+    return None
+
+
 def open_in_browser(url: str) -> bool:
-    """Open a url the way a person would: the default browser, one window."""
+    """Open a url the way a person would: the default browser, one window.
+
+    The panel plays our media; this stays for plain pages (the web tool's open).
+    """
     if not url:
         return False
     if sys.platform == "win32":
@@ -59,29 +152,4 @@ def open_in_browser(url: str) -> bool:
     completed = subprocess.run(
         ["powershell.exe", "-NoProfile", "-Command", f"Start-Process '{url}'"], capture_output=True
     )
-    return completed.returncode == 0
-
-
-MEDIA_PLAY_PAUSE = 0xB3
-KEY_EVENT_SCRIPT = f"""
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public class Keys {{
-  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-  public static void MediaPlayPause() {{ keybd_event({MEDIA_PLAY_PAUSE}, 0, 0, UIntPtr.Zero); keybd_event({MEDIA_PLAY_PAUSE}, 0, 2, UIntPtr.Zero); }}
-}}
-'@
-[Keys]::MediaPlayPause()
-"""
-
-
-def toggle_playback() -> bool:
-    """The media key, so whatever is playing pauses: our player is the machine's."""
-    try:
-        completed = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-Command", KEY_EVENT_SCRIPT], capture_output=True, timeout=15
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
     return completed.returncode == 0

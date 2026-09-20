@@ -19,11 +19,14 @@ Endpoints:
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+from services.arsvox import media
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8790
@@ -200,6 +203,36 @@ class AgentService:
         self.tts.synthesize(text.strip(), self.audio_dir / name)
         return f"/audio/{name}"
 
+    # ---- the media panel --------------------------------------------------
+    def media_play(self, payload: dict) -> dict:
+        """The panel's own play paths: a YouTube pick (card or tool) or a local file."""
+        if str(payload.get("source") or "youtube") == "local":
+            event = media.local_event(str(payload.get("path") or ""), str(payload.get("title") or ""))
+            if event is None:
+                return {"ok": False, "reason": "ese archivo no es música ni video, o no existe"}
+        else:
+            try:
+                seconds = int(payload.get("seconds") or 0)
+            except (TypeError, ValueError):
+                seconds = 0
+            event = media.youtube_event(
+                str(payload.get("url") or ""),
+                title=str(payload.get("title") or ""),
+                channel=str(payload.get("channel") or ""),
+                seconds=seconds,
+            )
+            if event is None:
+                return {"ok": False, "reason": "no es un enlace de video de YouTube"}
+        return {"ok": True, "id": self.store.append(self.session, "media_state", event), "event": event}
+
+    def media_control(self, action: str) -> dict:
+        """A control the user pressed in the panel; the log records it like any event."""
+        if action not in ("pause", "resume", "close"):
+            return {"ok": False, "reason": f"no conozco la acción '{action}'"}
+        if media.current(self.store, self.session) is None:
+            return {"ok": False, "reason": "no hay nada puesto"}
+        return {"ok": True, "id": self.store.append(self.session, "media_state", {"action": action})}
+
 
 def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
@@ -253,6 +286,56 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
             }.get(target.suffix, "application/octet-stream")
             self._send(200, target.read_bytes(), kind)
 
+        def _media_file(self, path_text: str) -> None:
+            """Serve one local media file, with Range so video seeking works.
+
+            The extension whitelist (media.MEDIA_TYPES) is the gate: whatever this
+            route hands out is a file the panel could play, never any other file.
+            """
+            target = Path(path_text).expanduser() if path_text else None
+            kind = media.media_type(target) if target else None
+            if kind is None or not target.is_file():
+                self._json(404, {"error": "no está"})
+                return
+            _, content_type = kind
+            size = target.stat().st_size
+            start, end, status = 0, max(size - 1, 0), 200
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", (self.headers.get("Range") or "").strip())
+            if match:
+                if match.group(1):
+                    start = int(match.group(1))
+                    if match.group(2):
+                        end = int(match.group(2))
+                elif match.group(2):
+                    start = max(size - int(match.group(2)), 0)
+                end = min(end, size - 1)
+                if start > end or start >= size:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.end_headers()
+                    return
+                status = 206
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(end - start + 1))
+            if status == 206:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            with target.open("rb") as handle:
+                handle.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = handle.read(min(65536, remaining))
+                    if not chunk:
+                        break
+                    try:
+                        self.wfile.write(chunk)
+                    except (BrokenPipeError, ConnectionResetError):
+                        break  # the player seeked away; the rest of the file is unwanted
+                    remaining -= len(chunk)
+
         # -- routes
         def do_OPTIONS(self) -> None:  # noqa: N802
             self.send_response(204)
@@ -270,6 +353,8 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
                 after = int((query.get("after") or ["0"])[0])
                 silent = (query.get("silent") or ["0"])[0] == "1"
                 self._json(200, service.events(after, include_silent=silent))
+            elif parsed.path == "/media/file":
+                self._media_file((query.get("path") or [""])[0])
             else:
                 self._static(parsed.path)
 
@@ -279,6 +364,10 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
             if parsed.path == "/turn":
                 accepted, reason = service.start_turn(body.get("text", ""))
                 self._json(200 if accepted else 409, {"accepted": accepted, "reason": reason})
+            elif parsed.path == "/media/play":
+                self._json(200, service.media_play(body))
+            elif parsed.path == "/media/control":
+                self._json(200, service.media_control(str(body.get("action") or "")))
             elif parsed.path == "/stop":
                 self._json(200, {"stopped": service.stop()})
             elif parsed.path == "/listen":

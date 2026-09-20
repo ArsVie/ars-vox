@@ -209,31 +209,73 @@ def documents_read(context: ToolContext, arguments: dict) -> str:
     return f"{chunk}\n\n{tail}"
 
 
-def media_play(context: ToolContext, arguments: dict) -> str:
+def media_search(context: ToolContext, arguments: dict) -> str:
+    """Search and leave the options on screen, so the user picks from the panel."""
     query = str(arguments.get("query") or "").strip()
     if not query:
-        return "¿Qué pongo? ¿Música o video de qué?"
+        return "¿Qué busca? ¿Música o un video?"
     try:
-        found = media.resolve(query, limit=3)
+        found = media.resolve(query, limit=4)
     except media.MediaError as exc:
         return f"No pude buscar '{query}': {exc}."
     if not found:
         return f"No encontré nada para '{query}'."
-    best = found[0]
-    if not media.open_in_browser(best["url"]):
-        return f"Encontré '{best['title']}' pero no pude abrirlo."
-    length = f", {best['seconds'] // 60} minutos" if best["seconds"] else ""
-    channel = f" de {best['channel']}" if best["channel"] else ""
+    context.store.append(context.session, "media_offers", {"query": query, "items": found})
+    parts = []
+    for number, item in enumerate(found, 1):
+        channel = f" — {item['channel']}" if item["channel"] else ""
+        length = f" — {item['seconds'] // 60}:{item['seconds'] % 60:02d}" if item["seconds"] else ""
+        parts.append(f"{number}) {item['title']}{channel}{length} [{item['url']}]")
     return (
-        f"Puse '{best['title']}'{channel}{length}. Se abrió en el navegador. "
-        "Dígame si lo paro."
+        "Opciones a la vista: "
+        + "; ".join(parts)
+        + ". Cuéntele cada opción con su número y su duración, y pregúntele cuál quiere. "
+        "[Meta: lo de corchetes es la dirección de cada opción, para play; no se lee en voz alta.]"
     )
 
 
+def media_play(context: ToolContext, arguments: dict) -> str:
+    url = str(arguments.get("url") or "").strip()
+    title = str(arguments.get("title") or "").strip()
+    query = str(arguments.get("query") or "").strip()
+    if not url and not query:
+        return "¿Qué pongo? ¿Música o video de qué?"
+    if url:
+        item = {"title": title, "url": url, "channel": "", "seconds": 0}
+    else:
+        try:
+            found = media.resolve(query, limit=3)
+        except media.MediaError as exc:
+            return f"No pude buscar '{query}': {exc}."
+        if not found:
+            return f"No encontré nada para '{query}'."
+        item = found[0]
+    event = media.youtube_event(item["url"], item["title"], item["channel"], item["seconds"])
+    if event is None:
+        return f"Ese enlace no es un video de YouTube: {item['url'][:60]}."
+    context.store.append(context.session, "media_state", event)
+    channel = f", de {event['channel']}" if event["channel"] else ""
+    return f"Puse '{event['title']}'{channel}. Ya está en el panel."
+
+
+def _media_transition(context: ToolContext, action: str, sentence: str, missing: str) -> str:
+    """pause / resume / close: only meaningful when the log says something is on."""
+    if media.current(context.store, context.session) is None:
+        return missing
+    context.store.append(context.session, "media_state", {"action": action})
+    return sentence
+
+
 def media_pause(context: ToolContext, arguments: dict) -> str:
-    if media.toggle_playback():
-        return "Listo, pausé lo que estaba sonando."
-    return "No pude mandar la orden de pausa."
+    return _media_transition(context, "pause", "Listo, quedó en pausa.", "No hay nada puesto.")
+
+
+def media_resume(context: ToolContext, arguments: dict) -> str:
+    return _media_transition(context, "resume", "Listo, ahí sigue.", "No hay nada que reanudar.")
+
+
+def media_close(context: ToolContext, arguments: dict) -> str:
+    return _media_transition(context, "close", "Ya no está en el panel.", "No hay nada que quitar.")
 
 
 def web_search(context: ToolContext, arguments: dict) -> str:
@@ -339,8 +381,11 @@ DOCUMENTS_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
     "get_book": books_get,
 }
 MEDIA_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
+    "search": media_search,
     "play": media_play,
     "pause": media_pause,
+    "resume": media_resume,
+    "close": media_close,
 }
 WEB_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
     "search": web_search,
@@ -468,9 +513,13 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "media",
-                "Música y video. "
-                "play(query) busca y lo pone en el navegador: una canción, un artista, un tema. "
-                "pause pausa o reanuda lo que esté sonando.",
+                "Música y video en el panel de la ventana. "
+                "search(query) busca en YouTube y deja las opciones a la vista para elegir entre varias; "
+                "cuéntele cada opción con su número y pregúntele cuál quiere. "
+                "play(query) pone directamente lo primero que encuentra; play(url) pone una opción "
+                "puntual de las que mostró search — la dirección se copia del resultado, nunca se inventa. "
+                "pause y resume controlan lo que está sonando; close lo quita del panel. "
+                "Lo que está entre corchetes en un resultado es interno: no se lee en voz alta.",
                 {
                     "type": "object",
                     "properties": {
@@ -480,6 +529,14 @@ def build_registry() -> dict[str, Tool]:
                             "description": "qué hacer",
                         },
                         "query": {"type": "string", "description": "qué quiere escuchar o ver"},
+                        "url": {
+                            "type": "string",
+                            "description": "la dirección de una opción que mostró search",
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "el título de esa opción, tal como apareció",
+                        },
                     },
                     "required": ["action"],
                 },

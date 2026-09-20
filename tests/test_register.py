@@ -78,7 +78,7 @@ def test_the_tool_copy_speaks_the_way_the_model_speaks(tmp_path):
     """The model answers an elderly user with usted; the tool sentences said dime."""
     source = (REPO_ROOT / "services" / "arsvox" / "tools.py").read_text(encoding="utf-8")
     assert "Dígame a qué hora" in source and "Dime a qué hora" not in source
-    assert "Dígame si lo paro" in source
+    assert "Cuéntele cada opción" in source and "Cuéntale cada opción" not in source
     assert "Dígame cuál abro" in source
 
 

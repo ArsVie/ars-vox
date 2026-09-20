@@ -7,6 +7,8 @@ import sys
 import threading
 import time
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import pytest
@@ -218,3 +220,72 @@ def test_the_store_is_safe_for_the_threaded_service(tmp_path: Path):
     assert errors == []
     assert len(store.events("t")) == 120
     store.close()
+
+
+def test_media_play_appends_one_event_and_serves_it_back(service):
+    _, port, store, _ = service(scripted())
+    status, body = post_json(
+        port,
+        "/media/play",
+        {"source": "youtube", "url": "https://youtu.be/abc12345xyz", "title": "Prueba"},
+    )
+    assert status == 200 and body["ok"] is True
+    (event,) = [e for e in store.events("cli") if e.kind == "media_state"]
+    assert event.payload["video_id"] == "abc12345xyz"
+    assert event.payload["title"] == "Prueba"
+    # the window gets it from the same log it rebuilds from
+    seen = [e for e in get_json(port, "/events?after=0")["events"] if e["kind"] == "media_state"]
+    assert seen[0]["payload"]["url"] == "https://youtu.be/abc12345xyz"
+
+
+def test_media_play_refuses_a_link_that_is_not_youtube(service):
+    _, port, store, _ = service(scripted())
+    status, body = post_json(port, "/media/play", {"url": "https://example.com/v"})
+    assert status == 200 and body["ok"] is False
+    assert store.events("cli") == []
+
+
+def test_media_control_needs_something_on_the_panel(service):
+    _, port, store, _ = service(scripted())
+    status, body = post_json(port, "/media/control", {"action": "pause"})
+    assert status == 200 and body["ok"] is False and "nada puesto" in body["reason"]
+    post_json(port, "/media/play", {"url": "https://youtu.be/abc12345xyz", "title": "Prueba"})
+    assert post_json(port, "/media/control", {"action": "pause"})[1]["ok"] is True
+    actions = [e.payload["action"] for e in store.events("cli") if e.kind == "media_state"]
+    assert actions == ["play", "pause"]
+    assert post_json(port, "/media/control", {"action": "saltar"})[1]["ok"] is False
+
+
+def test_a_local_media_file_plays_and_ranges(tmp_path: Path, service):
+    _, port, _, _ = service(scripted())
+    clip = tmp_path / "canto.mp3"
+    clip.write_bytes(bytes(range(256)) * 40)  # 10240 bytes; the content does not matter
+    status, body = post_json(port, "/media/play", {"source": "local", "path": str(clip)})
+    assert status == 200 and body["ok"] is True
+    assert body["event"]["source"] == "local" and body["event"]["kind"] == "audio"
+
+    url = f"/media/file?path={quote(str(clip))}"
+    with urlopen(f"http://127.0.0.1:{port}{url}", timeout=5) as response:
+        assert response.status == 200
+        assert response.headers["Accept-Ranges"] == "bytes"
+        assert response.headers["Content-Type"] == "audio/mpeg"
+        assert len(response.read()) == 10240
+
+    request = Request(f"http://127.0.0.1:{port}{url}", headers={"Range": "bytes=2-4"})
+    with urlopen(request, timeout=5) as response:
+        assert response.status == 206
+        assert response.headers["Content-Range"] == "bytes 2-4/10240"
+        assert response.read() == bytes([2, 3, 4])
+
+
+def test_the_file_server_never_serves_non_media(tmp_path: Path, service):
+    _, port, _, _ = service(scripted())
+    secret = tmp_path / "notas.txt"
+    secret.write_text("no soy música", encoding="utf-8")
+    status = post_json(port, "/media/play", {"source": "local", "path": str(secret)})[1]
+    assert status["ok"] is False
+    try:
+        urlopen(f"http://127.0.0.1:{port}/media/file?path={quote(str(secret))}", timeout=5)
+        raise AssertionError("the file server served a .txt")
+    except HTTPError as exc:
+        assert exc.code == 404

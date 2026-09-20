@@ -16,7 +16,27 @@
     </div>
   </header>
 
-  <main id="conversation" aria-live="polite"></main>
+  <div id="workspace">
+    <main id="conversation" aria-live="polite"></main>
+
+    <section id="panel" hidden>
+      <header class="panel-head">
+        <h2 id="panel-title"></h2>
+        <button id="panel-grow" class="panel-button" type="button">agrandar</button>
+        <button id="panel-close" class="panel-button" type="button" title="quitar del panel" aria-label="quitar del panel">✕</button>
+      </header>
+      <p id="panel-note" class="panel-note" hidden></p>
+      <div id="offers" class="offers" hidden></div>
+      <div id="stage" class="stage" hidden></div>
+      <div id="controls" class="controls" hidden>
+        <button id="ctl-play" class="ctl-play" type="button" aria-label="reproducir o pausar">▶</button>
+        <span id="ctl-time" class="ctl-time">0:00</span>
+        <input id="ctl-seek" class="ctl-seek" type="range" min="0" max="0" step="1" value="0" aria-label="posición" />
+        <span id="ctl-duration" class="ctl-time">0:00</span>
+        <input id="ctl-volume" class="ctl-volume" type="range" min="0" max="100" step="5" value="100" aria-label="volumen" />
+      </div>
+    </section>
+  </div>
 
   <div id="thinking" hidden>pensando…</div>
 
@@ -36,6 +56,13 @@
         <span class="time"></span>
       </div>
     </article>
+  </template>
+
+  <template id="card-template">
+    <button class="card" type="button">
+      <span class="card-title"></span>
+      <span class="card-sub"></span>
+    </button>
   </template>
 
   <script src="app.js"></script>

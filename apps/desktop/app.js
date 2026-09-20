@@ -5,6 +5,7 @@
    which is why a /listen response never sets the status itself. */
 
 const POLL_MS = 700;
+const FRESH_MS = 15000; // a media event this recent starts playing; an old one is restored paused
 let lastId = 0;
 let busy = false;
 let recording = false;
@@ -99,15 +100,367 @@ function chip(name, arguments_) {
   conversation.scrollTop = conversation.scrollHeight;
 }
 
-function render(event) {
+/* ---- the media panel ----------------------------------------------------
+   The panel is a view of the same log: media events say what to show and the
+   last one wins. Playback position is not kept anywhere — after a reload the
+   player comes back paused, which is the honest thing (a service-side
+   playback authority with snapshots was the v1 mistake this replaces). */
+
+const workspace = document.getElementById("workspace");
+const panel = document.getElementById("panel");
+const panelTitle = document.getElementById("panel-title");
+const panelNote = document.getElementById("panel-note");
+const panelGrow = document.getElementById("panel-grow");
+const panelClose = document.getElementById("panel-close");
+const offersBox = document.getElementById("offers");
+const stage = document.getElementById("stage");
+const controlsBox = document.getElementById("controls");
+const ctlPlay = document.getElementById("ctl-play");
+const ctlTime = document.getElementById("ctl-time");
+const ctlSeek = document.getElementById("ctl-seek");
+const ctlDuration = document.getElementById("ctl-duration");
+const ctlVolume = document.getElementById("ctl-volume");
+const cardTemplate = document.getElementById("card-template");
+
+let engine = null;   // what is on the stage, behind one small adapter
+let seeking = false;
+
+function fmtTime(seconds) {
+  const s = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  const mm = h ? String(m).padStart(2, "0") : String(m);
+  return h ? `${h}:${mm}:${String(r).padStart(2, "0")}` : `${mm}:${String(r).padStart(2, "0")}`;
+}
+
+function setPlayState(playing) {
+  ctlPlay.dataset.playing = playing ? "1" : "";
+  ctlPlay.textContent = playing ? "❚❚" : "▶";
+  ctlPlay.setAttribute("aria-label", playing ? "pausar" : "reproducir");
+}
+
+function reportFromEngine(state) {
+  if (state.note) {
+    // the bar cannot drive this video: say so in plain words, and let it rest
+    panelNote.textContent = state.note;
+    panelNote.hidden = false;
+    ctlPlay.disabled = true;
+    ctlSeek.disabled = true;
+    ctlVolume.disabled = true;
+  }
+  if (state.playing !== undefined) setPlayState(state.playing);
+  if (state.duration !== undefined && isFinite(state.duration) && state.duration > 0) {
+    ctlSeek.max = state.duration;
+    ctlDuration.textContent = fmtTime(state.duration);
+  }
+  if (state.time !== undefined && !seeking) {
+    ctlSeek.value = state.time;
+    ctlTime.textContent = fmtTime(state.time);
+  }
+}
+
+/* YouTube's own IFrame API script is the one component allowed to know the
+   player protocol: it keeps the handshake working as YouTube evolves it
+   (hand-rolled postMessage commands against the modern widget get ignored,
+   verified 2026-09 against the live rig). If the script cannot load, the
+   embed falls back to carrying its own controls and our bar steps aside. */
+let youTubeApiPromise = null;
+
+function loadYouTubeApi() {
+  if (youTubeApiPromise) return youTubeApiPromise;
+  youTubeApiPromise = new Promise((resolve, reject) => {
+    if (window.YT && window.YT.Player) return resolve(window.YT);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error("la api de YouTube no llegó"));
+      }
+    }, 9000);
+    const prior = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (prior) prior();
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(window.YT);
+      }
+    };
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.onerror = () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error("la api de YouTube no cargó"));
+      }
+    };
+    document.head.appendChild(script);
+  });
+  return youTubeApiPromise;
+}
+
+function youtubeTrouble(code) {
+  if (code === 100 || code === 2) return "Ese video ya no está disponible. Elija otra de la lista.";
+  if (code === 101 || code === 150) return "Este video no se puede ver acá. Elija otra de la lista.";
+  return "No se pudo cargar el video. Elija otra de la lista.";
+}
+
+function youTubeEngine(payload, report, fresh) {
+  const holder = document.createElement("div");
+  holder.className = "yt-holder";
+  stage.appendChild(holder);
+
+  let player = null;
+  let ready = false;
+  let finished = false;
+
+  loadYouTubeApi()
+    .then((YT) => {
+      if (finished) return;
+      player = new YT.Player(holder, {
+        videoId: payload.video_id,
+        playerVars: { origin: window.location.origin, playsinline: 1, controls: 0, rel: 0 },
+        events: {
+          onReady: (event) => {
+            ready = true;
+            report({ duration: event.target.getDuration() });
+            if (fresh) event.target.playVideo(); // a just-asked video starts; a rebuilt one waits
+          },
+          onStateChange: (event) => report({ playing: event.data === 1 }),
+          onError: (event) => report({ note: youtubeTrouble(event.data) }),
+        },
+      });
+    })
+    .catch(() => {
+      if (finished) return;
+      // no script: the video keeps its own controls, ours step aside
+      const frame = document.createElement("iframe");
+      frame.title = payload.title || "video";
+      frame.src = `https://www.youtube.com/embed/${encodeURIComponent(payload.video_id)}?playsinline=1&rel=0`;
+      stage.replaceChildren(frame);
+      report({ note: "Use los botones del video." });
+    });
+
+  const tick = setInterval(() => {
+    if (!ready || !player || !player.getCurrentTime) return;
+    report({ time: player.getCurrentTime(), duration: player.getDuration() });
+  }, 1000);
+
+  return {
+    play: () => player && player.playVideo && player.playVideo(),
+    pause: () => player && player.pauseVideo && player.pauseVideo(),
+    seek: (seconds) => player && player.seekTo && player.seekTo(seconds, true),
+    setVolume: (value) => player && player.setVolume && player.setVolume(value),
+    destroy() {
+      finished = true;
+      clearInterval(tick);
+      if (player && player.destroy) player.destroy();
+      holder.remove();
+    },
+  };
+}
+
+function html5Engine(payload, report, fresh) {
+  const element = document.createElement(payload.kind === "video" ? "video" : "audio");
+  element.preload = "metadata";
+  element.src = payload.url;
+  if (payload.kind === "video") {
+    stage.appendChild(element);
+  } else {
+    const card = document.createElement("div");
+    card.className = "audio-card";
+    const glyph = document.createElement("span");
+    glyph.className = "glyph";
+    glyph.textContent = "♪";
+    const name = document.createElement("span");
+    name.className = "audio-title";
+    name.textContent = payload.title || "audio";
+    card.append(glyph, name);
+    stage.append(card, element); // the element itself renders nothing for audio
+  }
+  element.addEventListener("timeupdate", () => report({ time: element.currentTime, duration: element.duration }));
+  element.addEventListener("durationchange", () => report({ duration: element.duration }));
+  element.addEventListener("play", () => report({ playing: true }));
+  element.addEventListener("pause", () => report({ playing: false }));
+  element.addEventListener("ended", () => report({ playing: false }));
+  if (fresh) {
+    const attempt = element.play();
+    if (attempt && attempt.catch) attempt.catch(() => report({ playing: false }));
+  }
+  return {
+    play: () => {
+      const attempt = element.play();
+      if (attempt && attempt.catch) attempt.catch(() => {});
+    },
+    pause: () => element.pause(),
+    seek: (seconds) => {
+      element.currentTime = seconds;
+    },
+    setVolume: (value) => {
+      element.volume = Math.max(0, Math.min(1, value / 100));
+    },
+    destroy() {
+      element.pause();
+      element.remove();
+    },
+  };
+}
+
+function setLayout(mode) {
+  workspace.className = mode;
+}
+
+function clearPanelBody() {
+  if (engine) {
+    engine.destroy();
+    engine = null;
+  }
+  offersBox.innerHTML = "";
+  stage.innerHTML = "";
+  offersBox.hidden = true;
+  stage.hidden = true;
+  controlsBox.hidden = true;
+  panelNote.hidden = true;
+  panelNote.textContent = "";
+  setPlayState(false);
+  ctlPlay.disabled = false;
+  ctlSeek.disabled = false;
+  ctlVolume.disabled = false;
+  ctlSeek.max = 0;
+  ctlSeek.value = 0;
+  ctlTime.textContent = "0:00";
+  ctlDuration.textContent = "0:00";
+}
+
+function showOffers(payload) {
+  clearPanelBody();
+  panelTitle.textContent = payload.query ? `Opciones: ${payload.query}` : "Opciones";
+  for (const item of payload.items || []) {
+    const node = cardTemplate.content.firstElementChild.cloneNode(true);
+    node.querySelector(".card-title").textContent = item.title || "(sin título)";
+    const bits = [];
+    if (item.channel) bits.push(item.channel);
+    if (item.seconds) bits.push(fmtTime(item.seconds));
+    node.querySelector(".card-sub").textContent = bits.join(" · ");
+    node.addEventListener("click", async () => {
+      node.disabled = true;
+      await fetch("/media/play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "youtube",
+          url: item.url,
+          title: item.title,
+          channel: item.channel,
+          seconds: item.seconds,
+        }),
+      });
+      pull(); // the play event comes back through the same log, as everything does
+    });
+    offersBox.appendChild(node);
+  }
+  offersBox.hidden = false;
+  setLayout(workspace.className === "focus" ? "focus" : "sidecar");
+  panel.hidden = false;
+}
+
+function showPlayer(payload, fresh) {
+  clearPanelBody();
+  panelTitle.textContent = payload.title || "Video de YouTube";
+  if (payload.source === "youtube" && payload.video_id) {
+    engine = youTubeEngine(payload, reportFromEngine, fresh);
+  } else if (payload.source === "local") {
+    engine = html5Engine(payload, reportFromEngine, fresh);
+  } else {
+    return; // nothing on the stage to show
+  }
+  if (engine) engine.setVolume(Number(ctlVolume.value));
+  stage.hidden = false;
+  controlsBox.hidden = false;
+  setLayout(workspace.className === "focus" ? "focus" : "sidecar");
+  panel.hidden = false;
+}
+
+function hidePanel() {
+  clearPanelBody();
+  panel.hidden = true;
+  panelGrow.textContent = "agrandar";
+  setLayout("");
+}
+
+function applyMedia(payload, fresh) {
+  if (payload.action === "play") showPlayer(payload, fresh);
+  else if (payload.action === "pause" && engine) engine.pause();
+  else if (payload.action === "resume" && engine) engine.play();
+  else if (payload.action === "close") hidePanel();
+}
+
+async function control(action) {
+  await fetch("/media/control", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+  // no pull() here: the event reaches this page through the poll like any other
+}
+
+ctlPlay.addEventListener("click", () => {
+  if (!engine) return;
+  if (ctlPlay.dataset.playing === "1") {
+    engine.pause();
+    control("pause");
+  } else {
+    engine.play();
+    control("resume");
+  }
+});
+
+ctlSeek.addEventListener("pointerdown", () => {
+  seeking = true;
+});
+ctlSeek.addEventListener("input", () => {
+  ctlTime.textContent = fmtTime(Number(ctlSeek.value));
+});
+ctlSeek.addEventListener("change", () => {
+  seeking = false;
+  if (engine) engine.seek(Number(ctlSeek.value));
+});
+ctlSeek.addEventListener("pointerup", () => {
+  seeking = false;
+});
+
+ctlVolume.addEventListener("input", () => {
+  if (engine) engine.setVolume(Number(ctlVolume.value));
+});
+
+panelClose.addEventListener("click", async () => {
+  await control("close");
+  pull();
+});
+
+panelGrow.addEventListener("click", () => {
+  const focused = workspace.className === "focus";
+  setLayout(focused ? "sidecar" : "focus");
+  panelGrow.textContent = focused ? "agrandar" : "achicar";
+});
+
+/* ---- the loop the page lives in ---------------------------------------- */
+
+function render(event, fresh) {
   const { kind, payload, ts } = event;
   if (kind === "user_text") bubble("user", payload.text, ts, false);
   else if (kind === "assistant_text") bubble("assistant", payload.text, ts, true);
   else if (kind === "tool_call") chip(payload.name, payload.arguments);
-  else if (kind === "tool_result" && /falló|no |No existe|debe ser|faltan/.test(payload.text || "")) {
+  else if (kind === "tool_result" && /^\s*No\b|falló|debe ser|faltan/.test(payload.text || "")) {
+    // only clear failures reach the reader; a stray "no" mid-sentence once
+    // dumped a whole internal tool result (with its [Meta:] notes) on screen
     bubble("note", payload.text, ts, false);
   } else if (kind === "reminder_fired") chip("recordatorio", { aviso: payload.spoken });
   else if (kind === "stop_requested") chip("detener", {});
+  else if (kind === "media_offers") showOffers(payload);
+  else if (kind === "media_state") applyMedia(payload, fresh);
 }
 
 async function pull() {
@@ -116,8 +469,10 @@ async function pull() {
   try {
     const response = await fetch(`/events?after=${lastId}`);
     const data = await response.json();
+    const now = Date.now();
     for (const event of data.events) {
-      render(event);
+      const age = event.ts ? now - Date.parse(event.ts) : Infinity;
+      render(event, age < FRESH_MS);
       lastId = Math.max(lastId, event.id);
     }
     lastId = Math.max(lastId, data.last_id || 0);
@@ -191,7 +546,7 @@ stopButton.addEventListener("click", async () => {
 
 async function boot() {
   await health();
-  await pull();          // rebuild the whole conversation from the log
+  await pull();          // rebuild the whole conversation (and panel) from the log
   polling = setInterval(pull, POLL_MS);
   input.focus();
 }
