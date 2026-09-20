@@ -8,6 +8,8 @@ the right.
 Refactor of `C:\dev\ars-vox` (archived, v0.1). The route is the harness anatomy
 of arXiv 2609.00006; the plan lives at `C:\dev\ars-vox-refactor-plan.md`.
 
+![The window — a spoken answer, music playing, video, and a real book open as pages](docs/ui/surface.png)
+
 ## What it does
 
 - **Habla y escucha.** Push-to-talk or typed text; answers spoken aloud in the
@@ -28,6 +30,8 @@ of arXiv 2609.00006; the plan lives at `C:\dev\ars-vox-refactor-plan.md`.
   classics that are not on disk can be brought home from Project Gutenberg.
   Books are *shown*, not narrated: reading books aloud is deferred on purpose.
 - **A settings popup.** Two folders — books and music. Nothing else.
+
+![The reader — fit to width, and the whole screen when asked](docs/ui/reading.png)
 
 Failures the user cannot fix turn into an offer in the assistant's own words.
 One always-visible stop control; status is one plain word.
