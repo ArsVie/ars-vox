@@ -57,7 +57,8 @@ def test_projection_rule_maps_every_kind():
 
 def test_resume_rebuilds_the_same_history(tmp_path: Path):
     loop, _, store = runtime(
-        tmp_path, [tool_call("tasks_add", {"text": "comprar pan"}), ModelReply(text="Listo, anotado.")]
+        tmp_path,
+        [tool_call("agenda", {"action": "add_task", "text": "comprar pan"}), ModelReply(text="Listo, anotado.")],
     )
     loop.turn("cli", "anotá comprar pan")
     before = loop.messages("cli")
@@ -73,7 +74,7 @@ def test_second_request_extends_the_first_byte_for_byte(tmp_path: Path):
     loop, model, _ = runtime(
         tmp_path,
         [
-            tool_call("tasks_add", {"text": "uno"}),
+            tool_call("agenda", {"action": "add_task", "text": "uno"}),
             ModelReply(text="Anotado."),
             ModelReply(text="Cómo estás."),
         ],
@@ -90,13 +91,13 @@ def test_tool_call_reaches_the_store_and_the_answer_is_recorded(tmp_path: Path):
     loop, _, store = runtime(
         tmp_path,
         [
-            tool_call("reminders_set", {"text": "tomar la pastilla", "when_local": "2026-09-12T20:00"}),
+            tool_call("agenda", {"action": "add_reminder", "text": "tomar la pastilla", "when_local": "2026-09-12T20:00"}),
             ModelReply(text="Listo, te lo recuerdo a las ocho."),
         ],
     )
     result = loop.turn("cli", "recordame tomar la pastilla a las ocho de la noche")
     assert result.text == "Listo, te lo recuerdo a las ocho."
-    assert [t.name for t in result.tools] == ["reminders_set"]
+    assert [t.name for t in result.tools] == ["agenda"]
     assert len(store.list_reminders("cli")) == 1
     assert store.events("cli")[-1].kind == "assistant_text"
 
@@ -104,7 +105,7 @@ def test_tool_call_reaches_the_store_and_the_answer_is_recorded(tmp_path: Path):
 def test_a_refusal_reaches_the_model_as_a_tool_result(tmp_path: Path):
     loop, model, _ = runtime(
         tmp_path,
-        [tool_call("reminders_cancel", {"reminder_id": "abc"}), ModelReply(text="¿Cuál borro?")],
+        [tool_call("agenda", {"action": "cancel_reminder", "reminder_id": "abc"}), ModelReply(text="¿Cuál borro?")],
     )
     result = loop.turn("cli", "borrá el recordatorio")
     assert result.tools[0].ran is False
@@ -115,18 +116,18 @@ def test_a_refusal_reaches_the_model_as_a_tool_result(tmp_path: Path):
 def test_bad_arguments_are_refused_with_a_readable_reason(tmp_path: Path):
     loop, _, _ = runtime(
         tmp_path,
-        [tool_call("reminders_set", {"when_local": "mañana"}), ModelReply(text="Decime qué recuerdo.")],
+        [tool_call("agenda", {"action": "add_reminder", "when_local": "mañana"}), ModelReply(text="Decime qué recuerdo.")],
     )
     result = loop.turn("cli", "recordame algo")
-    assert result.tools[0].ran is False
-    assert "faltan datos: text" in result.tools[0].result
+    assert result.tools[0].ran is True
+    assert "¿Qué quiere que le recuerde?" in result.tools[0].result
 
 
 def test_unparseable_date_is_refused_before_anything_is_stored(tmp_path: Path):
     loop, model, store = runtime(
         tmp_path,
         [
-            tool_call("reminders_set", {"text": "pagar la luz", "when_local": "mañana"}),
+            tool_call("agenda", {"action": "add_reminder", "text": "pagar la luz", "when_local": "mañana"}),
             ModelReply(text="¿A qué hora?"),
         ],
     )
@@ -141,7 +142,11 @@ def test_unparseable_date_is_refused_before_anything_is_stored(tmp_path: Path):
 def test_repeating_the_same_call_stops_the_turn(tmp_path: Path):
     loop, _, _ = runtime(
         tmp_path,
-        [tool_call("tasks_list", {}), tool_call("tasks_list", {}), tool_call("tasks_list", {})],
+        [
+            tool_call("agenda", {"action": "list_tasks"}),
+            tool_call("agenda", {"action": "list_tasks"}),
+            tool_call("agenda", {"action": "list_tasks"}),
+        ],
     )
     result = loop.turn("cli", "qué tengo que hacer")
     assert result.error and "repitió" in result.error
@@ -149,7 +154,7 @@ def test_repeating_the_same_call_stops_the_turn(tmp_path: Path):
 
 
 def test_step_budget_ends_a_long_turn(tmp_path: Path):
-    replies = [tool_call("tasks_add", {"text": f"t{i}"}, call_id=f"c{i}") for i in range(6)]
+    replies = [tool_call("agenda", {"action": "add_task", "text": f"t{i}"}, call_id=f"c{i}") for i in range(6)]
     loop, _, _ = runtime(tmp_path, replies, max_steps=2)
     result = loop.turn("cli", "anotá cosas")
     assert result.error and "límite" in result.error
@@ -198,7 +203,9 @@ def test_unknown_tool_is_reported_without_a_policy_layer(tmp_path: Path):
 
 
 def test_tool_signature_is_stable_across_key_order():
-    assert signature("tasks_add", {"text": "a", "id": 1}) == signature("tasks_add", {"id": 1, "text": "a"})
+    assert signature("agenda", {"action": "add_task", "text": "a", "id": 1}) == signature(
+        "agenda", {"id": 1, "text": "a", "action": "add_task"}
+    )
 
 
 def test_usage_cache_split_never_exceeds_the_prompt():

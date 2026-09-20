@@ -1,7 +1,18 @@
-"""The tools. Few, real, each one writing real state.
+"""The tools. Seven, real, each one writing real state.
 
 Every handler returns one short Spanish sentence, because that sentence is what
 the model reads next and what the user eventually hears.
+
+Five entries are families — one tool with an `action` enum routing to a handler
+per action (agenda, preferences, documents, media, web); weather and news stay
+standalone because each answers one user sentence in one call.
+
+House rule for descriptions (learned from ProjectSight's MCP tools and Pi's):
+every sentence must earn its cost on every request — when to use the tool,
+where each argument comes from, how to read the reply. A fact the caller needs
+only at one moment belongs in the refusal sentence, not in the description: a
+refusal costs nothing until it happens, where a description is paid by every
+session.
 """
 
 from __future__ import annotations
@@ -58,19 +69,22 @@ def _parse_when(value: str | None) -> tuple[str | None, str | None]:
 
 
 def reminders_set(context: ToolContext, arguments: dict) -> str:
+    text = str(arguments.get("text") or "").strip()
+    if not text:
+        return "¿Qué quiere que le recuerde?"
     when, error = _parse_when(arguments.get("when_local"))
     if error:
         return error
     repeat = arguments.get("repeat") or "once"
     if repeat not in REPEATS:
         repeat = "once"
-    reminder_id = context.store.add_reminder(context.session, arguments["text"], when, repeat)
+    reminder_id = context.store.add_reminder(context.session, text, when, repeat)
     if when:
         readable = datetime.fromisoformat(when).strftime("%H:%M del %d/%m")
-        line = f"Listo, recordatorio {reminder_id} guardado para las {readable}: {arguments['text']}"
+        line = f"Listo, recordatorio {reminder_id} guardado para las {readable}: {text}"
     else:
         return (
-            f"Guardé '{arguments['text']}' como recordatorio {reminder_id}, pero sin hora no te aviso. "
+            f"Guardé '{text}' como recordatorio {reminder_id}, pero sin hora no te aviso. "
             "Dígame a qué hora."
         )
     if context.scheduler is None:
@@ -96,6 +110,8 @@ def reminders_list(context: ToolContext, arguments: dict) -> str:
 
 
 def reminders_cancel(context: ToolContext, arguments: dict) -> str:
+    if arguments.get("reminder_id") is None:
+        return "¿Cuál recordatorio? Dígame el número que mostró la lista."
     reminder_id = int(arguments["reminder_id"])
     if not context.store.cancel_reminder(context.session, reminder_id):
         return f"No encontré un recordatorio activo con el número {reminder_id}."
@@ -105,8 +121,11 @@ def reminders_cancel(context: ToolContext, arguments: dict) -> str:
 
 
 def tasks_add(context: ToolContext, arguments: dict) -> str:
-    task_id = context.store.add_task(context.session, arguments["text"])
-    return f"Anotado como tarea {task_id}: {arguments['text']}"
+    text = str(arguments.get("text") or "").strip()
+    if not text:
+        return "¿Qué anoto?"
+    task_id = context.store.add_task(context.session, text)
+    return f"Anotado como tarea {task_id}: {text}"
 
 
 def tasks_list(context: ToolContext, arguments: dict) -> str:
@@ -123,6 +142,8 @@ def tasks_list(context: ToolContext, arguments: dict) -> str:
 
 
 def tasks_done(context: ToolContext, arguments: dict) -> str:
+    if arguments.get("task_id") is None:
+        return "¿Cuál tarea? Dígame el número que mostró la lista."
     task_id = int(arguments["task_id"])
     if context.store.complete_task(context.session, task_id):
         return f"Tarea {task_id} marcada como hecha."
@@ -130,8 +151,12 @@ def tasks_done(context: ToolContext, arguments: dict) -> str:
 
 
 def preferences_set(context: ToolContext, arguments: dict) -> str:
-    context.store.set_preference(context.session, arguments["key"], arguments["value"])
-    return f"Me acuerdo: {arguments['key']} = {arguments['value']}"
+    key = str(arguments.get("key") or "").strip()
+    value = str(arguments.get("value") or "").strip()
+    if not key or not value:
+        return "¿Qué preferencia guardo? Dígame el tema y lo que prefiere."
+    context.store.set_preference(context.session, key, value)
+    return f"Me acuerdo: {key} = {value}"
 
 
 def preferences_list(context: ToolContext, arguments: dict) -> str:
@@ -143,7 +168,9 @@ def preferences_list(context: ToolContext, arguments: dict) -> str:
 
 def documents_open(context: ToolContext, arguments: dict) -> str:
     """Open by name, without a viewer: the document is something we read aloud."""
-    query = arguments["query"]
+    query = str(arguments.get("query") or "").strip()
+    if not query:
+        return "¿Cuál archivo abro? Dígame cómo lo llama."
     hits, cut = documents.find(query, limit=4)
     if not hits:
         extra = " Busqué rápido, así que pruebe con otra palabra." if cut else ""
@@ -183,7 +210,9 @@ def documents_read(context: ToolContext, arguments: dict) -> str:
 
 
 def media_play(context: ToolContext, arguments: dict) -> str:
-    query = arguments["query"]
+    query = str(arguments.get("query") or "").strip()
+    if not query:
+        return "¿Qué pongo? ¿Música o video de qué?"
     try:
         found = media.resolve(query, limit=3)
     except media.MediaError as exc:
@@ -208,7 +237,9 @@ def media_pause(context: ToolContext, arguments: dict) -> str:
 
 
 def web_search(context: ToolContext, arguments: dict) -> str:
-    query = arguments["query"]
+    query = str(arguments.get("query") or "").strip()
+    if not query:
+        return "¿Qué busco?"
     try:
         results = web.search(query, limit=4, region=context.settings.region)
     except web.WebError as exc:
@@ -219,7 +250,9 @@ def web_search(context: ToolContext, arguments: dict) -> str:
 
 
 def web_read(context: ToolContext, arguments: dict) -> str:
-    url = arguments["url"]
+    url = str(arguments.get("url") or "").strip()
+    if not url:
+        return "¿Qué página? Páseme la dirección."
     try:
         text = web.read(url, limit=1800)
     except web.WebError as exc:
@@ -230,7 +263,10 @@ def web_read(context: ToolContext, arguments: dict) -> str:
 
 
 def web_open(context: ToolContext, arguments: dict) -> str:
-    if media.open_in_browser(arguments["url"]):
+    url = str(arguments.get("url") or "").strip()
+    if not url:
+        return "¿Qué página? Páseme la dirección."
+    if media.open_in_browser(url):
         return "Te abrí la página en el navegador."
     return "No pude abrir esa página."
 
@@ -256,7 +292,9 @@ def news_list(context: ToolContext, arguments: dict) -> str:
 
 
 def books_get(context: ToolContext, arguments: dict) -> str:
-    title = arguments["title"]
+    title = str(arguments.get("title") or "").strip()
+    if not title:
+        return "¿Cuál libro busco?"
     try:
         book = books.find(title, language=context.settings.language)
     except books.BookError as exc:
@@ -279,159 +317,198 @@ def books_get(context: ToolContext, arguments: dict) -> str:
     )
 
 
+# ---- the five families -----------------------------------------------------
+# One entry per family, one handler per action. The `action` enum in each schema
+# is built from these maps, so the enum and the handlers cannot disagree.
+
+AGENDA_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
+    "add_reminder": reminders_set,
+    "list_reminders": reminders_list,
+    "cancel_reminder": reminders_cancel,
+    "add_task": tasks_add,
+    "list_tasks": tasks_list,
+    "complete_task": tasks_done,
+}
+PREFERENCES_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
+    "remember": preferences_set,
+    "list": preferences_list,
+}
+DOCUMENTS_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
+    "open_document": documents_open,
+    "read_next": documents_read,
+    "get_book": books_get,
+}
+MEDIA_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
+    "play": media_play,
+    "pause": media_pause,
+}
+WEB_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
+    "search": web_search,
+    "read": web_read,
+    "open": web_open,
+}
+
+
+def _dispatch(actions: dict[str, Callable[[ToolContext, dict], str]], context: ToolContext, arguments: dict) -> str:
+    """Route one family call; an unknown action is a sentence, not a crash."""
+    handler = actions.get(str(arguments.get("action") or ""))
+    if handler is None:
+        known = ", ".join(actions)
+        return f"No conozco la acción '{arguments.get('action')}'. Las que tengo: {known}."
+    return handler(context, arguments)
+
+
+def route_agenda(context: ToolContext, arguments: dict) -> str:
+    return _dispatch(AGENDA_ACTIONS, context, arguments)
+
+
+def route_preferences(context: ToolContext, arguments: dict) -> str:
+    return _dispatch(PREFERENCES_ACTIONS, context, arguments)
+
+
+def route_documents(context: ToolContext, arguments: dict) -> str:
+    return _dispatch(DOCUMENTS_ACTIONS, context, arguments)
+
+
+def route_media(context: ToolContext, arguments: dict) -> str:
+    return _dispatch(MEDIA_ACTIONS, context, arguments)
+
+
+def route_web(context: ToolContext, arguments: dict) -> str:
+    return _dispatch(WEB_ACTIONS, context, arguments)
+
+
 def build_registry() -> dict[str, Tool]:
     return {
         tool.name: tool
         for tool in (
             Tool(
-                "reminders_set",
-                "Crear un recordatorio. Usarla cuando el usuario pida que se le recuerde algo.",
+                "agenda",
+                "Recordatorios y tareas del usuario. "
+                "add_reminder(text, when_local, repeat) para algo con hora: suena aunque el programa "
+                "esté cerrado, y sin hora queda guardado pero no avisa, así que conviene pedir la hora. "
+                "list_reminders lista los activos y cancel_reminder(reminder_id) borra uno por su número. "
+                "add_task(text) anota un pendiente sin hora; list_tasks y complete_task(task_id) lo mantienen. "
+                "Los números para cancelar o completar salen de las listas: nunca inventarlos.",
                 {
                     "type": "object",
                     "properties": {
-                        "text": {"type": "string", "description": "qué hay que recordar"},
+                        "action": {
+                            "type": "string",
+                            "enum": list(AGENDA_ACTIONS),
+                            "description": "qué hacer",
+                        },
+                        "text": {"type": "string", "description": "qué hay que recordar o anotar"},
                         "when_local": {
                             "type": "string",
-                            "description": "cuándo, en ISO local (2026-09-12T20:00). Omitirlo si el usuario no dijo hora.",
+                            "description": "cuándo, en ISO local (2026-09-12T20:00); omitirlo si el usuario no dijo hora",
                         },
                         "repeat": {
                             "type": "string",
                             "enum": ["once", "daily", "weekly"],
                             "description": "once por defecto; daily o weekly si pidió que se repita",
                         },
+                        "reminder_id": {"type": "integer", "description": "el número que mostró list_reminders"},
+                        "task_id": {"type": "integer", "description": "el número que mostró list_tasks"},
                     },
-                    "required": ["text"],
+                    "required": ["action"],
                 },
-                reminders_set,
+                route_agenda,
             ),
             Tool(
-                "reminders_list",
-                "Leer los recordatorios activos.",
-                {"type": "object", "properties": {}},
-                reminders_list,
-            ),
-            Tool(
-                "reminders_cancel",
-                "Borrar un recordatorio por su número.",
-                {
-                    "type": "object",
-                    "properties": {"reminder_id": {"type": "integer"}},
-                    "required": ["reminder_id"],
-                },
-                reminders_cancel,
-            ),
-            Tool(
-                "tasks_add",
-                "Anotar una tarea o algo que hay que hacer.",
-                {
-                    "type": "object",
-                    "properties": {"text": {"type": "string"}},
-                    "required": ["text"],
-                },
-                tasks_add,
-            ),
-            Tool(
-                "tasks_list",
-                "Leer las tareas anotadas.",
-                {"type": "object", "properties": {}},
-                tasks_list,
-            ),
-            Tool(
-                "tasks_done",
-                "Marcar una tarea como hecha.",
-                {
-                    "type": "object",
-                    "properties": {"task_id": {"type": "integer"}},
-                    "required": ["task_id"],
-                },
-                tasks_done,
-            ),
-            Tool(
-                "preferences_set",
-                "Guardar algo que al usuario le gusta o prefiere, para futuras búsquedas.",
+                "preferences",
+                "Lo que al usuario le gusta o prefiere, para futuras búsquedas. "
+                "remember(key, value) lo guarda: tema 'musica', valor 'jazz suave'. "
+                "list lee todo lo recordado.",
                 {
                     "type": "object",
                     "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": list(PREFERENCES_ACTIONS),
+                            "description": "qué hacer",
+                        },
                         "key": {"type": "string", "description": "tema, por ejemplo musica"},
                         "value": {"type": "string", "description": "lo que prefiere, por ejemplo jazz suave"},
                     },
-                    "required": ["key", "value"],
+                    "required": ["action"],
                 },
-                preferences_set,
+                route_preferences,
             ),
             Tool(
-                "preferences_list",
-                "Leer lo que ya se sabe de las preferencias del usuario.",
-                {"type": "object", "properties": {}},
-                preferences_list,
-            ),
-            Tool(
-                "documents_open",
-                "Abrir un documento del usuario por su nombre, para leerlo en voz alta. "
-                "Buscar en sus carpetas: diario, carta, receta, manual.",
+                "documents",
+                "Leer en voz alta lo que el usuario pide. "
+                "open_document(query) busca un archivo en sus carpetas por el nombre que él usa — "
+                "'el diario', 'la receta' — y lo deja listo; si hay varios parecidos, pregunta cuál. "
+                "read_next entrega el próximo pedazo del documento abierto cuando el usuario diga "
+                "'léalo' o 'siga'; el texto entre corchetes es interno y no se lee en voz alta. "
+                "get_book(title) trae un libro de dominio público del catálogo de Project Gutenberg, "
+                "con edición en español preferida, y lo deja abierto como documento. "
+                "Después de abrir o traer algo, la lectura sigue con read_next, pedazo por pedazo.",
                 {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "cómo lo llama el usuario"}
+                        "action": {
+                            "type": "string",
+                            "enum": list(DOCUMENTS_ACTIONS),
+                            "description": "qué hacer",
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "cómo llama el usuario al archivo: 'el diario', 'la receta'",
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "el título del libro, como lo dijo el usuario",
+                        },
                     },
-                    "required": ["query"],
+                    "required": ["action"],
                 },
-                documents_open,
+                route_documents,
             ),
             Tool(
-                "documents_read",
-                "Leer el próximo pedazo del documento abierto. Usarla cuando el usuario diga 'léalo' "
-                "o 'siga'. Lo que va entre corchetes es información interna: no se lee en voz alta.",
-                {"type": "object", "properties": {}},
-                documents_read,
-            ),
-            Tool(
-                "media_play",
-                "Poner música o un video: lo busca y lo abre en el navegador.",
+                "media",
+                "Música y video. "
+                "play(query) busca y lo pone en el navegador: una canción, un artista, un tema. "
+                "pause pausa o reanuda lo que esté sonando.",
                 {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "qué quiere escuchar o ver"}
+                        "action": {
+                            "type": "string",
+                            "enum": list(MEDIA_ACTIONS),
+                            "description": "qué hacer",
+                        },
+                        "query": {"type": "string", "description": "qué quiere escuchar o ver"},
                     },
-                    "required": ["query"],
+                    "required": ["action"],
                 },
-                media_play,
+                route_media,
             ),
             Tool(
-                "media_pause",
-                "Pausar o reanudar lo que está sonando.",
-                {"type": "object", "properties": {}},
-                media_pause,
-            ),
-            Tool(
-                "web_search",
-                "Buscar en internet: precios, personas, lugares, cualquier dato actual sin herramienta propia.",
+                "web",
+                "Internet: buscar y leer. "
+                "search(query) devuelve lo que encontró, ya leído. "
+                "read(url) lee una página en detalle cuando el resumen no alcance. "
+                "open(url) abre una página en el navegador para que el usuario la vea. "
+                "El clima y los titulares tienen su propia herramienta: weather_get y news_list.",
                 {
                     "type": "object",
-                    "properties": {"query": {"type": "string"}},
-                    "required": ["query"],
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": list(WEB_ACTIONS),
+                            "description": "qué hacer",
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "qué buscar: precios, personas, lugares, cualquier dato actual",
+                        },
+                        "url": {"type": "string", "description": "la dirección completa, tal como apareció"},
+                    },
+                    "required": ["action"],
                 },
-                web_search,
-            ),
-            Tool(
-                "web_read",
-                "Leer el texto de una página ya encontrada, cuando el resumen no alcance o haga falta el detalle.",
-                {
-                    "type": "object",
-                    "properties": {"url": {"type": "string", "description": "dirección completa"}},
-                    "required": ["url"],
-                },
-                web_read,
-            ),
-            Tool(
-                "web_open",
-                "Abrir una página en el navegador para que el usuario la vea.",
-                {
-                    "type": "object",
-                    "properties": {"url": {"type": "string", "description": "dirección completa"}},
-                    "required": ["url"],
-                },
-                web_open,
+                route_web,
             ),
             Tool(
                 "weather_get",
@@ -457,24 +534,6 @@ def build_registry() -> dict[str, Tool]:
                 "Leer los titulares de las noticias de hoy.",
                 {"type": "object", "properties": {}},
                 news_list,
-            ),
-            Tool(
-                "books_get",
-                "Conseguir un libro de dominio público y dejarlo listo para leer en voz alta. "
-                "Lo busca en el catálogo de Project Gutenberg, prefiere una edición en español y lo "
-                "guarda en la carpeta de libros del usuario. Continuar con documents_read si el "
-                "usuario pidió que se lo lea.",
-                {
-                    "type": "object",
-                    "properties": {
-                        "title": {
-                            "type": "string",
-                            "description": "el título del libro, como lo dijo el usuario",
-                        }
-                    },
-                    "required": ["title"],
-                },
-                books_get,
             ),
         )
     }

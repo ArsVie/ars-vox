@@ -555,11 +555,53 @@ def test_the_catalog_keeps_trying_through_a_stall_wave(monkeypatch):
 
 # ---- the registry ---------------------------------------------------------
 
+TOOL_NAMES = {"agenda", "preferences", "documents", "media", "web", "weather_get", "news_list"}
+
+
 def test_every_tool_declares_a_usable_schema():
     registry = build_registry()
-    assert len(registry) == 18
-    assert {"weather_get", "news_list", "books_get"} <= set(registry)
+    assert set(registry) == TOOL_NAMES
     for tool in registry.values():
         assert tool.description.strip()
         assert tool.parameters["type"] == "object"
         assert callable(tool.handler)
+
+
+def test_every_family_action_has_a_handler_and_a_declared_enum():
+    from services.arsvox import tools as t
+
+    families = {
+        "agenda": t.AGENDA_ACTIONS,
+        "preferences": t.PREFERENCES_ACTIONS,
+        "documents": t.DOCUMENTS_ACTIONS,
+        "media": t.MEDIA_ACTIONS,
+        "web": t.WEB_ACTIONS,
+    }
+    registry = build_registry()
+    for name, actions in families.items():
+        schema = registry[name].parameters
+        assert schema["properties"]["action"]["enum"] == list(actions), name
+        assert callable(registry[name].handler)
+
+
+def test_a_family_routes_its_actions_and_refuses_an_unknown_one(tmp_path):
+    from services.arsvox import tools as t
+
+    ctx = context(tmp_path)
+    answer = t.route_agenda(ctx, {"action": "add_task", "text": "probar la ventana"})
+    assert "probar la ventana" in answer
+    assert len(ctx.store.list_tasks("cli")) == 1
+    refused = t.route_agenda(ctx, {"action": "saltar"})
+    assert "No conozco la acción" in refused and "add_task" in refused
+
+
+def test_a_missing_argument_gets_a_question_not_a_crash(tmp_path):
+    from services.arsvox import tools as t
+
+    ctx = context(tmp_path)
+    assert "¿Qué anoto?" in t.route_agenda(ctx, {"action": "add_task"})
+    assert "¿Qué quiere que le recuerde?" in t.route_agenda(ctx, {"action": "add_reminder"})
+    assert "¿Qué pongo?" in t.route_media(ctx, {"action": "play"})
+    assert "¿Cuál archivo" in t.route_documents(ctx, {"action": "open_document"})
+    assert "¿Qué busco?" in t.route_web(ctx, {"action": "search"})
+    assert "¿Cuál libro busco?" in t.route_documents(ctx, {"action": "get_book"})

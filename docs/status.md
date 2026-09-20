@@ -105,7 +105,7 @@ that fallback instead of hiding it.
 | `services/arsvox/model.py` | 199 | raw httpx chat completions, usage and cache accounting |
 | `services/arsvox/context.py` | 119 | ordered prompt sections, strict interpolation, volatile snapshot |
 | `services/arsvox/limits.py` | 54 | step budget and repetition cap (Recommendation 18) |
-| `services/arsvox/tools.py` | 257 | eight tools, each writing real state, validated against its own schema |
+| `services/arsvox/tools.py` | 597 | seven tools — five action families plus weather and news — each writing real state, validated against its own schema |
 | `services/arsvox/runtime.py` | 162 | the turn loop |
 | `apps/cli/arsvox_cli.py` | 361 | `ask`, `chat`, `talk`, `speak`, `listen`, `log`, `sessions` |
 
@@ -331,8 +331,8 @@ tool covers that road: `books_get` searches Project Gutenberg through its keyles
 JSON API (Gutendex), prefers a Spanish edition, fetches the plain text, strips the
 Project Gutenberg header and footer, saves it under `Documents\Ars Vox Libros\` and
 registers it as the current document — `documents_read` continues from there. The
-visible-tool count is 18: this one is the reading feature itself, not another web
-source.
+visible-tool count went to 18 with this one: the reading feature itself, not
+another web source — then the surface was collapsed the same day (see below).
 
 | what | evidence |
 |---|---|
@@ -344,6 +344,27 @@ source.
 A sibling check, same day, off-tree: libgen.li works end to end — search → download →
 md5 of the received file equals the catalog's recorded md5 (2 of 2 downloads). The
 in-copyright route stays unwired; that decision is Ars's.
+
+### La superficie: 18 tool entries collapsed to 7 (2026-09-19)
+
+The model used to choose among eighteen tools. Five families now carry the routine
+work behind one `action` enum each — `agenda` (reminders and tasks), `preferences`,
+`documents` (open / read next / bring a book), `media`, `web` — and `weather_get`
+and `news_list` stay standalone because each answers one sentence in one call. The
+enum in every schema is built from the same map the dispatcher uses, so the two
+cannot disagree, and a missing per-action argument is answered with a question
+("¿Qué anoto?") instead of a validation code. Descriptions follow the house style
+of ProjectSight's MCP tools and Pi's: every sentence earns its cost — when to use
+the tool, where each argument comes from, how to read the reply — and a fact
+needed only at one moment lives in the refusal sentence, not the description.
+
+Verified by a real-model battery over a throwaway service: ten utterances,
+eleven tool calls, and every call picked the right family and action (agenda ×3,
+preferences ×2, documents ×3, weather, news, web). Gutendex stalled mid-battery —
+the model said so and offered to retry instead of inventing an answer. Same day,
+the Spanish-first book search stopped falling through to foreign editions when a
+long title misses the catalog (the Quijote it once saved was Hungarian, PG #66263).
+120 tests green.
 
 ## El registro — español de México, de usted
 

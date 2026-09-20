@@ -194,15 +194,15 @@ def test_the_loop_registers_and_cancels_the_windows_task(tmp_path: Path):
                 tool_calls=[
                     ToolCall(
                         id="c1",
-                        name="reminders_set",
-                        arguments={"text": "pastilla", "when_local": "2026-09-12T20:00"},
+                        name="agenda",
+                        arguments={"action": "add_reminder", "text": "pastilla", "when_local": "2026-09-12T20:00"},
                     )
                 ],
             ),
             ModelReply(text="Listo."),
             ModelReply(
                 text="",
-                tool_calls=[ToolCall(id="c2", name="reminders_cancel", arguments={"reminder_id": 1})],
+                tool_calls=[ToolCall(id="c2", name="agenda", arguments={"action": "cancel_reminder", "reminder_id": 1})],
             ),
             ModelReply(text="Borrado."),
         ]
@@ -219,7 +219,7 @@ def test_a_reminder_with_no_time_says_so(tmp_path: Path):
     settings = Settings(base_url="http://x", model="fake", api_key="k", db_path=tmp_path / "c.db")
     model = FakeModel(
         [
-            ModelReply(text="", tool_calls=[ToolCall(id="c1", name="reminders_set", arguments={"text": "pagar la luz"})]),
+            ModelReply(text="", tool_calls=[ToolCall(id="c1", name="agenda", arguments={"action": "add_reminder", "text": "pagar la luz"})]),
             ModelReply(text="¿A qué hora?"),
         ]
     )

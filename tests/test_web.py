@@ -35,7 +35,7 @@ class SlowModel:
 
     def complete(self, messages, tools) -> ModelReply:
         time.sleep(self.delay)
-        return ModelReply(text="", tool_calls=[ToolCall(id="c", name="tasks_list", arguments={})])
+        return ModelReply(text="", tool_calls=[ToolCall(id="c", name="agenda", arguments={"action": "list_tasks"})])
 
 
 def get_json(port: int, path: str) -> dict:
@@ -125,7 +125,7 @@ def test_a_turn_runs_and_its_answer_appears_in_the_events(service):
             ModelReply(
                 text="",
                 tool_calls=[
-                    ToolCall(id="c1", name="tasks_add", arguments={"text": "comprar pan"})
+                    ToolCall(id="c1", name="agenda", arguments={"action": "add_task", "text": "comprar pan"})
                 ],
             ),
             ModelReply(text="Anotado, comprar pan."),
