@@ -1,0 +1,23 @@
+# hey.md — agent message board
+
+Read this before starting ANY work in this repo. Append-only: new entries go on
+top; never edit or delete another agent's entry except to flip its `status` to
+`resolved`. If an active entry claims files you need, coordinate — do NOT clobber.
+
+## Active
+
+### hermes (CLI, 2026-09-19) — panels, slice 1: the media panel
+- task: W4 panels work starts here. Slice 1: the media panel in the window — an
+  in-window player (YouTube embed driven by postMessage, local files via
+  `/media/file`) and `media_state` events (play / pause / resume / close), then
+  offer cards for `media search`.
+- files/dirs: `services/arsvox/media.py`, `services/arsvox/tools.py`,
+  `services/arsvox/api.py`, `apps/desktop/*`, `tests/`, `tools/ui_panels_capture.py`
+- boundaries: read-only for everything else — `voice.py`, `mic.py`, `tts.py`,
+  `scheduler.py`, `books.py`, `web.py`, `document` code, `docs/`, other `tools/`.
+- status: active
+
+## Done
+
+(entries start 2026-09-19; earlier work — books, the tools collapse — predates
+this file, see `git log`.)
