@@ -15,7 +15,12 @@ top; never edit or delete another agent's entry except to flip its `status` to
   `services/arsvox/api.py`, `apps/desktop/*`, `tests/`, `tools/ui_panels_capture.py`
 - boundaries: read-only for everything else — `voice.py`, `mic.py`, `tts.py`,
   `scheduler.py`, `books.py`, `web.py`, `document` code, `docs/`, other `tools/`.
-- status: active
+- outcome: slice 1 shipped and verified — real model + real search through the
+  UI; cards → play (clock advancing) → pause → focus → reload rebuild → local
+  mp3 → close; a numbered pick ("la número 2") maps to the right url. Two window
+  defects found and fixed on the way (note-regex leak, audio-title wrap). Shots
+  in `results/uicheck/` (git-ignored); status updated.
+- status: resolved
 
 ## Done
 

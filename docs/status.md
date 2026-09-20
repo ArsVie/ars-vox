@@ -224,7 +224,7 @@ Five abilities from the sheet. Status after this wave:
 |---|---|---|
 | documents | `documents_open`, `documents_read` | opened the user's real 1,875,482-character construction spec PDF out of Downloads and read the first chunk of it |
 | web | `web_search`, `web_read`, `web_open` | live: "ahora hay unos 31 grados, máxima de 36 y mínima de 26, soleado" for Mexicali. The dollar came back as pages, and the assistant said it had no number instead of inventing one |
-| media | `media_play`, `media_pause` | resolution verified live (three real results for "The Beatles Let It Be"); playback deliberately not exercised — it would play music at the user unprompted. Pause sends the media key |
+| media | `media` (search / play / pause / resume / close) | superseded by the panels slice below: real search through the window, click-to-play in the panel, controls that actually drive the video; verified live 2026-09-19 |
 | reminders | `reminders_*` | fires with the app closed (W2) |
 | messaging | — | not built yet: needs a bot token and the spoken read-back |
 
@@ -493,11 +493,50 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 3,873 in 20 files |
-| measurement tooling lines | 1,003 |
-| test lines | 1,668, one hundred fifteen tests green |
+| runtime lines (services + cli) | 4,167 |
+| measurement tooling lines | 1,664 |
+| test lines | 1,907, one hundred thirty-three tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |
 | voice | edge-tts neural; SAPI banned by ear |
-| window | 416 lines of plain JS in apps/desktop (HABLAR + DETENER + bubbles), no framework, no build step |
+| window | 878 lines of plain JS, HTML and CSS in apps/desktop (HABLAR + DETENER + bubbles + the media panel), no framework, no build step |
+
+## W4 — los paneles, slice 1: el panel de medios (2026-09-19)
+
+The first panel. Not a layout engine, not a registry of roles — conversation and
+panel, two layouts (`sidecar` and `focus`), and the panel is a view of the same
+event log as everything else: `media_offers` and `media_state` events say what to
+show and the last one wins. The v1 mistakes it deliberately does not repeat: no
+playback authority in the service (position lives in the page; a reload comes back
+paused, which is the honest thing), no snapshot/restore machinery, and the old
+"open a browser tab" playback is deleted, not deprecated.
+
+| what | evidence |
+|---|---|
+| offer cards, real search | a real turn ("Busca en YouTube música de los Beatles") → `media.search` → 4 real cards in the panel; the model reads the options out with their numbers (tool text sharpened the same day: "Cuéntele cada opción con su número y su duración") |
+| click to play | clicking a card posts `/media/play`; the play event reaches the page through the log; the video plays with the clock advancing (0:00 → 0:02) and a real 2:11:35 duration |
+| embedding-restricted videos | three of the four offerings refuse embedding; YouTube's `onError` (101/150) becomes a plain-language note in the panel («Este video no se puede ver acá. Elija otra de la lista.») and the bar rests — captured (`panels-04-unavailable.png`) |
+| pause / focus | our own control pauses (button flips to ▶); `agrandar` grows the panel to the full window and back |
+| reload rebuild | the page comes back with the player re-mounted and paused at 0:00, position never faked |
+| local files | a real mp3 served range-capable by the service plays in the same bar (pause glyph, 0:01, 3:09) — `panels-09-local.png` |
+| close | the ✕ posts `/media/control` close; a reload after it stays closed |
+| numbered pick (voice path) | "Ponga la número 2 de la lista." → a `play` event carrying exactly that option's url; the reply offers pause or another |
+| the YouTube channel | hand-rolled postMessage commands are ignored by the modern widget (verified: the raw iframe sends `readyToListen`/`onReady` and never answers a parent command; YouTube's own `iframe_api` player does). The window now uses the official loader, keeps its own control bar, and falls back to the video's controls if the script cannot load. |
+| tests | 133 green |
+
+Two window defects this slice found, both fixed:
+
+1. **A stray "no" mid-sentence dumped an internal tool result on screen.** The
+   note-regex (`/falló|no |…/`) matched "…no se lee en voz alta" inside a
+   *successful* search result and rendered the whole `[Meta: …]`-carrying text as
+   a user-facing note. Only clear failures reach the reader now (anchored on
+   "No…", "falló", "debe ser", "faltan").
+2. **The audio file name wrapped mid-word.** `.audio-title` had `max-width: 90%`
+   inside a shrink-to-fit grid — the constraint fought the sizing and "cafe.mp3"
+   broke as "cafe.mp"/"3". The cap moved to the card; the title is one line again
+   (104×35 px measured).
+
+The driver that walked all of this with real pixels is `tools/ui_panels_capture.py`
+(muted headless Edge against a throwaway service; every state screenshotted under
+`results/uicheck/`, git-ignored).
