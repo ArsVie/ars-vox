@@ -702,3 +702,116 @@ def test_a_missing_argument_gets_a_question_not_a_crash(tmp_path):
     assert "¿Cuál archivo" in t.route_documents(ctx, {"action": "open_document"})
     assert "¿Qué busco?" in t.route_web(ctx, {"action": "search"})
     assert "¿Cuál libro busco?" in t.route_documents(ctx, {"action": "get_book"})
+
+
+def test_music_search_leaves_songs_on_screen(tmp_path, monkeypatch):
+    from services.arsvox import media as m
+    from services.arsvox import tools as t
+
+    ctx = context(tmp_path)
+    monkeypatch.setattr(
+        m,
+        "search_music",
+        lambda query, limit=4: [
+            {
+                "title": "Let It Be",
+                "url": "https://www.youtube.com/watch?v=QDYfEBY9NM4",
+                "channel": "The Beatles",
+                "seconds": 243,
+            }
+        ],
+    )
+    answer = t.route_media(ctx, {"action": "search", "query": "the beatles", "type": "music"})
+    assert "Canciones a la vista" in answer and "Let It Be" in answer
+    offers = [e for e in ctx.store.events("cli") if e.kind == "media_offers"]
+    assert offers and offers[-1].payload.get("type") == "music"
+
+
+def test_music_play_fetches_the_sound_not_the_video(tmp_path, monkeypatch):
+    from services.arsvox import media as m
+    from services.arsvox import tools as t
+
+    ctx = context(tmp_path)
+    produced = tmp_path / "QDYfEBY9NM4.m4a"
+    produced.write_bytes(b"\x00")
+    monkeypatch.setattr(m, "fetch_audio", lambda url, folder: (produced, "Let It Be (Remastered 2009)"))
+    answer = t.route_media(
+        ctx,
+        {
+            "action": "play",
+            "type": "music",
+            "url": "https://www.youtube.com/watch?v=QDYfEBY9NM4",
+            "title": "Let It Be",
+        },
+    )
+    assert "Let It Be" in answer
+    plays = [
+        e
+        for e in ctx.store.events("cli")
+        if e.kind == "media_state" and e.payload.get("source") == "music"
+    ]
+    assert plays and plays[-1].payload["kind"] == "audio"
+    # the video path was never walked
+    assert not [e for e in ctx.store.events("cli") if e.kind == "media_state" and e.payload.get("source") == "youtube"]
+
+
+def test_the_window_folders_become_the_reader_roots(tmp_path):
+    from services.arsvox import books, documents
+
+    library = tmp_path / "libros"
+    library.mkdir()
+    (library / "el coronel no tiene quien le escriba.txt").write_text("hola", encoding="utf-8")
+    documents.set_search_folders([library])
+    try:
+        hits, _ = documents.find("coronel")
+        assert hits and hits[0].path == library / "el coronel no tiene quien le escriba.txt"
+        assert books.books_home() == library / "Ars Vox Libros"
+    finally:
+        documents.set_search_folders(None)
+
+
+def test_documents_list_shows_the_shelf(tmp_path):
+    from services.arsvox import documents
+    from services.arsvox import tools as t
+
+    ctx = context(tmp_path)
+    shelf = tmp_path / "libros"
+    shelf.mkdir()
+    (shelf / "El Quijote.txt").write_text("x", encoding="utf-8")
+    (shelf / "Recetas de la abuela.md").write_text("y", encoding="utf-8")
+    (shelf / "notas.png").write_bytes(b"z")  # not readable: stays off the shelf
+    documents.set_search_folders([shelf])
+    try:
+        answer = t.route_documents(ctx, {"action": "list_documents"})
+        assert "El Quijote" in answer and "Recetas de la abuela" in answer
+        assert "notas" not in answer
+        assert "Dígame cuál le leo" in answer
+    finally:
+        documents.set_search_folders(None)
+
+
+def test_documents_list_on_an_empty_shelf(tmp_path):
+    from services.arsvox import documents
+    from services.arsvox import tools as t
+
+    ctx = context(tmp_path)
+    empty = tmp_path / "vacio"
+    empty.mkdir()
+    documents.set_search_folders([empty])
+    try:
+        answer = t.route_documents(ctx, {"action": "list_documents"})
+        assert "No encontré documentos" in answer
+    finally:
+        documents.set_search_folders(None)
+
+
+def test_config_lives_in_the_store(tmp_path):
+    ctx = context(tmp_path)
+    ctx.store.set_config("cli", "books_path", str(tmp_path / "mis libros"))
+    ctx.store.set_config("cli", "music_path", str(tmp_path / "mi musica"))
+    assert ctx.store.config("cli") == {
+        "books_path": str(tmp_path / "mis libros"),
+        "music_path": str(tmp_path / "mi musica"),
+    }
+    ctx.store.set_config("cli", "books_path", str(tmp_path / "otros"))
+    assert ctx.store.config("cli")["books_path"] == str(tmp_path / "otros")

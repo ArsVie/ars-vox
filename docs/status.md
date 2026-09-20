@@ -493,14 +493,14 @@ Re-scoring a saved session without new audio: `python tools/w0_rescore.py`.
 
 | item | value |
 |---|---|
-| runtime lines (services + cli) | 4,167 |
-| measurement tooling lines | 1,664 |
-| test lines | 1,907, one hundred thirty-three tests green |
+| runtime lines (services + cli) | 4,401 |
+| measurement tooling lines | 1,598 |
+| test lines | 2,060, one hundred forty-one tests green |
 | dependencies | faster-whisper, ctranslate2, numpy, sounddevice, edge-tts, httpx, ffmpeg on PATH |
 | fakes | two seams only: the model, the microphone (the fake voice is test-only) |
 | runs | JSON per run under results/ (git-ignored) |
 | voice | edge-tts neural; SAPI banned by ear |
-| window | 878 lines of plain JS, HTML and CSS in apps/desktop (HABLAR + DETENER + bubbles + the media panel), no framework, no build step |
+| window | 1,120 lines of plain JS, HTML and CSS in apps/desktop (HABLAR + DETENER + bubbles + the media panel + the settings popup), no framework, no build step |
 
 ## W4 — los paneles, slice 1: el panel de medios (2026-09-19)
 
@@ -540,3 +540,26 @@ Two window defects this slice found, both fixed:
 The driver that walked all of this with real pixels is `tools/ui_panels_capture.py`
 (muted headless Edge against a throwaway service; every state screenshotted under
 `results/uicheck/`, git-ignored).
+## W4 — los paneles, slice 2: música, el rescate del video bloqueado, ajustes y el estante (2026-09-19)
+
+Slice 2 split the one panel into two shapes and closed the hole slice 1 left open:
+a video that refuses to embed used to die on screen with no path forward.
+
+| what | evidence |
+|---|---|
+| music path (`type: music`) | `media search/play` with `type="music"` searches YouTube Music and takes the sound path: yt-dlp `bestaudio` fetched into the folder set from the settings screen and pruned to the newest 12; the music shape is a small top-right control (compact light stage) instead of a video stage |
+| the refusal auto-tie | the window reports a failed embed to `POST /media/failed`; the service logs it and wakes ONE turn whose cue is marked `internal` — the window never renders internal cues (the first cut leaked the raw cue, "error 150" and all, into her conversation column; the pixel pass caught it) |
+| the offer, unprompted | "Ese video no se puede ver aquí, pero la canción sí se puede oír. ¿Quiere que se la ponga para escucharla?" — no user action, no error text; the turn exists because the failure did |
+| «sí» plays the same song | verified live: an error-150 video → offer → «Sí, se lo agradezco: póngamelo para oír.» → the same video's audio fetched (`NCtzkaL2t_Y.m4a`), playing in the panel (0:09 → 0:15 of a 3:31 clock) |
+| friendly failure view | YouTube's English "This video is unavailable" chrome is replaced by the panel's own calm card (glyph + plain sentence); the note strip carries the words |
+| settings popup | «ajustes» floats over the window (the dim edge closes it, Escape closes it) and writes `books_path` / `music_path` through `/config`; measured reflow zero (workspace 915 → 915 px) — it must never squash the UI |
+| `agrandar` = full screen | the measured first cut grew only black (stage 494 px tall in BOTH layouts; the video is height-capped) — the chrome steps aside and the panel goes full screen (stage 1151×767 → 1920×932 at 1080p), `achicar`/Esc/✕ back, panel header kept; measure the video rects when touching it |
+| header diet | the model/session readout left the header (developer noise on an elderly surface); status = one FILLED square + one plain word — an outline square reads as an unchecked checkbox |
+| the shelf (`list_documents`) | «¿Qué libros tiene para leerme?» → "Tiene tres cosas guardadas: el cancionero de la familia, las recetas de la abuela, y la novela El coronel no tiene quien le escriba. ¿Cuál quiere que le lea?"; live: list → open by name → reads the first part → «siga leyendo» → continues → ends with a sentence, not a search |
+| reading stays local | `get_book` is forbidden while a local document is open (a mid-read catalog detour produced a timeout apology that reached the user); an exhausted document answers «Ya le leí todo…» (register fixed from an informal "te") |
+| replies read themselves | fresh assistant replies auto-speak (`/speak` queue in the window); «escuchar» stays for replays |
+| fresh DB per update (Ars's rule) | every relaunch starts a clean database (the throwaway rig stamps a temp file; live backs up `data/arsvox.db` first); boot-time schemas mean code changes need the relaunch anyway; the window auto-reloads when it sees the log reset, so an open window never shows a conversation the log no longer has |
+| ports | live **8790**; the ONE throwaway rig is **8791** (8792–8794 retired); Ars looks at 8791 when he wants to see the current build |
+| tests | 141 green |
+
+Shots under `results/uicheck/` (`s2-*`, `s4-*`, `s5-*`, git-ignored).

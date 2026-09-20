@@ -22,7 +22,6 @@ function localStamp() {
 const conversation = document.getElementById("conversation");
 const indicator = document.getElementById("indicator");
 const statusText = document.getElementById("status-text");
-const who = document.getElementById("who");
 const thinking = document.getElementById("thinking");
 const input = document.getElementById("text");
 const sendButton = document.getElementById("send");
@@ -207,6 +206,17 @@ function youtubeTrouble(code) {
   return "No se pudo cargar el video. Elija otra de la lista.";
 }
 
+/* The failure also goes to the service. The user never reads an error: what
+   happens next is that the assistant speaks first and offers to play the sound.
+   One report per mounted player — the note stays on screen, the log keeps one line. */
+function reportMediaFailed(payload, code) {
+  fetch("/media/failed", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: payload.url || "", title: payload.title || "", code: code }),
+  }).catch(() => {});
+}
+
 function youTubeEngine(payload, report, fresh) {
   const holder = document.createElement("div");
   holder.className = "yt-holder";
@@ -215,6 +225,7 @@ function youTubeEngine(payload, report, fresh) {
   let player = null;
   let ready = false;
   let finished = false;
+  let failedReported = false;
 
   loadYouTubeApi()
     .then((YT) => {
@@ -229,7 +240,29 @@ function youTubeEngine(payload, report, fresh) {
             if (fresh) event.target.playVideo(); // a just-asked video starts; a rebuilt one waits
           },
           onStateChange: (event) => report({ playing: event.data === 1 }),
-          onError: (event) => report({ note: youtubeTrouble(event.data) }),
+          onError: (event) => {
+            const message = youtubeTrouble(event.data);
+            report({ note: message });
+            if (!failedReported) {
+              failedReported = true; // one report per mounted player
+              reportMediaFailed(payload, event.data);
+            }
+            // YouTube's own error screen speaks English; the panel speaks hers
+            ready = false;
+            try {
+              if (player && player.destroy) player.destroy();
+            } catch (error) {}
+            const card = document.createElement("div");
+            card.className = "audio-card";
+            const glyph = document.createElement("span");
+            glyph.className = "glyph";
+            glyph.textContent = "▷";
+            const line = document.createElement("span");
+            line.className = "audio-title";
+            line.textContent = message;
+            card.append(glyph, line);
+            stage.replaceChildren(card);
+          },
         },
       });
     })
@@ -256,7 +289,9 @@ function youTubeEngine(payload, report, fresh) {
     destroy() {
       finished = true;
       clearInterval(tick);
-      if (player && player.destroy) player.destroy();
+      try {
+        if (player && player.destroy) player.destroy();
+      } catch (error) {}
       holder.remove();
     },
   };
@@ -319,6 +354,8 @@ function clearPanelBody() {
   }
   offersBox.innerHTML = "";
   stage.innerHTML = "";
+  stage.classList.remove("audio-only");
+  panel.classList.remove("audio-only");
   offersBox.hidden = true;
   stage.hidden = true;
   controlsBox.hidden = true;
@@ -336,7 +373,8 @@ function clearPanelBody() {
 
 function showOffers(payload) {
   clearPanelBody();
-  panelTitle.textContent = payload.query ? `Opciones: ${payload.query}` : "Opciones";
+  const label = payload.type === "music" ? "Canciones" : "Opciones";
+  panelTitle.textContent = payload.query ? `${label}: ${payload.query}` : label;
   for (const item of payload.items || []) {
     const node = cardTemplate.content.firstElementChild.cloneNode(true);
     node.querySelector(".card-title").textContent = item.title || "(sin título)";
@@ -350,7 +388,7 @@ function showOffers(payload) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source: "youtube",
+          source: payload.type === "music" ? "music" : "youtube",
           url: item.url,
           title: item.title,
           channel: item.channel,
@@ -368,10 +406,13 @@ function showOffers(payload) {
 
 function showPlayer(payload, fresh) {
   clearPanelBody();
-  panelTitle.textContent = payload.title || "Video de YouTube";
+  const audioOnly = payload.source === "music" || (payload.source === "local" && payload.kind === "audio");
+  panelTitle.textContent = payload.title || (payload.source === "youtube" ? "Video de YouTube" : "Música");
+  stage.classList.toggle("audio-only", audioOnly);
+  panel.classList.toggle("audio-only", audioOnly);
   if (payload.source === "youtube" && payload.video_id) {
     engine = youTubeEngine(payload, reportFromEngine, fresh);
-  } else if (payload.source === "local") {
+  } else if (payload.source === "local" || payload.source === "music") {
     engine = html5Engine(payload, reportFromEngine, fresh);
   } else {
     return; // nothing on the stage to show
@@ -386,6 +427,11 @@ function showPlayer(payload, fresh) {
 function hidePanel() {
   clearPanelBody();
   panel.hidden = true;
+  grown = false;
+  document.body.classList.remove("focus-mode");
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
   panelGrow.textContent = "agrandar";
   setLayout("");
 }
@@ -440,18 +486,140 @@ panelClose.addEventListener("click", async () => {
   pull();
 });
 
-panelGrow.addEventListener("click", () => {
-  const focused = workspace.className === "focus";
-  setLayout(focused ? "sidecar" : "focus");
-  panelGrow.textContent = focused ? "agrandar" : "achicar";
+/* agrandar: the video gets the whole screen, not just more black. The window's
+   chrome steps aside, and full screen is the extra mile when the browser allows it
+   (a click is a gesture, so it does). */
+let grown = false;
+
+function setGrown(on) {
+  grown = on;
+  setLayout(on ? "focus" : "sidecar");
+  document.body.classList.toggle("focus-mode", on);
+  panelGrow.textContent = on ? "achicar" : "agrandar";
+  if (!on && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+panelGrow.addEventListener("click", async () => {
+  const next = !grown;
+  setGrown(next);
+  if (next && !panel.classList.contains("audio-only") && panel.requestFullscreen) {
+    try {
+      await panel.requestFullscreen();
+    } catch (error) {
+      // the wide layout already grew; full screen was the extra
+    }
+  }
+});
+
+document.addEventListener("fullscreenchange", () => {
+  // Esc lands here too: leaving full screen also means "achicar"
+  if (grown && !document.fullscreenElement) setGrown(false);
+});
+
+/* ---- the voice ----------------------------------------------------------
+   A reply that just arrived is read out loud: the product talks back. The
+   "escuchar" button stays on every bubble for hearing it again. */
+const speechQueue = [];
+let speaking = false;
+
+function speak(text) {
+  if (!text) return;
+  speechQueue.push(text);
+  drainSpeech();
+}
+
+function drainSpeech() {
+  if (speaking) return;
+  const line = speechQueue.shift();
+  if (line === undefined) return;
+  speaking = true;
+  const done = () => {
+    speaking = false;
+    drainSpeech();
+  };
+  fetch("/speak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: line }),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (!data.url) return done();
+      const audio = new Audio(data.url);
+      audio.onended = done;
+      audio.onerror = done;
+      audio.play().catch(done);
+    })
+    .catch(done);
+}
+
+/* ---- the folders the user can set from the window ----------------------- */
+
+const settingsOpen = document.getElementById("settings-open");
+const settingsBox = document.getElementById("settings");
+const cfgBooks = document.getElementById("cfg-books");
+const cfgMusic = document.getElementById("cfg-music");
+const cfgSave = document.getElementById("cfg-save");
+const cfgClose = document.getElementById("cfg-close");
+const cfgStatus = document.getElementById("cfg-status");
+
+async function openSettings() {
+  try {
+    const data = await (await fetch("/config")).json();
+    const cfg = data.config || {};
+    cfgBooks.value = cfg.books_path || "";
+    cfgMusic.value = cfg.music_path || "";
+    cfgStatus.textContent = "";
+  } catch (error) {
+    cfgStatus.textContent = "no pude leer los ajustes";
+  }
+  settingsBox.hidden = false;
+}
+
+settingsOpen.addEventListener("click", async () => {
+  if (settingsBox.hidden) await openSettings();
+  else settingsBox.hidden = true;
+});
+cfgClose.addEventListener("click", () => {
+  settingsBox.hidden = true;
+});
+settingsBox.addEventListener("click", (event) => {
+  if (event.target === settingsBox) settingsBox.hidden = true; // the dim edge closes it
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !settingsBox.hidden) settingsBox.hidden = true;
+});
+cfgSave.addEventListener("click", async () => {
+  try {
+    const response = await fetch("/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        books_path: cfgBooks.value.trim(),
+        music_path: cfgMusic.value.trim(),
+      }),
+    });
+    const data = await response.json();
+    cfgStatus.textContent = data.ok ? "guardado" : "no pude guardar";
+  } catch (error) {
+    cfgStatus.textContent = "no pude guardar";
+  }
 });
 
 /* ---- the loop the page lives in ---------------------------------------- */
 
 function render(event, fresh) {
   const { kind, payload, ts } = event;
-  if (kind === "user_text") bubble("user", payload.text, ts, false);
-  else if (kind === "assistant_text") bubble("assistant", payload.text, ts, true);
+  if (kind === "user_text") {
+    // internal cues wake the model; they never appear as her own words
+    if (!payload.internal) bubble("user", payload.text, ts, false);
+  }
+  else if (kind === "assistant_text") {
+    bubble("assistant", payload.text, ts, true);
+    if (fresh) speak(payload.text); // fresh replies are read out loud; the button replays
+  }
   else if (kind === "tool_call") chip(payload.name, payload.arguments);
   else if (kind === "tool_result" && /^\s*No\b|falló|debe ser|faltan/.test(payload.text || "")) {
     // only clear failures reach the reader; a stray "no" mid-sentence once
@@ -470,6 +638,12 @@ async function pull() {
     const response = await fetch(`/events?after=${lastId}`);
     const data = await response.json();
     const now = Date.now();
+    if (data.last_id < lastId) {
+      // the service came back with a fresh log (an update reset the database):
+      // start over so the window never shows a conversation the log no longer has
+      location.reload();
+      return;
+    }
     for (const event of data.events) {
       const age = event.ts ? now - Date.parse(event.ts) : Infinity;
       render(event, age < FRESH_MS);
@@ -488,11 +662,10 @@ async function pull() {
 async function health() {
   try {
     const data = await (await fetch("/health")).json();
-    who.textContent = data.model + " · " + data.session;
     setEars(Boolean(data.ears));
     setStatus(data.busy, data.busy ? "trabajando" : "listo");
   } catch (error) {
-    who.textContent = "servicio apagado";
+    setStatus(true, "sin conexión — reintentando");
     setEars(false);
   }
 }

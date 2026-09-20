@@ -85,13 +85,20 @@ class Runtime:
         return [{"role": "system", "content": self.system_prompt(now)}] + self.store.messages(session)
 
     # ---- the turn --------------------------------------------------------
-    def turn(self, session: str, user_text: str, should_stop=None) -> TurnResult:
-        """One turn. `should_stop` is the always-visible stop control, checked each step."""
+    def turn(self, session: str, user_text: str, should_stop=None, internal: bool = False) -> TurnResult:
+        """One turn. `should_stop` is the always-visible stop control, checked each step.
+
+        `internal` marks a cue the window must not show as the user's own words
+        (the media failure note wakes the model; it never reaches her eyes).
+        """
         started = time.perf_counter()
         # The context block goes in before the user's words, so the request is the last
         # thing the model reads and not the boilerplate.
         snapshot_appended = self.refresh_snapshot(session)
-        self.store.append(session, "user_text", {"text": user_text})
+        cue = {"text": user_text}
+        if internal:
+            cue["internal"] = True
+        self.store.append(session, "user_text", cue)
         budget = StepBudget(self.max_steps)
         doom = DoomLoopCap()
         result = TurnResult(text="", snapshot_appended=snapshot_appended)

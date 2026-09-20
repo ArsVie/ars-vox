@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Callable, Protocol
 
 from services.arsvox import books, documents, media, web
@@ -185,7 +186,7 @@ def documents_read(context: ToolContext, arguments: dict) -> str:
         return f"No pude volver a leer '{row['title']}' ({type(exc).__name__})."
     cursor = int(row["cursor"])
     if cursor >= len(text):
-        return f"Ya te leí todo '{row['title']}'."
+        return f"Ya le leí todo '{row['title']}'."
     chunk = text[cursor : cursor + documents.CHUNK_CHARS]
     new_cursor = context.store.advance_document(context.session, len(chunk))
     remaining = max(len(text) - new_cursor, 0)
@@ -193,29 +194,74 @@ def documents_read(context: ToolContext, arguments: dict) -> str:
     return f"{chunk}\n\n{tail}"
 
 
+def documents_list(context: ToolContext, arguments: dict) -> str:
+    """What is on the shelf: the files the assistant can read aloud, newest first."""
+    books = documents.list_books(limit=12)
+    if not books:
+        return "No encontré documentos en sus carpetas. Dígame dónde los tiene y los busco."
+    parts = [
+        f"{number}) {path.stem.replace('_', ' ').replace('-', ' ').strip()}"
+        for number, path in enumerate(books, 1)
+    ]
+    return "Tengo estos documentos a mano: " + "; ".join(parts) + ". Dígame cuál le leo."
+
+
+def _music_dir(context: ToolContext) -> Path:
+    """Where fetched songs live: the folder set in the window, or the service's cache."""
+    configured = (context.store.config(context.session).get("music_path") or "").strip()
+    return Path(configured) if configured else context.settings.db_path.parent / "media-cache"
+
+
 def media_search(context: ToolContext, arguments: dict) -> str:
     """Search and leave the options on screen, so the user picks from the panel."""
     query = str(arguments.get("query") or "").strip()
     if not query:
         return "¿Qué busca? ¿Música o un video?"
+    music = str(arguments.get("type") or "video") == "music"
     try:
-        found = media.resolve(query, limit=4)
+        found = media.search_music(query, limit=4) if music else media.resolve(query, limit=4)
     except media.MediaError as exc:
         return f"No pude buscar '{query}': {exc}."
     if not found:
         return f"No encontré nada para '{query}'."
-    context.store.append(context.session, "media_offers", {"query": query, "items": found})
+    context.store.append(
+        context.session,
+        "media_offers",
+        {"query": query, "items": found, "type": "music" if music else "video"},
+    )
     parts = []
     for number, item in enumerate(found, 1):
         channel = f" — {item['channel']}" if item["channel"] else ""
         length = f" — {item['seconds'] // 60}:{item['seconds'] % 60:02d}" if item["seconds"] else ""
         parts.append(f"{number}) {item['title']}{channel}{length} [{item['url']}]")
+    opening = "Canciones a la vista: " if music else "Opciones a la vista: "
     return (
-        "Opciones a la vista: "
+        opening
         + "; ".join(parts)
         + ". Cuéntele cada opción con su número y su duración, y pregúntele cuál quiere. "
         "[Meta: lo de corchetes es la dirección de cada opción, para play; no se lee en voz alta.]"
     )
+
+
+def _media_play_music(context: ToolContext, url: str, query: str, title: str) -> str:
+    """The sound path: fetch the audio and put it in the panel. No embed involved."""
+    seconds = 0
+    if not url:
+        try:
+            found = media.search_music(query, limit=3)
+        except media.MediaError as exc:
+            return f"No pude buscar '{query}': {exc}."
+        if not found:
+            return f"No encontré nada para '{query}'."
+        item = found[0]
+        url, title, seconds = item["url"], item["title"], int(item.get("seconds") or 0)
+    try:
+        path, fetched_title = media.fetch_audio(url, _music_dir(context))
+    except media.MediaError as exc:
+        return f"No pude traer esa canción: {exc}. ¿Le pongo otra cosa?"
+    event = media.music_event(path, title or fetched_title, seconds=seconds, origin=url)
+    context.store.append(context.session, "media_state", event)
+    return f"Ya la puse para oír: '{event['title']}'. Suena en el panel."
 
 
 def media_play(context: ToolContext, arguments: dict) -> str:
@@ -224,6 +270,8 @@ def media_play(context: ToolContext, arguments: dict) -> str:
     query = str(arguments.get("query") or "").strip()
     if not url and not query:
         return "¿Qué pongo? ¿Música o video de qué?"
+    if str(arguments.get("type") or "video") == "music":
+        return _media_play_music(context, url, query, title)
     if url:
         item = {"title": title, "url": url, "channel": "", "seconds": 0}
     else:
@@ -358,6 +406,7 @@ AGENDA_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
 DOCUMENTS_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
     "open_document": documents_open,
     "read_next": documents_read,
+    "list_documents": documents_list,
     "get_book": books_get,
 }
 MEDIA_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
@@ -443,9 +492,13 @@ def build_registry() -> dict[str, Tool]:
                 "'el diario', 'la receta' — y lo deja listo; si hay varios parecidos, pregunta cuál. "
                 "read_next entrega el próximo pedazo del documento abierto cuando el usuario diga "
                 "'léalo' o 'siga'; el texto entre corchetes es interno y no se lee en voz alta. "
-                "get_book(title) trae un libro de dominio público del catálogo de Project Gutenberg, "
-                "con edición en español preferida, y lo deja abierto como documento. "
-                "Después de abrir o traer algo, la lectura sigue con read_next, pedazo por pedazo.",
+                "get_book(title) es solo para clásicos de dominio público que el usuario no tiene en "
+                "sus carpetas; lo deja abierto como documento (edición en español preferida). "
+                "list_documents() enseña qué documentos hay en sus carpetas, del más nuevo al más "
+                "viejo; úselo cuando pregunte qué libros tiene o pida leer algo sin decir cuál. "
+                "Para seguir leyendo ('léalo', 'siga') siempre es read_next, jamás get_book, aunque el "
+                "libro venga del catálogo; si el documento ya se acabó, read_next lo dice y usted se lo "
+                "cuenta tal cual, sin buscar el libro otra vez.",
                 {
                     "type": "object",
                     "properties": {
@@ -470,11 +523,14 @@ def build_registry() -> dict[str, Tool]:
             Tool(
                 "media",
                 "Música y video en el panel de la ventana. "
-                "search(query) busca en YouTube y deja las opciones a la vista para elegir entre varias; "
+                "Para música (canciones, artistas) use type='music': busca en YouTube Music y suena "
+                "siempre, porque se oye el audio; para ver un video use type='video'. "
+                "search(query, type) busca y deja las opciones a la vista para elegir entre varias; "
                 "cuéntele cada opción con su número y pregúntele cuál quiere. "
-                "play(query) pone directamente lo primero que encuentra; play(url) pone una opción "
+                "play(query, type) pone directamente lo primero que encuentra; play(url, type) pone una opción "
                 "puntual de las que mostró search — la dirección se copia del resultado, nunca se inventa. "
                 "pause y resume controlan lo que está sonando; close lo quita del panel. "
+                "Si un video no se pudo ver, ofrézcale oírlo con type='music' y la misma dirección. "
                 "Lo que está entre corchetes en un resultado es interno: no se lee en voz alta.",
                 {
                     "type": "object",
@@ -483,6 +539,11 @@ def build_registry() -> dict[str, Tool]:
                             "type": "string",
                             "enum": list(MEDIA_ACTIONS),
                             "description": "qué hacer",
+                        },
+                        "type": {
+                            "type": "string",
+                            "enum": ["video", "music"],
+                            "description": "video = ver un video; music = música para oír (sin video)",
                         },
                         "query": {"type": "string", "description": "qué quiere escuchar o ver"},
                         "url": {

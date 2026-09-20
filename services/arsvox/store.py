@@ -5,6 +5,7 @@ that log through a single rule, so history can never drift from what happened,
 and a restart rebuilds the conversation by replaying it.
 
     events      every turn, tool call and snapshot, in order
+    config      paths the user set from the window
     reminders   state written by tools
     tasks       state written by tools
 """
@@ -48,6 +49,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     text TEXT NOT NULL,
     created_ts TEXT NOT NULL,
     done_ts TEXT
+);
+
+CREATE TABLE IF NOT EXISTS config (
+    session TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updated_ts TEXT NOT NULL,
+    PRIMARY KEY (session, key)
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -315,6 +324,26 @@ class Store:
         self.conn.commit()
         row = self.get_document(session)
         return int(row["cursor"]) if row else 0
+
+    # ---- the folders the user set from the window ------------------------
+    @locked
+    def set_config(self, session: str, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT INTO config (session, key, value, updated_ts) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(session, key) DO UPDATE SET value = excluded.value, "
+            "updated_ts = excluded.updated_ts",
+            (session, key, value, now_local()),
+        )
+        self.conn.commit()
+
+    @locked
+    def config(self, session: str) -> dict[str, str]:
+        return {
+            r["key"]: r["value"]
+            for r in self.conn.execute(
+                "SELECT key, value FROM config WHERE session = ? ORDER BY key", (session,)
+            ).fetchall()
+        }
 
     @locked
     def close(self) -> None:

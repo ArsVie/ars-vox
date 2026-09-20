@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from services.arsvox import media
+from services.arsvox import documents, media
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8790
@@ -61,6 +61,7 @@ class AgentService:
         self._stop = threading.Event()
         self._worker: threading.Thread | None = None
         self.last_error = ""
+        self.apply_config()
 
     # ---- state -----------------------------------------------------------
     @property
@@ -96,7 +97,7 @@ class AgentService:
         }
 
     # ---- a turn ----------------------------------------------------------
-    def start_turn(self, text: str) -> tuple[bool, str]:
+    def start_turn(self, text: str, internal: bool = False) -> tuple[bool, str]:
         text = (text or "").strip()
         if not text:
             return False, "texto vacío"
@@ -105,7 +106,7 @@ class AgentService:
                 return False, "ya estoy con otra cosa"
             self._busy = True
             self._stop.clear()
-        self._worker = threading.Thread(target=self._run_turn, args=(text,), daemon=True)
+        self._worker = threading.Thread(target=self._run_turn, args=(text, internal), daemon=True)
         self._worker.start()
         return True, ""
 
@@ -122,9 +123,9 @@ class AgentService:
         self._stop.set()
         self.wait(timeout)
 
-    def _run_turn(self, text: str) -> None:
+    def _run_turn(self, text: str, internal: bool = False) -> None:
         try:
-            self.runtime.turn(self.session, text, should_stop=self._stop.is_set)
+            self.runtime.turn(self.session, text, should_stop=self._stop.is_set, internal=internal)
             self.last_error = ""
         except Exception as exc:  # noqa: BLE001 - the window must survive a broken turn
             self.last_error = f"{type(exc).__name__}: {exc}"[:200]
@@ -205,8 +206,11 @@ class AgentService:
 
     # ---- the media panel --------------------------------------------------
     def media_play(self, payload: dict) -> dict:
-        """The panel's own play paths: a YouTube pick (card or tool) or a local file."""
-        if str(payload.get("source") or "youtube") == "local":
+        """The panel's own play paths: a YouTube pick, the sound path, or a local file."""
+        source = str(payload.get("source") or "youtube")
+        if source == "music":
+            return self._media_play_music(payload)
+        if source == "local":
             event = media.local_event(str(payload.get("path") or ""), str(payload.get("title") or ""))
             if event is None:
                 return {"ok": False, "reason": "ese archivo no es música ni video, o no existe"}
@@ -225,6 +229,27 @@ class AgentService:
                 return {"ok": False, "reason": "no es un enlace de video de YouTube"}
         return {"ok": True, "id": self.store.append(self.session, "media_state", event), "event": event}
 
+    def _media_play_music(self, payload: dict) -> dict:
+        """A music card was clicked: fetch the sound and put it in the panel."""
+        url = str(payload.get("url") or "")
+        folder = (self.store.config(self.session).get("music_path") or "").strip()
+        target = Path(folder) if folder else self.store.path.parent / "media-cache"
+        try:
+            path, fetched_title = media.fetch_audio(url, target)
+        except media.MediaError as exc:
+            return {"ok": False, "reason": f"no pude traer el audio: {exc}"}
+        try:
+            seconds = int(payload.get("seconds") or 0)
+        except (TypeError, ValueError):
+            seconds = 0
+        event = media.music_event(
+            path,
+            str(payload.get("title") or "") or fetched_title,
+            seconds=seconds,
+            origin=url,
+        )
+        return {"ok": True, "id": self.store.append(self.session, "media_state", event), "event": event}
+
     def media_control(self, action: str) -> dict:
         """A control the user pressed in the panel; the log records it like any event."""
         if action not in ("pause", "resume", "close"):
@@ -232,6 +257,43 @@ class AgentService:
         if media.current(self.store, self.session) is None:
             return {"ok": False, "reason": "no hay nada puesto"}
         return {"ok": True, "id": self.store.append(self.session, "media_state", {"action": action})}
+
+    def media_failed(self, payload: dict) -> dict:
+        """The panel could not show a video: the log records it and the assistant speaks.
+
+        No error ever reaches the user. The failure wakes one turn, the model reads
+        what happened and offers the sound path in its own words.
+        """
+        url = str(payload.get("url") or "").strip()
+        title = str(payload.get("title") or "ese video").strip()
+        code = str(payload.get("code") or "").strip()
+        event = {"action": "failed", "source": "youtube", "url": url, "title": title, "code": code}
+        event_id = self.store.append(self.session, "media_state", event)
+        address = f" ({url})" if url else ""
+        message = (
+            f"[el panel] No se pudo ver «{title}»{address}: YouTube no permite verlo fuera de su página "
+            f"(error {code or 'desconocido'}). Dile en una frase breve y sencilla que ese video no se puede "
+            "ver aquí y ofrécele ponerlo para oír. Si le dice que sí, póngalo con play(type='music') y la "
+            "misma dirección; no lo intentes como video otra vez."
+        )
+        started, _ = self.start_turn(message, internal=True)
+        return {"ok": True, "id": event_id, "turn": started}
+
+    # ---- the folders the user sets from the window ------------------------
+    def apply_config(self) -> None:
+        """The books folder the user set reaches the reader (and where books save)."""
+        books_path = (self.store.config(self.session).get("books_path") or "").strip()
+        documents.set_search_folders([books_path] if books_path else None)
+
+    def config_get(self) -> dict:
+        return {"ok": True, "config": self.store.config(self.session)}
+
+    def config_set(self, payload: dict) -> dict:
+        for key in ("books_path", "music_path"):
+            if key in payload:
+                self.store.set_config(self.session, key, str(payload.get(key) or "").strip())
+        self.apply_config()
+        return {"ok": True, "config": self.store.config(self.session)}
 
 
 def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
@@ -353,6 +415,8 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
                 after = int((query.get("after") or ["0"])[0])
                 silent = (query.get("silent") or ["0"])[0] == "1"
                 self._json(200, service.events(after, include_silent=silent))
+            elif parsed.path == "/config":
+                self._json(200, service.config_get())
             elif parsed.path == "/media/file":
                 self._media_file((query.get("path") or [""])[0])
             else:
@@ -368,6 +432,10 @@ def make_handler(service: AgentService) -> type[BaseHTTPRequestHandler]:
                 self._json(200, service.media_play(body))
             elif parsed.path == "/media/control":
                 self._json(200, service.media_control(str(body.get("action") or "")))
+            elif parsed.path == "/media/failed":
+                self._json(200, service.media_failed(body))
+            elif parsed.path == "/config":
+                self._json(200, service.config_set(body))
             elif parsed.path == "/stop":
                 self._json(200, {"stopped": service.stop()})
             elif parsed.path == "/listen":

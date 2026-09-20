@@ -289,3 +289,40 @@ def test_the_file_server_never_serves_non_media(tmp_path: Path, service):
         raise AssertionError("the file server served a .txt")
     except HTTPError as exc:
         assert exc.code == 404
+
+
+def test_media_failed_is_logged_and_the_assistant_speaks_first(service):
+    _, port, store, _ = service(
+        scripted(ModelReply(text="Ese video no se puede ver acá, pero se lo puedo poner para oír."))
+    )
+    status, body = post_json(
+        port,
+        "/media/failed",
+        {
+            "url": "https://www.youtube.com/watch?v=QDYfEBY9NM4",
+            "title": "Let It Be (Official)",
+            "code": 150,
+        },
+    )
+    assert status == 200 and body["ok"] is True
+    failed = [
+        e for e in store.events("cli") if e.kind == "media_state" and e.payload.get("action") == "failed"
+    ]
+    assert failed and failed[0].payload["code"] == "150"
+    cue = wait_for(port, "user_text")  # the turn thread appends it after the response
+    assert cue["payload"].get("internal") is True
+    event = wait_for(port, "assistant_text")
+    assert "oír" in event["payload"]["text"]
+
+
+def test_config_roundtrip_over_the_window_api(service, tmp_path):
+    from services.arsvox import documents
+
+    _, port, _, _ = service(scripted())
+    status, body = post_json(port, "/config", {"books_path": str(tmp_path / "libros"), "music_path": ""})
+    assert status == 200 and body["config"]["books_path"] == str(tmp_path / "libros")
+    assert get_json(port, "/config")["config"]["books_path"] == str(tmp_path / "libros")
+    try:
+        assert documents.search_folders() == [tmp_path / "libros"]
+    finally:
+        documents.set_search_folders(None)

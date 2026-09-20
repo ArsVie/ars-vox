@@ -11,10 +11,24 @@
     <div class="status">
       <span id="indicator" class="square idle" title="estado"></span>
       <span id="status-text">listo</span>
-      <span class="sep">|</span>
-      <span id="who">…</span>
+      <button id="settings-open" class="settings-button" type="button">ajustes</button>
     </div>
   </header>
+
+  <section id="settings" hidden>
+    <div class="settings-card">
+      <h2>Ajustes</h2>
+      <label for="cfg-books">Carpeta de los libros</label>
+      <input id="cfg-books" type="text" spellcheck="false" placeholder="C:\Users\...\Documents" />
+      <label for="cfg-music">Carpeta de la música</label>
+      <input id="cfg-music" type="text" spellcheck="false" placeholder="C:\Users\...\Music" />
+      <div class="settings-actions">
+        <button id="cfg-save" class="send" type="button">Guardar</button>
+        <button id="cfg-close" type="button">Cerrar</button>
+        <span id="cfg-status" class="cfg-status" role="status"></span>
+      </div>
+    </div>
+  </section>
 
   <div id="workspace">
     <main id="conversation" aria-live="polite"></main>

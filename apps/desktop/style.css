@@ -38,16 +38,17 @@ header {
 
 h1 { font-size: 22px; margin: 0; letter-spacing: 0.3px; font-weight: 650; }
 
-.status { display: flex; align-items: center; gap: 10px; color: var(--quiet); font-size: 18px; }
-.sep { color: var(--line); }
+.status { display: flex; align-items: center; gap: 10px; color: var(--quiet); font-size: 19px; }
 
+/* a solid square, never a checkbox: soft green when ready, strong when working */
 .square {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   display: inline-block;
-  border: 2px solid var(--quiet);
+  border: 2px solid #b9d3c4;
+  background: #cfe0d6;
 }
-.square.idle { background: transparent; }
+.square.idle { background: #cfe0d6; border-color: #b9d3c4; }
 .square.busy { background: var(--accent); border-color: var(--accent); }
 
 main {
@@ -252,3 +253,57 @@ footer {
 .panel-note[hidden] { display: none; }
 
 .yt-holder { width: 100%; height: 100%; }
+
+/* ---- the folders the user can set from the window ----------------------- */
+
+.settings-button { min-height: 44px; padding: 6px 14px; font-size: 18px; }
+
+/* the settings float over the window: they never squash what is behind them */
+#settings {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 90px 20px 20px;
+  background: rgba(44, 42, 39, 0.18);
+  z-index: 40;
+}
+#settings[hidden] { display: none; }
+.settings-card {
+  display: grid;
+  gap: 8px;
+  width: min(640px, 100%);
+  padding: 18px 20px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: #fffdfa;
+  box-shadow: 0 18px 48px rgba(44, 42, 39, 0.25);
+}
+#settings h2 { margin: 0; font-size: 20px; font-weight: 650; }
+#settings label { font-size: 18px; color: var(--quiet); }
+#settings input {
+  font: inherit;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  min-height: 48px;
+}
+.settings-actions { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
+.cfg-status { color: var(--accent); font-size: 18px; }
+
+/* watching big: the window's own chrome steps aside for the video */
+body.focus-mode > header, body.focus-mode > footer { display: none; }
+#panel:fullscreen { border-left: 0; }
+
+/* music has no picture: the stage steps aside so the control stays small */
+#panel.audio-only { align-self: flex-start; height: auto; }
+
+.stage.audio-only {
+  flex: 0 0 auto;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.stage.audio-only .audio-card { color: var(--ink); padding: 22px 18px; gap: 8px; }
+.stage.audio-only .audio-card .glyph { font-size: 40px; color: var(--accent); }
+.stage.audio-only .audio-card .audio-title { font-size: 22px; }

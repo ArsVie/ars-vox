@@ -91,8 +91,44 @@ def folder_override() -> list[Path]:
     return [Path(part) for part in raw.split(os.pathsep) if part.strip()]
 
 
+_CONFIGURED: list[Path] = []
+
+
+def set_search_folders(paths: list[str | Path] | None) -> None:
+    """The folders the user set in the window; empty drops back to the defaults."""
+    global _CONFIGURED
+    _CONFIGURED = [Path(path) for path in paths] if paths else []
+
+
 def search_folders() -> list[Path]:
-    return folder_override() or default_folders()
+    return _CONFIGURED or folder_override() or default_folders()
+
+
+def list_books(limit: int = 12, deadline_s: float = DEADLINE_S) -> list[Path]:
+    """The readable files on the shelf, newest first — for "¿qué libros tengo?"."""
+    deadline = time.monotonic() + deadline_s
+    found: list[Path] = []
+    scanned = 0
+    for root in search_folders():
+        if not root.is_dir():
+            continue
+        for path in _walk(root, deadline):
+            scanned += 1
+            if scanned > MAX_FILES_SCANNED:
+                break
+            if path.suffix.lower() in READABLE:
+                found.append(path)
+        if scanned > MAX_FILES_SCANNED:
+            break
+
+    def moment(path: Path) -> float:
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    found.sort(key=moment, reverse=True)
+    return found[:limit]
 
 
 def normalize(text: str) -> str:
