@@ -1,40 +1,59 @@
 # Ars-Vox v2
 
-A local-first voice assistant for one elderly Spanish-speaking user.
-Voice in, voice out, five abilities, one always-visible stop control.
+A voice-first desktop assistant for one elderly Spanish-speaking user — Mexican
+Spanish, addressed as *usted*. Talk or type; it answers out loud, and everything
+it does stays visible on one window: the conversation on the left, a panel on
+the right.
 
-Refactor of `C:\dev\ars-vox` (archived). Plan: `C:\dev\ars-vox-refactor-plan.md`.
-Direction: arXiv 2609.00006 (harness anatomy, seven subsystems) and the
-DeepSeek Harness source layout.
+Refactor of `C:\dev\ars-vox` (archived, v0.1). The route is the harness anatomy
+of arXiv 2609.00006; the plan lives at `C:\dev\ars-vox-refactor-plan.md`.
 
-## Shape
+## What it does
 
-```
-services/arsvox/   the agent runtime, one module per harness subsystem
-apps/cli/          headless driver — the primary development surface
-apps/desktop/      thin Electron client over the same wire
-tests/             <= 60% of product lines, checked in CI
-docs/subsystems/   one page per subsystem, <= 120 lines each
-docs/status.md     one page, one product number per phase
-```
+- **Habla y escucha.** Push-to-talk or typed text; answers spoken aloud in the
+  product voice (es-MX). A reminder, a task, a question — same door.
+- **Reminders that ring.** "Recuérdame tomar la pastilla a las ocho" fires on
+  time even with the app closed — Windows Task Scheduler owns it. Daily and
+  weekly repeats included.
+- **A simple task list.** "¿Qué tengo pendiente?" — add and list.
+- **The web, on request.** Search, page reading, weather by city, news lists.
+- **Music and video in the panel.** "Ponme a los Beatles" — the options are
+  offered aloud with numbers and durations; picking plays the video in the
+  panel, and when a video refuses to embed the assistant offers the sound path
+  itself and the song plays — the user never sees an error.
+- **Documents and books, shown as pages.** "Abrí el diario", "ábreme el
+  Quijote" — it finds the user's own files under Documents / Desktop /
+  Downloads; PDFs appear as their real pages, text books as page-sized pieces,
+  fit to the panel's width, with page arrows and «pase la página». Public-domain
+  classics that are not on disk can be brought home from Project Gutenberg.
+  Books are *shown*, not narrated: reading books aloud is deferred on purpose.
+- **A settings popup.** Two folders — books and music. Nothing else.
 
-## Waves
+Failures the user cannot fix turn into an offer in the assistant's own words.
+One always-visible stop control; status is one plain word.
 
-| wave | build | gate |
-|---|---|---|
-| W0 | voice in/out, push-to-talk, harness | 30 real utterances, >= 24 correct, turn under 20 s |
-| W1 | headless agent loop | prefix cache hit > 0, session resumes from the event log |
-| W2 | safety floor, reminders that survive power-off | deny-list green, stop works offline, reminder fires with app closed |
-| W3 | desktop shell | socket unplug/replug mid-turn, UI matches the log |
-| W4 | five abilities complete | 30-utterance number re-measured on the desktop app |
-| W5 | installer, pilot | two weeks of unaided tasks with the real user |
+## Run
 
-## Run (spike)
+The service is the product; the window is a page it serves.
 
 ```bash
-# transcribe any audio file with the real engine
-python -m apps.cli.arsvox_cli transcribe clip.m4a --model small
-
-# W0 baseline: score several models against a reference transcript
-python tools/stt_baseline.py clip.m4a --reference reference.txt --models tiny base small
+python -m apps.cli.arsvox_cli serve          # 127.0.0.1:8790
 ```
+
+Open `http://127.0.0.1:8790/`, or `msedge --app=http://127.0.0.1:8790/` for a
+window without browser chrome. On Windows, `tools\windows\run_service.ps1`
+starts it hidden with the CUDA paths and the key from `%USERPROFILE%\.arsvox\env`.
+
+Headless drivers, for work without the window:
+
+```bash
+python -m apps.cli.arsvox_cli ask "ponme un video de los Beatles" --speak
+python -m apps.cli.arsvox_cli talk           # voice in, voice out
+python -m apps.cli.arsvox_cli transcribe clip.m4a
+```
+
+## For developers
+
+`services/arsvox/` is the agent runtime, one module per harness subsystem;
+`apps/desktop/` is the window page; `tests/` guards behavior. The state of every
+wave, with its evidence, lives in `docs/status.md`.
