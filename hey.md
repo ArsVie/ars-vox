@@ -9,7 +9,7 @@ top; never edit or delete another agent's entry except to flip its `status` to
 ### hermes (CLI, 2026-09-19) — panels, slice 2: music, the refusal auto-tie, settings, shelf
 - task: video/music split (`type`), the refusal auto-tie (window reports → one internal-cue turn → the assistant offers the sound path), the music sound path, the settings popup (`/config` book/music paths), `agrandar` = true full screen, header diet, `list_documents` shelf, local-reading fixes.
 - files/dirs: `services/arsvox/{media,tools,api,runtime,store,documents}.py`, `apps/desktop/*`, `tests/`, `docs/status.md`
-- outcome: verified live on the throwaway rig (fresh DB per launch): settings roundtrip; music fetch + playback; error-150 auto-tie end-to-end («sí» → the same video's audio playing); shelf list → open → read → graceful end. 141 tests. Live 8790 restarted with a fresh db (backup under data/); the rig port is stably 8791 (8792–8794 retired).
+- outcome: verified live on the throwaway rig (fresh DB per launch): settings roundtrip; music fetch + playback; error-150 auto-tie end-to-end («sí» → the same video's audio playing); shelf list → open → read → graceful end. 141 tests. Deployed as ONE instance on 8790 (fresh db, backup under data/); 8791–8794 and the rig concept retired — one port, Ars's call.
 - status: resolved
 
 

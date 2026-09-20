@@ -558,8 +558,8 @@ a video that refuses to embed used to die on screen with no path forward.
 | the shelf (`list_documents`) | «¿Qué libros tiene para leerme?» → "Tiene tres cosas guardadas: el cancionero de la familia, las recetas de la abuela, y la novela El coronel no tiene quien le escriba. ¿Cuál quiere que le lea?"; live: list → open by name → reads the first part → «siga leyendo» → continues → ends with a sentence, not a search |
 | reading stays local | `get_book` is forbidden while a local document is open (a mid-read catalog detour produced a timeout apology that reached the user); an exhausted document answers «Ya le leí todo…» (register fixed from an informal "te") |
 | replies read themselves | fresh assistant replies auto-speak (`/speak` queue in the window); «escuchar» stays for replays |
-| fresh DB per update (Ars's rule) | every relaunch starts a clean database (the throwaway rig stamps a temp file; live backs up `data/arsvox.db` first); boot-time schemas mean code changes need the relaunch anyway; the window auto-reloads when it sees the log reset, so an open window never shows a conversation the log no longer has |
-| ports | live **8790**; the ONE throwaway rig is **8791** (8792–8794 retired); Ars looks at 8791 when he wants to see the current build |
+| fresh DB per update (Ars's rule) | every relaunch starts a clean database (the live file is backed up to `data/arsvox.db.bak-*` first); boot-time schemas mean code changes need the relaunch anyway; the window auto-reloads when it sees the log reset, so an open window never shows a conversation the log no longer has |
+| ports | ONE instance: **8790** serves both use and verification (Ars's call — one port; 8791–8794 and the rig concept retired) |
 | tests | 141 green |
 
 Shots under `results/uicheck/` (`s2-*`, `s4-*`, `s5-*`, git-ignored).
