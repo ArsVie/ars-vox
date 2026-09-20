@@ -12,6 +12,7 @@ top; never edit or delete another agent's entry except to flip its `status` to
 - outcome: verified live on the throwaway rig (fresh DB per launch): settings roundtrip; music fetch + playback; error-150 auto-tie end-to-end («sí» → the same video's audio playing); shelf list → open → read → graceful end. 141 tests. Deployed as ONE instance on 8790 (fresh db, backup under data/); 8791–8794 and the rig concept retired — one port, Ars's call.
 - follow-up: the book panel — documents auto-show a page in the same panel (`document_state`; `/documents/control` close; full-screen reading). Verified live on 8790 with real turns; captures `book-0*.png`; 143 green.
 - follow-up 2 (same night): Ars corrected the reader — book read-aloud was to stay deferred: `read_next` and the read path are deleted, nothing narrates documents; the reader is a VIEWER with fit-to-width default (pdf pages rendered via `/documents/page`, text cut into pages, panel arrows, same-name dedupe, `._` skip). Verified live with a REAL 85-page pdf (fit 1136==1136, grown 1904, text full width, route 404 when not a pdf); 146 tests; captures `viewer-0*.png`.
+- follow-up 3 (his live check found two): the voice said «13 de abril de 471» for "13 de 471" (Azure date normalizer; proof + fix `tts.speakable()` — the voice spells numbers; 3 tests) and the book had little air (book-mode 1fr:3fr: conversation 768→480, book 1152→1440; paddings trimmed). Verified live on his own Quijote PDF (fit 1424==1424) + `/speak` round-trip; 149 tests; capture `view-fix-01-bookmode.png`.
 - status: resolved
 
 

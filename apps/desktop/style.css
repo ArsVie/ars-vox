@@ -133,6 +133,8 @@ footer {
 
 #workspace { display: grid; grid-template-columns: 1fr; overflow: hidden; }
 #workspace.sidecar { grid-template-columns: minmax(0, 2fr) minmax(430px, 3fr); }
+/* a document is open: the book takes the room the conversation was wasting */
+#workspace.sidecar.book-mode { grid-template-columns: minmax(0, 1fr) minmax(430px, 3fr); }
 #workspace.focus #conversation { display: none; }
 
 #panel {
@@ -149,7 +151,7 @@ footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--line);
 }
 #panel-title {
@@ -266,7 +268,7 @@ footer {
 .book-image[hidden] { display: none; }
 .book-page {
   margin: 0;
-  padding: 26px 30px 44px;
+  padding: 18px 22px 32px;
   font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
   font-size: 20px;
   line-height: 1.7;
@@ -280,7 +282,7 @@ footer {
   align-items: center;
   justify-content: center;
   gap: 18px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-top: 1px solid var(--line);
   background: #fffdfa;
 }

@@ -605,3 +605,16 @@ that narrated itself; it is replaced by a viewer.
 
 Captures `results/uicheck/viewer-0*.png` (real pdf open / page 2 / grown / text /
 reload-closed), git-ignored like the rest.
+
+
+## W6 — el número que sonaba a abril; el libro con más aire (2026-09-20)
+
+Two live findings from Ars's own check, fixed the same night.
+
+| what | evidence |
+|---|---|
+| the voice ate numbers | «Página 13 de 471.» was spoken as *trece de abril de setenta y uno* — Azure's Spanish date normalizer reads "de 4XX/5XX" as month+year ("de 500" → «de mayo de 2000»; "de 1527", four digits, is safe). Proof by round-trip (synthesize → transcribe through the product's own recogniser) and the exact wav from his session (`apps/desktop/audio/reply-1789884644142.wav` = "abril de 71") |
+| the fix | `tts.speakable()` spells every number before synthesis (digits in the window, words in the voice); decimals (17,20) and long ids keep their digits; pinned by `tests/test_tts.py`. Live: `/speak "Página 13 de 471."` → the voice says «Página 13 de 471» |
+| the book had little air | his review: «the surrounding pills and panels have a lot of padding». Measured at 1920: conversation 768 px for bubbles using ~480, book 1152, chrome bands ~290 px tall. Fix: `book-mode` — with a document open the grid is 1fr:3fr (conversation 480, book 1440, +288 px) and the panel-head / book-page / book-bar paddings were trimmed |
+| verified live | his own PDF (471 pp): class `sidecar book-mode`, conversation 480, panel 1440, fit 1424 == 1424; capture `results/uicheck/view-fix-01-bookmode.png` |
+| tests | 149 green |

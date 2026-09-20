@@ -351,7 +351,8 @@ function html5Engine(payload, report, fresh) {
 }
 
 function setLayout(mode) {
-  workspace.className = mode;
+  const book = mode === "sidecar" && panelMode === "book";
+  workspace.className = book ? `sidecar book-mode` : mode;
 }
 
 function clearPanelBody() {
@@ -414,7 +415,7 @@ function showOffers(payload) {
     offersBox.appendChild(node);
   }
   offersBox.hidden = false;
-  setLayout(workspace.className === "focus" ? "focus" : "sidecar");
+  setLayout(workspace.classList.contains("focus") ? "focus" : "sidecar");
   panel.hidden = false;
 }
 
@@ -435,7 +436,7 @@ function showPlayer(payload, fresh) {
   if (engine) engine.setVolume(Number(ctlVolume.value));
   stage.hidden = false;
   controlsBox.hidden = false;
-  setLayout(workspace.className === "focus" ? "focus" : "sidecar");
+  setLayout(workspace.classList.contains("focus") ? "focus" : "sidecar");
   panel.hidden = false;
 }
 
@@ -460,7 +461,7 @@ function showDocument(payload) {
     bookBar.hidden = false;
   }
   bookBox.hidden = false;
-  setLayout(workspace.className === "focus" ? "focus" : "sidecar");
+  setLayout(workspace.classList.contains("focus") ? "focus" : "sidecar");
   panel.hidden = false;
 }
 
