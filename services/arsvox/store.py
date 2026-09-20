@@ -7,7 +7,6 @@ and a restart rebuilds the conversation by replaying it.
     events      every turn, tool call and snapshot, in order
     reminders   state written by tools
     tasks       state written by tools
-    preferences what the assistant remembers about the user
 """
 
 from __future__ import annotations
@@ -49,14 +48,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     text TEXT NOT NULL,
     created_ts TEXT NOT NULL,
     done_ts TEXT
-);
-
-CREATE TABLE IF NOT EXISTS preferences (
-    session TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    updated_ts TEXT NOT NULL,
-    PRIMARY KEY (session, key)
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -291,30 +282,10 @@ class Store:
         return cursor.rowcount > 0
 
     @locked
-    def set_preference(self, session: str, key: str, value: str) -> None:
-        self.conn.execute(
-            "INSERT INTO preferences (session, key, value, updated_ts) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(session, key) DO UPDATE SET value = excluded.value, "
-            "updated_ts = excluded.updated_ts",
-            (session, key, value, now_local()),
-        )
-        self.conn.commit()
-
-    @locked
-    def preferences(self, session: str) -> dict[str, str]:
-        return {
-            r["key"]: r["value"]
-            for r in self.conn.execute(
-                "SELECT key, value FROM preferences WHERE session = ? ORDER BY key", (session,)
-            ).fetchall()
-        }
-
-    @locked
     def state_counts(self, session: str) -> dict[str, int]:
         return {
             "reminders": len(self.list_reminders(session)),
             "tasks_open": sum(1 for t in self.list_tasks(session) if not t["done_ts"]),
-            "preferences": len(self.preferences(session)),
             "events": len(self.events(session)),
         }
 

@@ -114,9 +114,7 @@ def human_time(moment: datetime) -> str:
     return f"{moment.strftime('%Y-%m-%d %H:%M')} ({WEEKDAYS[moment.weekday()]})"
 
 
-def snapshot_text(
-    moment: datetime, state: dict, preferences: dict[str, str], note: str = ""
-) -> str:
+def snapshot_text(moment: datetime, state: dict, note: str = "") -> str:
     """The volatile tail: current facts, re-sent only when the text changes.
 
     `note` is the register, and it belongs here rather than only in the persona: the
@@ -131,9 +129,4 @@ def snapshot_text(
     ]
     if note:
         lines.append(note)
-    if preferences:
-        remembered = "; ".join(f"{key}: {value}" for key, value in sorted(preferences.items()))
-        lines.append(f"Lo que recuerdo del usuario: {remembered}")
-    else:
-        lines.append("Lo que recuerdo del usuario: nada todavía")
     return "\n".join(lines)

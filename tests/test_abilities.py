@@ -653,7 +653,7 @@ def test_the_catalog_keeps_trying_through_a_stall_wave(monkeypatch):
 
 # ---- the registry ---------------------------------------------------------
 
-TOOL_NAMES = {"agenda", "preferences", "documents", "media", "web", "weather_get", "news_list"}
+TOOL_NAMES = {"agenda", "documents", "media", "web", "weather_get", "news_list"}
 
 
 def test_every_tool_declares_a_usable_schema():
@@ -670,7 +670,6 @@ def test_every_family_action_has_a_handler_and_a_declared_enum():
 
     families = {
         "agenda": t.AGENDA_ACTIONS,
-        "preferences": t.PREFERENCES_ACTIONS,
         "documents": t.DOCUMENTS_ACTIONS,
         "media": t.MEDIA_ACTIONS,
         "web": t.WEB_ACTIONS,

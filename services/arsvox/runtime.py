@@ -74,7 +74,6 @@ class Runtime:
         text = snapshot_text(
             moment,
             self.store.state_counts(session),
-            self.store.preferences(session),
             note=self.settings.note,
         )
         if self.store.last_snapshot(session) == text:

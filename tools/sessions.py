@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = REPO_ROOT / "data" / "arsvox.db"
-TABLES = (("events", "session"), ("preferences", "session"))
+TABLES = (("events", "session"),)
 
 
 def connect(db: Path) -> sqlite3.Connection:

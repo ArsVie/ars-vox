@@ -1,10 +1,10 @@
-"""The tools. Seven, real, each one writing real state.
+"""The tools. Six, real, each one writing real state.
 
 Every handler returns one short Spanish sentence, because that sentence is what
 the model reads next and what the user eventually hears.
 
-Five entries are families — one tool with an `action` enum routing to a handler
-per action (agenda, preferences, documents, media, web); weather and news stay
+Four entries are families — one tool with an `action` enum routing to a handler
+per action (agenda, documents, media, web); weather and news stay
 standalone because each answers one user sentence in one call.
 
 House rule for descriptions (learned from ProjectSight's MCP tools and Pi's):
@@ -148,22 +148,6 @@ def tasks_done(context: ToolContext, arguments: dict) -> str:
     if context.store.complete_task(context.session, task_id):
         return f"Tarea {task_id} marcada como hecha."
     return f"No encontré una tarea pendiente con el número {task_id}."
-
-
-def preferences_set(context: ToolContext, arguments: dict) -> str:
-    key = str(arguments.get("key") or "").strip()
-    value = str(arguments.get("value") or "").strip()
-    if not key or not value:
-        return "¿Qué preferencia guardo? Dígame el tema y lo que prefiere."
-    context.store.set_preference(context.session, key, value)
-    return f"Me acuerdo: {key} = {value}"
-
-
-def preferences_list(context: ToolContext, arguments: dict) -> str:
-    preferences = context.store.preferences(context.session)
-    if not preferences:
-        return "Todavía no me acuerdo de nada en particular."
-    return "Me acuerdo de: " + "; ".join(f"{k}: {v}" for k, v in preferences.items())
 
 
 def documents_open(context: ToolContext, arguments: dict) -> str:
@@ -359,7 +343,7 @@ def books_get(context: ToolContext, arguments: dict) -> str:
     )
 
 
-# ---- the five families -----------------------------------------------------
+# ---- the four families -----------------------------------------------------
 # One entry per family, one handler per action. The `action` enum in each schema
 # is built from these maps, so the enum and the handlers cannot disagree.
 
@@ -370,10 +354,6 @@ AGENDA_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
     "add_task": tasks_add,
     "list_tasks": tasks_list,
     "complete_task": tasks_done,
-}
-PREFERENCES_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
-    "remember": preferences_set,
-    "list": preferences_list,
 }
 DOCUMENTS_ACTIONS: dict[str, Callable[[ToolContext, dict], str]] = {
     "open_document": documents_open,
@@ -405,10 +385,6 @@ def _dispatch(actions: dict[str, Callable[[ToolContext, dict], str]], context: T
 
 def route_agenda(context: ToolContext, arguments: dict) -> str:
     return _dispatch(AGENDA_ACTIONS, context, arguments)
-
-
-def route_preferences(context: ToolContext, arguments: dict) -> str:
-    return _dispatch(PREFERENCES_ACTIONS, context, arguments)
 
 
 def route_documents(context: ToolContext, arguments: dict) -> str:
@@ -459,26 +435,6 @@ def build_registry() -> dict[str, Tool]:
                     "required": ["action"],
                 },
                 route_agenda,
-            ),
-            Tool(
-                "preferences",
-                "Lo que al usuario le gusta o prefiere, para futuras búsquedas. "
-                "remember(key, value) lo guarda: tema 'musica', valor 'jazz suave'. "
-                "list lee todo lo recordado.",
-                {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": list(PREFERENCES_ACTIONS),
-                            "description": "qué hacer",
-                        },
-                        "key": {"type": "string", "description": "tema, por ejemplo musica"},
-                        "value": {"type": "string", "description": "lo que prefiere, por ejemplo jazz suave"},
-                    },
-                    "required": ["action"],
-                },
-                route_preferences,
             ),
             Tool(
                 "documents",

@@ -188,11 +188,15 @@ def test_unknown_variable_raises_instead_of_shipping_a_hole():
 
 
 def test_snapshot_carries_time_and_counts():
-    text = snapshot_text(datetime(2026, 9, 12, 20, 0).astimezone(), {"reminders": 2, "tasks_open": 1},
-                         {"musica": "jazz"})
+    text = snapshot_text(
+        datetime(2026, 9, 12, 20, 0).astimezone(),
+        {"reminders": 2, "tasks_open": 1},
+        note="nota de registro",
+    )
     assert "Recordatorios activos: 2" in text
     assert "Tareas pendientes: 1" in text
-    assert "jazz" in text
+    assert "nota de registro" in text
+    assert "Lo que recuerdo" not in text
 
 
 def test_unknown_tool_is_reported_without_a_policy_layer(tmp_path: Path):
