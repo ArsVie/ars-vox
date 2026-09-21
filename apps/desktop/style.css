@@ -339,14 +339,59 @@ footer {
 body.focus-mode > header, body.focus-mode > footer { display: none; }
 #panel:fullscreen { border-left: 0; }
 
-/* music has no picture: the stage steps aside so the control stays small */
-#panel.audio-only { align-self: flex-start; height: auto; }
+/* music has no picture: a small card in the corner, and the conversation takes
+   back the column the media panel was holding for it */
+#panel.audio-only {
+  position: relative;
+  align-self: flex-start;
+  height: auto;
+  justify-self: end;
+  width: min(480px, calc(100% - 32px));
+  margin: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(44, 42, 39, 0.08);
+}
+#workspace.sidecar.music-mode { grid-template-columns: minmax(0, 1fr) minmax(430px, 512px); }
+/* the close button floats over the card's corner: the title lives in the card
+   below, once, and audio never goes full screen, so "agrandar" goes too */
+#panel.audio-only .panel-head { position: absolute; top: 6px; right: 6px; border-bottom: 0; padding: 0; }
+#panel.audio-only #panel-title,
+#panel.audio-only #panel-grow { display: none; }
+#panel.audio-only .panel-note { margin: 6px 10px 0; padding-right: 50px; border: 1px solid #f0dcb4; border-radius: 10px; }
 
 .stage.audio-only {
   flex: 0 0 auto;
-  background: var(--paper);
-  border-bottom: 1px solid var(--line);
+  background: transparent;
+  border-bottom: 0;
 }
-.stage.audio-only .audio-card { color: var(--ink); padding: 22px 18px; gap: 8px; }
-.stage.audio-only .audio-card .glyph { font-size: 40px; color: var(--accent); }
-.stage.audio-only .audio-card .audio-title { font-size: 22px; }
+.stage.audio-only .audio-card { color: var(--ink); padding: 20px 22px 14px; gap: 12px; }
+.stage.audio-only .audio-card .glyph {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  color: var(--accent);
+  background: #eef4f0;
+  border: 1px solid #d8e5dd;
+  border-radius: 18px;
+}
+.stage.audio-only .audio-card .audio-title { font-size: 24px; }
+#panel.audio-only .controls { border-top: 1px solid var(--line); padding: 12px 14px 14px; gap: 10px; }
+#panel.audio-only .ctl-time { min-width: 46px; }
+#panel.audio-only .ctl-volume { width: 88px; }
+
+/* the cards carry the same numbers the voice reads out */
+.card { grid-template-columns: auto 1fr; column-gap: 14px; }
+.card .card-num {
+  grid-row: 1 / span 2;
+  align-self: start;
+  min-width: 22px;
+  font-size: 22px;
+  font-weight: 650;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+.card .card-title,
+.card .card-sub { grid-column: 2; }

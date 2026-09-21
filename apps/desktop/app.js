@@ -351,8 +351,10 @@ function html5Engine(payload, report, fresh) {
 }
 
 function setLayout(mode) {
-  const book = mode === "sidecar" && panelMode === "book";
-  workspace.className = book ? `sidecar book-mode` : mode;
+  const sidecar = mode === "sidecar";
+  const book = sidecar && panelMode === "book";
+  const music = sidecar && panelMode === "media" && panel.classList.contains("audio-only");
+  workspace.className = book ? "sidecar book-mode" : music ? "sidecar music-mode" : mode;
 }
 
 function clearPanelBody() {
@@ -390,8 +392,9 @@ function showOffers(payload) {
   panelMode = "media";
   const label = payload.type === "music" ? "Canciones" : "Opciones";
   panelTitle.textContent = payload.query ? `${label}: ${payload.query}` : label;
-  for (const item of payload.items || []) {
+  for (const [index, item] of (payload.items || []).entries()) {
     const node = cardTemplate.content.firstElementChild.cloneNode(true);
+    node.querySelector(".card-num").textContent = String(index + 1);
     node.querySelector(".card-title").textContent = item.title || "(sin título)";
     const bits = [];
     if (item.channel) bits.push(item.channel);

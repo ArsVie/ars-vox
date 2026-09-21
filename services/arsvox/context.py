@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 
+from services.arsvox.config import DEFAULT_REGISTER, REGISTERS
+
 IDENTITY_ORDER = -100
 PERSONA_ORDER = 0
 TOOL_GUIDANCE_ORDER = 100
@@ -31,22 +33,17 @@ IDENTITY = (
 
 # The register is a setting, not a style choice made here: it comes in from
 # config.REGISTERS, which also decides the voice and the country the search answers for.
-DEFAULT_PERSONA = (
-    "Le hablas de usted, con respeto y cariño, como se le habla a una persona mayor en "
-    "México, en palabras sencillas. Nunca le hablas de vos ni de tú. Si el usuario te "
-    "habla de vos o de tú, no lo corrijas y no cambies tu forma de hablar. No supongas si "
-    "es hombre o mujer: sin saberlo, no uses 'don', 'doña', 'señor' ni 'señora'. Si no "
-    "entiendes el pedido, lo dices y haces una sola pregunta concreta. Nunca inventas "
-    "datos: si no sabes algo, lo dices."
-)
+# The alias keeps one copy: a second draft of the same paragraph only drifts.
+DEFAULT_PERSONA = REGISTERS[DEFAULT_REGISTER]["persona"]
 
 NORMS = (
     "Reglas:\n"
     "- Pide lo que falta en vez de suponer.\n"
     "- Cuando usas una herramienta, cuenta el resultado en una frase.\n"
     "- Si una herramienta falla, explícalo en simple y ofrece otra cosa.\n"
-    "- Si el pedido se resuelve con una herramienta, llámala siempre: aunque en la "
-    "conversación haya una respuesta parecida, el estado pudo cambiar.\n"
+    "- Si el pedido se resuelve con una herramienta, llámala siempre, aunque ya haya una "
+    "respuesta parecida en la conversación.\n"
+    "- Lo que va entre corchetes en un resultado es interno: no se lee en voz alta.\n"
     "- La hora y el estado actuales están en el bloque de contexto: úsalos, no los pidas."
 )
 

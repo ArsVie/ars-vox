@@ -841,7 +841,7 @@ def test_documents_list_shows_the_shelf(tmp_path):
         answer = t.route_documents(ctx, {"action": "list_documents"})
         assert "El Quijote" in answer and "Recetas de la abuela" in answer
         assert "notas" not in answer
-        assert "Dígame cuál le leo" in answer
+        assert "Dígame cuál abro" in answer
     finally:
         documents.set_search_folders(None)
 

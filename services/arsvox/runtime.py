@@ -58,15 +58,14 @@ class Runtime:
         self.store = store
         self.model = model
         self.scheduler = scheduler
-        self.registry = build_registry()
+        self.registry = build_registry(settings.city)
         self.schemas = tool_schemas(self.registry)
         self.builder = default_builder(tool_guidance(self.registry), persona=settings.persona)
         self.max_steps = max_steps or settings.max_steps
 
     # ---- prompt ----------------------------------------------------------
-    def system_prompt(self, now: datetime | None = None) -> str:
-        moment = now or datetime.now().astimezone()
-        return self.builder.render({"hora": moment.isoformat(timespec="minutes")})
+    def system_prompt(self) -> str:
+        return self.builder.render({})
 
     def refresh_snapshot(self, session: str, now: datetime | None = None) -> bool:
         """Append the runtime context only when its text changed. Cache hygiene."""
@@ -81,8 +80,8 @@ class Runtime:
         self.store.append(session, "runtime_snapshot", {"text": text})
         return True
 
-    def messages(self, session: str, now: datetime | None = None) -> list[dict]:
-        return [{"role": "system", "content": self.system_prompt(now)}] + self.store.messages(session)
+    def messages(self, session: str) -> list[dict]:
+        return [{"role": "system", "content": self.system_prompt()}] + self.store.messages(session)
 
     # ---- the turn --------------------------------------------------------
     def turn(self, session: str, user_text: str, should_stop=None, internal: bool = False) -> TurnResult:

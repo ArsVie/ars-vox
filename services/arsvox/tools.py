@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from services.arsvox import books, documents, media, web
-from services.arsvox.config import Settings
+from services.arsvox.config import DEFAULT_CITY, Settings
 from services.arsvox.scheduler import REPEATS
 from services.arsvox.store import Store
 
@@ -225,7 +225,7 @@ def documents_page(context: ToolContext, arguments: dict) -> str:
 
 
 def documents_list(context: ToolContext, arguments: dict) -> str:
-    """What is on the shelf: the files the assistant can read aloud, newest first."""
+    """What is on the shelf: the files the assistant can show, newest first."""
     books = documents.list_books(limit=12)
     if not books:
         return "No encontré documentos en sus carpetas. Dígame dónde los tiene y los busco."
@@ -233,7 +233,7 @@ def documents_list(context: ToolContext, arguments: dict) -> str:
         f"{number}) {path.stem.replace('_', ' ').replace('-', ' ').strip()}"
         for number, path in enumerate(books, 1)
     ]
-    return "Tengo estos documentos a mano: " + "; ".join(parts) + ". Dígame cuál le leo."
+    return "Tengo estos documentos a mano: " + "; ".join(parts) + ". Dígame cuál abro."
 
 
 def _music_dir(context: ToolContext) -> Path:
@@ -493,7 +493,7 @@ def route_web(context: ToolContext, arguments: dict) -> str:
     return _dispatch(WEB_ACTIONS, context, arguments)
 
 
-def build_registry() -> dict[str, Tool]:
+def build_registry(city: str = DEFAULT_CITY) -> dict[str, Tool]:
     return {
         tool.name: tool
         for tool in (
@@ -536,15 +536,14 @@ def build_registry() -> dict[str, Tool]:
                 "open_document(query) busca un archivo en sus carpetas por el nombre que él usa — "
                 "'el diario', 'la receta' — y lo muestra en el panel; si hay varios parecidos, "
                 "pregunta cuál. Los PDF se ven tal como son, página por página; el texto se corta "
-                "en páginas. Nada de esto se lee en voz alta: el documento se VE en el panel, no "
-                "se recita ni se repite en la conversación. "
+                "en páginas. Nada de esto se lee en voz alta: solo se ve en el panel. "
                 "page pasa las páginas cuando diga 'siguiente', 'atrás' o 'vaya a la página 20' "
                 "(step: 1 adelante, -1 atrás; to: el número exacto). "
                 "list_documents() enseña qué documentos hay en sus carpetas, del más nuevo al más "
                 "viejo; úselo cuando pregunte qué libros tiene. "
                 "get_book(title) es solo para clásicos de dominio público que el usuario no tiene "
-                "en sus carpetas (edición en español preferida); también queda en el panel, "
-                "igual que los demás.",
+                "en sus carpetas (edición en español preferida); queda en el panel, igual "
+                "que los demás.",
                 {
                     "type": "object",
                     "properties": {
@@ -578,14 +577,12 @@ def build_registry() -> dict[str, Tool]:
                 "media",
                 "Música y video en el panel de la ventana. "
                 "Para música (canciones, artistas) use type='music': busca en YouTube Music y suena "
-                "siempre, porque se oye el audio; para ver un video use type='video'. "
-                "search(query, type) busca y deja las opciones a la vista para elegir entre varias; "
-                "cuéntele cada opción con su número y pregúntele cuál quiere. "
+                "siempre (se oye el audio); para ver un video use type='video'. "
+                "search(query, type) busca y deja las opciones a la vista para elegir entre varias. "
                 "play(query, type) pone directamente lo primero que encuentra; play(url, type) pone una opción "
                 "puntual de las que mostró search — la dirección se copia del resultado, nunca se inventa. "
                 "pause y resume controlan lo que está sonando; close lo quita del panel. "
-                "Si un video no se pudo ver, ofrézcale oírlo con type='music' y la misma dirección. "
-                "Lo que está entre corchetes en un resultado es interno: no se lee en voz alta.",
+                "Si un video no se pudo ver, ofrézcale oírlo con type='music' y la misma dirección.",
                 {
                     "type": "object",
                     "properties": {
@@ -640,7 +637,7 @@ def build_registry() -> dict[str, Tool]:
             ),
             Tool(
                 "weather_get",
-                "Consultar el clima de hoy o de mañana en una ciudad; sin ciudad es Mexicali.",
+                f"Consultar el clima de hoy o de mañana en una ciudad; sin ciudad es {city}.",
                 {
                     "type": "object",
                     "properties": {
