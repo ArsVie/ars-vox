@@ -1,5 +1,5 @@
 ﻿# Ars Vox service: the ears, the loop and the window, with the CUDA libraries on PATH.
-$repo = 'C:\dev\ars-vox-v2'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $libs = 'cublas', 'cudnn', 'cuda_nvrtc' | ForEach-Object { "$repo\.venv-win\Lib\site-packages\nvidia\$_\bin" }
 $env:PATH = (($libs + $env:PATH) -join ';')
 Set-Location $repo

@@ -20,6 +20,7 @@ Usage: python ui_panels_capture.py [service_port=8791] [out_dir=results/uicheck]
 
 import base64
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -28,11 +29,15 @@ from pathlib import Path
 import websocket
 
 SERVICE_PORT = sys.argv[1] if len(sys.argv) > 1 else "8791"
-OUT = Path(sys.argv[2] if len(sys.argv) > 2 else "/mnt/c/dev/ars-vox-v2/results/uicheck")
+OUT = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).resolve().parents[1] / "results" / "uicheck")
 CDP_PORT = sys.argv[3] if len(sys.argv) > 3 else "9224"
 OUT.mkdir(parents=True, exist_ok=True)
 
-LOCAL_AUDIO = r"C:\Users\vruizes\Downloads\10-Media_Audio_Video\cafe.mp3"
+# Any local mp3 the service may serve (inside the configured music folder).
+LOCAL_AUDIO = os.environ.get("ARSVOX_CAPTURE_AUDIO", "")
+if not LOCAL_AUDIO:
+    print("set ARSVOX_CAPTURE_AUDIO to a local mp3 for step 9")
+    sys.exit(2)
 TURN_TEXT = "Busca en YouTube música de los Beatles y muéstrame las opciones."
 SERVICE = f"http://127.0.0.1:{SERVICE_PORT}"
 
