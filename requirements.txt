@@ -1,0 +1,11 @@
+# Runtime. Python 3.12; the product runs on Windows (reminders use Task Scheduler).
+httpx            # model client (OpenAI-compatible chat completions)
+faster-whisper   # speech to text (CTranslate2); CUDA needs the nvidia cuBLAS/cuDNN wheels
+edge-tts         # product voice (needs network); ffmpeg must be on PATH for wav playback
+numpy
+sounddevice      # microphone capture
+pymupdf          # PDF pages in the reader panel
+yt-dlp           # music and video search, no download
+
+# Tests
+pytest

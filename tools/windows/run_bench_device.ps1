@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference = "Stop"
-$root = "C:\dev\ars-vox-v2"
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $py = Join-Path $root ".venv-win\Scripts\python.exe"
 $nv = Join-Path $root ".venv-win\Lib\site-packages\nvidia"
 $env:PATH = "$nv\cublas\bin;$nv\cudnn\bin;$nv\cuda_nvrtc\bin;$env:PATH"
